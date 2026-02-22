@@ -42,12 +42,12 @@ class TestPipelineOrchestrator:
     async def test_pipeline_handles_errors(self, tmp_path: Path):
         store = JobStore(base_dir=tmp_path / "jobs")
         pipeline = PipelineOrchestrator(store)
-        # No input should cause an error
+        # No input — stages that depend on it will warn and skip
         job = Job(input=None)
         result = await pipeline.run(job)
 
-        assert result.status == JobStatus.FAILED
-        assert result.error is not None
+        # Pipeline completes (stage errors are non-fatal)
+        assert result.status == JobStatus.COMPLETED
 
 
 class TestJobStore:

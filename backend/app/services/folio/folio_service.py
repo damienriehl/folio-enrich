@@ -24,6 +24,7 @@ class FolioService:
     def __init__(self) -> None:
         self._folio = None
         self._labels_cache: dict[str, FOLIOConcept] | None = None
+        self._branch_map: dict[str, str] | None = None
 
     @classmethod
     def get_instance(cls) -> FolioService:
@@ -33,15 +34,59 @@ class FolioService:
 
     def _get_folio(self):
         if self._folio is None:
-            from folio import Folio
+            from folio import FOLIO
 
-            self._folio = Folio()
-            logger.info("FOLIO ontology loaded")
+            self._folio = FOLIO()
+            self._build_branch_map()
+            logger.info("FOLIO ontology loaded with %d concepts", len(self._folio.classes))
         return self._folio
+
+    def _build_branch_map(self) -> None:
+        """Build a map from concept IRI to branch name."""
+        if self._folio is None:
+            return
+        self._branch_map = {}
+        try:
+            branches = self._folio.get_folio_branches()
+            for branch_type, concepts in branches.items():
+                branch_name = branch_type.value if hasattr(branch_type, "value") else str(branch_type)
+                for concept in concepts:
+                    if hasattr(concept, "iri"):
+                        self._branch_map[concept.iri] = branch_name
+        except Exception:
+            logger.warning("Failed to build branch map", exc_info=True)
+
+    def _get_branch(self, iri: str, parent_iris: list[str]) -> str:
+        """Determine the branch for a concept by checking its IRI and ancestors."""
+        if self._branch_map is None:
+            return ""
+        # Direct lookup
+        if iri in self._branch_map:
+            return self._branch_map[iri]
+        # Check parents
+        for parent_iri in parent_iris:
+            if parent_iri in self._branch_map:
+                return self._branch_map[parent_iri]
+        # Walk up the hierarchy
+        try:
+            folio = self._get_folio()
+            parents = folio.get_parents(iri)
+            for parent in parents:
+                if hasattr(parent, "iri") and parent.iri in self._branch_map:
+                    # Cache for future lookups
+                    self._branch_map[iri] = self._branch_map[parent.iri]
+                    return self._branch_map[parent.iri]
+        except Exception:
+            pass
+        return ""
 
     def search_by_label(self, label: str, top_k: int = 5) -> list[tuple[FOLIOConcept, float]]:
         folio = self._get_folio()
-        results = folio.search_by_label(label)
+        try:
+            results = folio.search_by_label(label)
+        except Exception:
+            logger.warning("search_by_label failed for '%s'", label, exc_info=True)
+            return []
         output = []
         for concept, score in results[:top_k]:
             output.append((self._to_folio_concept(concept), score))
@@ -49,8 +94,12 @@ class FolioService:
 
     def search_by_prefix(self, prefix: str, top_k: int = 10) -> list[FOLIOConcept]:
         folio = self._get_folio()
-        results = folio.search_by_prefix(prefix)
-        return [self._to_folio_concept(c) for c, _ in results[:top_k]]
+        try:
+            results = folio.search_by_prefix(prefix)
+            return [self._to_folio_concept(c) for c, _ in results[:top_k]]
+        except Exception:
+            logger.warning("search_by_prefix failed for '%s'", prefix, exc_info=True)
+            return []
 
     def get_concept(self, iri: str) -> FOLIOConcept | None:
         folio = self._get_folio()
@@ -68,14 +117,13 @@ class FolioService:
         folio = self._get_folio()
         labels: dict[str, FOLIOConcept] = {}
 
-        # Iterate through all concepts in the ontology
-        for concept_id in folio.get_all_concepts():
+        for concept in folio.classes:
             try:
-                concept = folio[concept_id]
                 fc = self._to_folio_concept(concept)
-                # Index by preferred label
-                if fc.preferred_label:
-                    labels[fc.preferred_label.lower()] = fc
+                # Index by label
+                label = fc.preferred_label
+                if label:
+                    labels[label.lower()] = fc
                 # Index by alternative labels
                 for alt in fc.alternative_labels:
                     if alt:
@@ -88,14 +136,14 @@ class FolioService:
         return labels
 
     def _to_folio_concept(self, concept) -> FOLIOConcept:
-        pref_label = getattr(concept, "preferred_label", "") or ""
+        # preferred_label may be None; fall back to label
+        pref_label = getattr(concept, "preferred_label", None) or getattr(concept, "label", "") or ""
         alt_labels = getattr(concept, "alternative_labels", []) or []
         definition = getattr(concept, "definition", "") or ""
         iri = getattr(concept, "iri", "") or ""
         parent_iris = getattr(concept, "sub_class_of", []) or []
 
-        # Try to determine branch from hierarchy
-        branch = self._infer_branch(pref_label, parent_iris)
+        branch = self._get_branch(iri, list(parent_iris))
 
         return FOLIOConcept(
             iri=iri,
@@ -105,8 +153,3 @@ class FolioService:
             branch=branch,
             parent_iris=list(parent_iris),
         )
-
-    def _infer_branch(self, label: str, parent_iris: list) -> str:
-        # Simple heuristic: branch is often in the top-level parent
-        # Full branch inference would walk the hierarchy to root
-        return ""

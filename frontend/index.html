@@ -1,0 +1,1727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FOLIO Enrich</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242836;
+    --surface3: #2e3348;
+    --border: #2e3348;
+    --text: #e4e6f0;
+    --text-dim: #8b8fa3;
+    --accent: #6c8cff;
+    --accent-dim: #4a5fa0;
+    --green: #4caf7c;
+    --orange: #e8a54c;
+    --red: #e05555;
+    --cyan: #5ec4d4;
+    --purple: #b07ee8;
+    --highlight: rgba(108,140,255,0.15);
+    --highlight-confirmed: rgba(108,140,255,0.22);
+    --highlight-preliminary: rgba(108,140,255,0.08);
+    --highlight-rejected: rgba(224,85,85,0.08);
+
+    /* Branch colors */
+    --branch-actor: #5ec4d4;
+    --branch-area-of-law: #e8a54c;
+    --branch-document: #b07ee8;
+    --branch-engagement: #4caf7c;
+    --branch-event: #e05555;
+    --branch-location: #6c8cff;
+    --branch-governmental: #e887a0;
+    --branch-legal-entity: #7bed9f;
+    --branch-industry: #f0c040;
+    --branch-service: #50c8ff;
+    --branch-default: #8b8fa3;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow: hidden;
+  }
+
+  /* Header */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 48px;
+    flex-shrink: 0;
+  }
+
+  header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+  header h1 span { color: var(--accent); }
+
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    display: inline-block;
+  }
+
+  .status-dot.disconnected { background: var(--red); }
+
+  .header-btn {
+    background: var(--surface2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+  }
+
+  .header-btn:hover { border-color: var(--accent-dim); color: var(--text); }
+
+  /* Main layout */
+  main {
+    display: grid;
+    grid-template-columns: minmax(350px, 1fr) minmax(400px, 1.5fr);
+    gap: 0;
+    height: calc(100vh - 48px);
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-left { border-right: 1px solid var(--border); }
+
+  .panel-header {
+    padding: 10px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .panel-header h2 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-dim);
+  }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  /* Forms and inputs */
+  .form-group {
+    margin-bottom: 12px;
+  }
+
+  .form-group label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+
+  .form-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  select, input[type="text"], input[type="password"] {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    width: 100%;
+    transition: border-color 0.15s;
+  }
+
+  select:hover, input:hover { border-color: var(--accent-dim); }
+  select:focus, input:focus { outline: none; border-color: var(--accent); }
+
+  button {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  button:hover { border-color: var(--accent-dim); }
+
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  button.primary:hover { background: #5a7ae8; }
+  button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  button.secondary { background: transparent; border-color: var(--border); color: var(--text-dim); }
+  button.secondary:hover { color: var(--text); }
+
+  button.small { padding: 3px 8px; font-size: 11px; }
+
+  textarea {
+    width: 100%;
+    min-height: 180px;
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    resize: vertical;
+  }
+
+  textarea:focus { outline: none; border-color: var(--accent); }
+
+  /* Collapsible sections */
+  .collapsible {
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .collapsible-header {
+    padding: 8px 12px;
+    background: var(--surface);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    user-select: none;
+  }
+
+  .collapsible-header:hover { color: var(--text); }
+
+  .collapsible-header .arrow {
+    transition: transform 0.2s;
+    font-size: 10px;
+  }
+
+  .collapsible-header.open .arrow { transform: rotate(90deg); }
+
+  .collapsible-body {
+    display: none;
+    padding: 12px;
+  }
+
+  .collapsible-body.open { display: block; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+
+  .tab {
+    padding: 8px 16px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Annotated text */
+  .annotated-text {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 14px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .annotation-span {
+    background: var(--highlight-confirmed);
+    border-bottom: 2px solid var(--accent);
+    cursor: pointer;
+    border-radius: 2px;
+    padding: 1px 2px;
+    transition: background 0.15s;
+    position: relative;
+  }
+
+  .annotation-span:hover { background: rgba(108,140,255,0.35); }
+
+  /* Branch-colored annotations */
+  .annotation-span[data-branch="Actor / Player"] { border-bottom-color: var(--branch-actor); background: rgba(94,196,212,0.12); }
+  .annotation-span[data-branch="Area of Law"] { border-bottom-color: var(--branch-area-of-law); background: rgba(232,165,76,0.12); }
+  .annotation-span[data-branch="Document / Artifact"] { border-bottom-color: var(--branch-document); background: rgba(176,126,232,0.12); }
+  .annotation-span[data-branch="Engagement Terms"] { border-bottom-color: var(--branch-engagement); background: rgba(76,175,124,0.12); }
+  .annotation-span[data-branch="Event"] { border-bottom-color: var(--branch-event); background: rgba(224,85,85,0.12); }
+  .annotation-span[data-branch="Location"] { border-bottom-color: var(--branch-location); background: rgba(108,140,255,0.12); }
+  .annotation-span[data-branch="Governmental Body"] { border-bottom-color: var(--branch-governmental); background: rgba(232,135,160,0.12); }
+  .annotation-span[data-branch="Legal Entity"] { border-bottom-color: var(--branch-legal-entity); background: rgba(123,237,159,0.12); }
+  .annotation-span[data-branch="Industry"] { border-bottom-color: var(--branch-industry); background: rgba(240,192,64,0.12); }
+  .annotation-span[data-branch="Service"] { border-bottom-color: var(--branch-service); background: rgba(80,200,255,0.12); }
+
+  .annotation-span[data-branch="Actor / Player"]:hover { background: rgba(94,196,212,0.25); }
+  .annotation-span[data-branch="Area of Law"]:hover { background: rgba(232,165,76,0.25); }
+  .annotation-span[data-branch="Document / Artifact"]:hover { background: rgba(176,126,232,0.25); }
+  .annotation-span[data-branch="Location"]:hover { background: rgba(108,140,255,0.25); }
+
+  /* Concept tooltip */
+  .concept-tooltip {
+    position: fixed;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    max-width: 400px;
+    min-width: 250px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    z-index: 1000;
+    display: none;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  .concept-tooltip.visible { display: block; }
+
+  .tooltip-label { font-size: 15px; font-weight: 600; color: var(--accent); margin-bottom: 2px; }
+  .tooltip-branch { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding: 2px 6px; border-radius: 3px; display: inline-block; }
+  .tooltip-definition { font-size: 13px; color: var(--text); line-height: 1.5; margin-bottom: 8px; }
+  .tooltip-meta { font-size: 11px; color: var(--text-dim); display: flex; gap: 12px; margin-bottom: 6px; }
+  .tooltip-iri a { color: var(--accent-dim); text-decoration: none; font-size: 11px; word-break: break-all; }
+  .tooltip-iri a:hover { text-decoration: underline; }
+
+  /* Pipeline progress */
+  .pipeline-progress {
+    padding: 8px 16px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .progress-bar {
+    height: 3px;
+    background: var(--surface3);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  .progress-stages {
+    display: flex;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--text-dim);
+    flex-wrap: wrap;
+  }
+
+  .stage-pill {
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: var(--surface2);
+  }
+
+  .stage-pill.active { background: rgba(108,140,255,0.2); color: var(--accent); }
+  .stage-pill.done { background: rgba(76,175,124,0.2); color: var(--green); }
+  .stage-pill.error { background: rgba(224,85,85,0.2); color: var(--red); }
+
+  .status-text {
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* Concepts sidebar */
+  .concept-group { margin-bottom: 16px; }
+  .concept-group-header {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .concept-group-count {
+    font-size: 10px;
+    background: var(--surface2);
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 400;
+  }
+
+  .concept-item {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-top: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 12px;
+  }
+
+  .concept-item:hover { background: var(--surface2); }
+  .concept-name { font-weight: 600; }
+  .concept-meta { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+
+  .confidence-bar { height: 2px; background: var(--border); border-radius: 1px; margin-top: 4px; overflow: hidden; }
+  .confidence-fill { height: 100%; border-radius: 1px; }
+
+  /* Export buttons */
+  .export-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 6px;
+  }
+
+  .export-btn {
+    font-size: 11px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .export-btn .ext { font-size: 9px; color: var(--text-dim); }
+
+  /* Metadata grid */
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 4px 12px;
+    font-size: 12px;
+  }
+
+  .meta-key { color: var(--text-dim); font-weight: 500; padding: 2px 0; }
+  .meta-value { color: var(--text); padding: 2px 0; word-break: break-word; }
+
+  /* Settings modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 2000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.visible { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 540px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  .modal h3 {
+    font-size: 16px;
+    margin-bottom: 16px;
+  }
+
+  .modal .form-group { margin-bottom: 14px; }
+
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+
+  /* Synthetic generator */
+  .doc-type-tree { font-size: 12px; }
+
+  .doc-type-category {
+    padding: 6px 10px;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .doc-type-category:hover { background: var(--surface2); }
+
+  .doc-type-subtypes {
+    display: none;
+    padding-left: 24px;
+  }
+
+  .doc-type-subtypes.open { display: block; }
+
+  .doc-type-subtype {
+    padding: 4px 10px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .doc-type-subtype:hover { background: var(--surface2); color: var(--text); }
+  .doc-type-subtype.selected { background: rgba(108,140,255,0.15); color: var(--accent); }
+
+  .radio-group { display: flex; gap: 12px; margin-top: 4px; }
+  .radio-group label { font-size: 12px; color: var(--text); display: flex; align-items: center; gap: 4px; cursor: pointer; text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+  /* Toggle switch */
+  .toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
+  .toggle input { display: none; }
+  .toggle-track {
+    width: 32px; height: 18px;
+    background: var(--surface3);
+    border-radius: 9px;
+    position: relative;
+    transition: background 0.2s;
+  }
+  .toggle input:checked + .toggle-track { background: var(--accent); }
+  .toggle-thumb {
+    width: 14px; height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px; left: 2px;
+    transition: left 0.2s;
+  }
+  .toggle input:checked + .toggle-track .toggle-thumb { left: 16px; }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-dim);
+  }
+
+  .empty-state h3 { font-size: 14px; margin-bottom: 6px; color: var(--text); }
+
+  /* File upload zone */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .upload-zone:hover { border-color: var(--accent-dim); color: var(--text); }
+  .upload-zone.dragover { border-color: var(--accent); background: rgba(108,140,255,0.05); }
+  .upload-zone input { display: none; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent-dim); }
+
+  /* Sample buttons */
+  .sample-grid {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .sample-btn {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  /* Tag badge for branch */
+  .branch-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  .test-status { font-size: 11px; margin-top: 6px; }
+  .test-status.ok { color: var(--green); }
+  .test-status.error { color: var(--red); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>FOLIO</span> Enrich</h1>
+  <span class="status-dot" id="healthDot"></span>
+  <span style="font-size:11px;color:var(--text-dim)" id="healthText">Connecting...</span>
+  <div class="header-right">
+    <label class="toggle" title="Toggle uncertain annotations">
+      <input type="checkbox" id="hideUncertainToggle" checked onchange="toggleUncertain()">
+      <span class="toggle-track"><span class="toggle-thumb"></span></span>
+      <span>Show all</span>
+    </label>
+    <button class="header-btn" onclick="openSettings()">Settings</button>
+    <button class="header-btn" onclick="openSynthetic()">Generate</button>
+  </div>
+</header>
+
+<main>
+  <!-- Left panel: Input -->
+  <div class="panel panel-left">
+    <div class="panel-header">
+      <h2>Document Input</h2>
+    </div>
+    <div class="panel-body">
+      <!-- LLM Configuration (inline) -->
+      <div class="collapsible">
+        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+          <span class="arrow">&#9654;</span>
+          LLM Provider
+          <span style="margin-left:auto;font-weight:400;font-size:11px" id="llmSummary">Loading...</span>
+        </div>
+        <div class="collapsible-body" id="llmConfig">
+          <div class="form-row" style="margin-bottom:8px">
+            <div style="flex:1">
+              <label>Provider</label>
+              <select id="providerSelect" onchange="onProviderChange()"></select>
+            </div>
+            <div style="flex:1">
+              <label>Model</label>
+              <select id="modelSelect"></select>
+            </div>
+          </div>
+          <div class="form-group" id="apiKeyGroup">
+            <label>API Key</label>
+            <div class="form-row">
+              <input type="password" id="apiKeyInput" placeholder="sk-...">
+              <button class="small" onclick="testConnection()">Test</button>
+            </div>
+            <div class="test-status" id="testStatus"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Format & Upload -->
+      <div class="form-row" style="margin-bottom:8px">
+        <select id="formatSelect" style="width:auto">
+          <option value="plain_text">Plain Text</option>
+          <option value="markdown">Markdown</option>
+          <option value="html">HTML</option>
+          <option value="pdf">PDF</option>
+          <option value="word">Word (DOCX)</option>
+        </select>
+        <button class="primary" id="enrichBtn" onclick="submitEnrichment()">Enrich Document</button>
+        <button class="secondary" onclick="clearAll()">Clear</button>
+      </div>
+
+      <!-- File upload -->
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        Drop a file here or click to upload (PDF, DOCX, HTML, MD, TXT)
+        <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.html,.htm,.md,.txt" onchange="handleFileUpload(event)">
+      </div>
+
+      <!-- Text input -->
+      <textarea id="docInput" placeholder="Paste your legal document text here..."></textarea>
+
+      <!-- Sample documents -->
+      <div style="margin-top:12px">
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim)">Quick Start</label>
+        <div class="sample-grid" style="margin-top:4px">
+          <button class="secondary sample-btn" onclick="loadSample('motion')">Motion to Dismiss</button>
+          <button class="secondary sample-btn" onclick="loadSample('contract')">Contract Clause</button>
+          <button class="secondary sample-btn" onclick="loadSample('opinion')">Court Opinion</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline progress -->
+    <div class="pipeline-progress" id="pipelineProgress">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <div class="progress-stages" id="progressStages"></div>
+      <div class="status-text">
+        <span id="statusText">Ready</span>
+        <span id="statusBadge" style="font-size:10px;color:var(--text-dim)">idle</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right panel: Results -->
+  <div class="panel">
+    <div class="tabs">
+      <div class="tab active" data-tab="annotated" onclick="switchTab(this, 'annotated')">Annotated Text</div>
+      <div class="tab" data-tab="concepts" onclick="switchTab(this, 'concepts')">Concepts</div>
+      <div class="tab" data-tab="triples" onclick="switchTab(this, 'triples')">Triples</div>
+      <div class="tab" data-tab="metadata" onclick="switchTab(this, 'metadata')">Metadata</div>
+      <div class="tab" data-tab="export" onclick="switchTab(this, 'export')">Export</div>
+    </div>
+    <div class="panel-body" id="resultBody">
+      <div class="tab-content active" id="tab-annotated">
+        <div class="empty-state" id="emptyState">
+          <h3>No annotations yet</h3>
+          <p>Paste a legal document and click "Enrich Document" to see FOLIO annotations.</p>
+        </div>
+        <div class="annotated-text" id="annotatedText" style="display:none"></div>
+      </div>
+      <div class="tab-content" id="tab-concepts">
+        <div id="conceptsList"></div>
+      </div>
+      <div class="tab-content" id="tab-triples">
+        <div id="triplesList"></div>
+      </div>
+      <div class="tab-content" id="tab-metadata">
+        <div id="metadataDisplay"></div>
+      </div>
+      <div class="tab-content" id="tab-export">
+        <p style="color:var(--text-dim);font-size:12px;margin-bottom:12px">Download annotations in any of the 12 supported formats:</p>
+        <div class="export-grid" id="exportButtons"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Tooltip -->
+<div class="concept-tooltip" id="tooltip"></div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <h3>Settings</h3>
+    <div class="form-group">
+      <label>Default LLM Provider</label>
+      <select id="settingsProvider"></select>
+    </div>
+    <div class="form-group">
+      <label>Default Model</label>
+      <select id="settingsModel"></select>
+    </div>
+    <div class="form-group">
+      <label>OpenAI API Key</label>
+      <input type="password" id="settingsOpenAIKey" placeholder="sk-...">
+    </div>
+    <div class="form-group">
+      <label>Anthropic API Key</label>
+      <input type="password" id="settingsAnthropicKey" placeholder="sk-ant-...">
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeSettings()">Cancel</button>
+      <button class="primary" onclick="saveSettings()">Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- Synthetic Document Generator Modal -->
+<div class="modal-overlay" id="syntheticModal">
+  <div class="modal" style="max-width:600px">
+    <h3>Generate Synthetic Legal Document</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:16px">Select a document type to generate a realistic legal document for testing.</p>
+    <div class="doc-type-tree" id="docTypeTree"></div>
+    <div style="margin-top:16px">
+      <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim)">Length</label>
+      <div class="radio-group">
+        <label><input type="radio" name="synLength" value="short"> Short (1-5 pages)</label>
+        <label><input type="radio" name="synLength" value="medium" checked> Medium (10-30 pages)</label>
+        <label><input type="radio" name="synLength" value="long"> Long (50-100 pages)</label>
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:12px">
+      <label>Jurisdiction (optional)</label>
+      <select id="synJurisdiction">
+        <option value="Federal">US Federal</option>
+        <option value="New York">New York</option>
+        <option value="California">California</option>
+        <option value="Texas">Texas</option>
+        <option value="Delaware">Delaware</option>
+        <option value="England and Wales">England &amp; Wales</option>
+        <option value="Canada">Canada</option>
+        <option value="Australia">Australia</option>
+        <option value="Generic">Generic</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeSynthetic()">Cancel</button>
+      <button class="primary" id="generateBtn" onclick="generateSynthetic()">Generate &amp; Annotate</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8730';
+let currentJobId = null;
+let currentJob = null;
+let pollInterval = null;
+let pollTimeout = null;
+let providersData = {};
+let selectedDocType = null;
+let showUncertain = true;
+
+const PIPELINE_STAGES = [
+  'pending', 'ingesting', 'normalizing', 'identifying',
+  'resolving', 'matching', 'judging', 'exporting', 'completed'
+];
+
+const STAGE_LABELS = {
+  pending: 'Queued', ingesting: 'Ingesting', normalizing: 'Normalizing',
+  identifying: 'Identifying', resolving: 'Resolving', matching: 'Matching',
+  judging: 'Judging', exporting: 'Exporting', completed: 'Done'
+};
+
+const BRANCH_COLORS = {
+  'Actor / Player': 'var(--branch-actor)',
+  'Area of Law': 'var(--branch-area-of-law)',
+  'Document / Artifact': 'var(--branch-document)',
+  'Engagement Terms': 'var(--branch-engagement)',
+  'Event': 'var(--branch-event)',
+  'Location': 'var(--branch-location)',
+  'Governmental Body': 'var(--branch-governmental)',
+  'Legal Entity': 'var(--branch-legal-entity)',
+  'Industry': 'var(--branch-industry)',
+  'Service': 'var(--branch-service)',
+  'Objectives': 'var(--orange)',
+  'Legal Authorities': 'var(--purple)',
+  'Status': 'var(--cyan)',
+  'Currency': 'var(--orange)',
+  'Forums and Venues': 'var(--branch-governmental)',
+};
+
+const EXPORT_FORMATS = [
+  { name: 'json', label: 'JSON', ext: '.json' },
+  { name: 'jsonld', label: 'JSON-LD', ext: '.jsonld' },
+  { name: 'xml', label: 'XML', ext: '.xml' },
+  { name: 'csv', label: 'CSV', ext: '.csv' },
+  { name: 'jsonl', label: 'JSONL', ext: '.jsonl' },
+  { name: 'parquet', label: 'Parquet', ext: '.parquet' },
+  { name: 'elasticsearch', label: 'Elasticsearch', ext: '.ndjson' },
+  { name: 'neo4j', label: 'Neo4j CSV', ext: '.csv' },
+  { name: 'rag', label: 'RAG Chunks', ext: '.json' },
+  { name: 'rdf', label: 'RDF/Turtle', ext: '.ttl' },
+  { name: 'brat', label: 'brat', ext: '.ann' },
+  { name: 'html', label: 'HTML', ext: '.html' },
+];
+
+const SAMPLES = {
+  motion: `UNITED STATES DISTRICT COURT\nSOUTHERN DISTRICT OF NEW YORK\n\nCase No. 1:24-cv-03456-ABC\n\nACME CORPORATION, Plaintiff,\nv.\nWIDGET INDUSTRIES, INC., Defendant.\n\nDEFENDANT'S MOTION TO DISMISS\n\nDefendant Widget Industries, Inc., by and through its undersigned counsel, hereby moves this Court pursuant to Federal Rule of Civil Procedure 12(b)(6) for an Order dismissing the Complaint filed by Plaintiff Acme Corporation for failure to state a claim upon which relief can be granted.\n\nIn support of this Motion, Defendant respectfully submits the following Memorandum of Law.\n\nMEMORANDUM OF LAW\n\nI. INTRODUCTION\n\nPlaintiff's Complaint alleges breach of contract and negligence arising from a commercial supply agreement between the parties. However, the Complaint fails to allege the essential elements required to sustain either cause of action under New York law.\n\nII. LEGAL STANDARD\n\nTo survive a motion to dismiss under Rule 12(b)(6), a complaint must contain sufficient factual matter, accepted as true, to state a claim to relief that is plausible on its face. Ashcroft v. Iqbal, 556 U.S. 662, 678 (2009). A claim has facial plausibility when the plaintiff pleads factual content that allows the court to draw the reasonable inference that the defendant is liable for the misconduct alleged. Id.\n\nIII. ARGUMENT\n\nA. The Breach of Contract Claim Should Be Dismissed\n\nUnder New York law, the elements of breach of contract are: (1) the existence of a valid contract; (2) performance by the plaintiff; (3) breach by the defendant; and (4) resulting damages. Harris v. Seward Park Housing Corp., 79 A.D.3d 425, 426 (1st Dep't 2010).\n\nHere, the Complaint fails to identify the specific contractual provision allegedly breached. The Complaint merely alleges in conclusory fashion that Defendant "failed to perform its obligations under the Agreement." Such threadbare recitals of the elements of a cause of action are insufficient under Iqbal.\n\nB. The Negligence Claim Should Be Dismissed\n\nThe negligence claim is barred by the economic loss doctrine. Under New York law, a plaintiff cannot recover in tort for purely economic losses arising from a breach of contract. Clark-Fitzpatrick, Inc. v. Long Island R.R. Co., 70 N.Y.2d 382, 389 (1987).\n\nIV. CONCLUSION\n\nFor the foregoing reasons, Defendant respectfully requests that this Court grant its Motion to Dismiss and dismiss the Complaint in its entirety with prejudice.\n\nDated: January 15, 2024\nNew York, New York\n\nRespectfully submitted,\n\nJOHNSON & SMITH LLP\n\nBy: /s/ Sarah Johnson\nSarah Johnson, Esq.\nAttorneys for Defendant Widget Industries, Inc.`,
+  contract: `FORCE MAJEURE AND TERMINATION PROVISIONS\n\nSection 14.1 Force Majeure. Neither party shall be liable for any failure or delay in performing its obligations under this Agreement if such failure or delay results from circumstances beyond the reasonable control of that party, including but not limited to acts of God, natural disasters, war, terrorism, riots, embargoes, acts of civil or military authorities, fire, floods, epidemics, pandemics, quarantine restrictions, strikes, or transportation disruptions (each a "Force Majeure Event").\n\nSection 14.2 Notice of Force Majeure. The affected party shall provide written notice to the other party within five (5) business days of becoming aware of the Force Majeure Event, describing the nature of the event and the expected duration of the delay.\n\nSection 14.3 Termination for Convenience. Either party may terminate this Agreement for any reason upon ninety (90) days' prior written notice to the other party. Upon such termination, the terminating party shall pay all amounts due for services performed through the effective date of termination.\n\nSection 14.4 Termination for Cause. Either party may terminate this Agreement immediately upon written notice if the other party: (a) commits a material breach of this Agreement and fails to cure such breach within thirty (30) days after receiving written notice thereof; (b) becomes insolvent or files for bankruptcy protection; or (c) assigns this Agreement without the prior written consent of the other party.\n\nSection 14.5 Effect of Termination. Upon termination or expiration of this Agreement: (a) all licenses granted hereunder shall immediately terminate; (b) each party shall return or destroy all Confidential Information of the other party; (c) any accrued rights and obligations shall survive termination; and (d) Sections 8 (Confidentiality), 10 (Indemnification), 11 (Limitation of Liability), and 15 (Governing Law) shall survive termination.\n\nSection 14.6 Governing Law and Dispute Resolution. This Agreement shall be governed by and construed in accordance with the laws of the State of Delaware, without regard to its conflict of laws principles. Any dispute arising under this Agreement shall be resolved by binding arbitration administered by the American Arbitration Association under its Commercial Arbitration Rules.`,
+  opinion: `UNITED STATES COURT OF APPEALS FOR THE SEVENTH CIRCUIT\n\nNo. 23-2847\n\nMARIA GONZALEZ,\n  Plaintiff-Appellant,\n\nv.\n\nCITY OF SPRINGFIELD, a municipal corporation, and OFFICER JAMES TAYLOR, individually and in his official capacity,\n  Defendants-Appellees.\n\nAppeal from the United States District Court for the Central District of Illinois.\nNo. 3:22-cv-00891 — Judge Robert Harrison, presiding.\n\nOPINION\n\nWOOD, Circuit Judge.\n\nMaria Gonzalez appeals the district court's grant of summary judgment in favor of the City of Springfield and Officer James Taylor on her claims under 42 U.S.C. \u00A7 1983 for excessive force in violation of the Fourth Amendment and municipal liability under Monell v. Department of Social Services, 436 U.S. 658 (1978).\n\nI. BACKGROUND\n\nOn March 15, 2022, Officer Taylor responded to a domestic disturbance call at Gonzalez's residence. Upon arrival, Officer Taylor encountered Gonzalez on her front porch. According to Gonzalez, she was unarmed and compliant with Officer Taylor's instructions. Despite this, Officer Taylor allegedly used a Taser on Gonzalez, causing her to fall and sustain injuries including a fractured wrist and concussion.\n\nOfficer Taylor maintains that Gonzalez was aggressive and non-compliant, and that his use of the Taser was a reasonable application of force under the circumstances.\n\nII. STANDARD OF REVIEW\n\nWe review the district court's grant of summary judgment de novo, construing all facts and drawing all reasonable inferences in favor of the non-moving party. Scott v. Harris, 550 U.S. 372, 378 (2007). Summary judgment is appropriate when there is no genuine dispute as to any material fact and the movant is entitled to judgment as a matter of law. Fed. R. Civ. P. 56(a).\n\nIII. ANALYSIS\n\nA. Excessive Force Claim\n\nClaims of excessive force during an arrest are analyzed under the Fourth Amendment's objective reasonableness standard. Graham v. Connor, 490 U.S. 386, 395 (1989). The inquiry requires balancing the nature and quality of the intrusion on the individual's Fourth Amendment interests against the countervailing governmental interests at stake. Id. at 396.\n\nThe relevant factors include: (1) the severity of the crime at issue; (2) whether the suspect poses an immediate threat to the safety of officers or others; and (3) whether the suspect is actively resisting arrest or attempting to evade arrest by flight. Id.\n\nHere, the parties present fundamentally different accounts of the encounter. Gonzalez maintains she was compliant and non-threatening, while Officer Taylor asserts she was aggressive. At the summary judgment stage, we must credit Gonzalez's version of events. Under her account, the use of a Taser against an unarmed, compliant individual responding to a domestic call would constitute excessive force.\n\nThe district court erred by crediting Officer Taylor's version of events over Gonzalez's at the summary judgment stage. We REVERSE the grant of summary judgment on the excessive force claim and REMAND for further proceedings.\n\nB. Qualified Immunity\n\nOfficer Taylor asserts qualified immunity. Qualified immunity shields government officials from civil damages liability unless their conduct violates clearly established statutory or constitutional rights. Pearson v. Callahan, 555 U.S. 223, 231 (2009).\n\nTaking the facts in the light most favorable to Gonzalez, a reasonable officer would have known that using a Taser on an unarmed, compliant individual violated the Fourth Amendment. We therefore deny qualified immunity at this stage.\n\nIV. CONCLUSION\n\nThe judgment of the district court is REVERSED in part and REMANDED for further proceedings consistent with this opinion.`
+};
+
+// ==============================================
+// Initialization
+// ==============================================
+
+async function init() {
+  checkHealth();
+  setInterval(checkHealth, 10000);
+  await loadProviders();
+  await loadSettings();
+  setupDragDrop();
+  renderProgressStages('pending');
+}
+
+// ==============================================
+// Health Check
+// ==============================================
+
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/health`);
+    if (!r.ok) throw new Error();
+    document.getElementById('healthDot').classList.remove('disconnected');
+    document.getElementById('healthText').textContent = 'Backend connected';
+  } catch {
+    document.getElementById('healthDot').classList.add('disconnected');
+    document.getElementById('healthText').textContent = 'Backend offline';
+  }
+}
+
+// ==============================================
+// LLM Provider Configuration
+// ==============================================
+
+async function loadProviders() {
+  try {
+    const r = await fetch(`${API}/settings/providers`);
+    if (!r.ok) return;
+    const data = await r.json();
+    providersData = data.providers || {};
+
+    // Populate provider selects
+    for (const sel of [document.getElementById('providerSelect'), document.getElementById('settingsProvider')]) {
+      sel.innerHTML = '';
+      for (const name of Object.keys(providersData)) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+        sel.appendChild(opt);
+      }
+    }
+
+    // Set current
+    if (data.current) {
+      document.getElementById('providerSelect').value = data.current.provider;
+      document.getElementById('settingsProvider').value = data.current.provider;
+    }
+
+    onProviderChange();
+  } catch (e) {
+    console.error('Failed to load providers:', e);
+  }
+}
+
+function onProviderChange() {
+  const provider = document.getElementById('providerSelect').value;
+  const modelSelect = document.getElementById('modelSelect');
+  modelSelect.innerHTML = '';
+
+  const models = providersData[provider] || [];
+  for (const m of models) {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = m;
+    modelSelect.appendChild(opt);
+  }
+
+  // Show/hide API key based on provider
+  const needsKey = ['openai', 'anthropic'].includes(provider);
+  document.getElementById('apiKeyGroup').style.display = needsKey ? 'block' : 'none';
+
+  updateLLMSummary();
+}
+
+function updateLLMSummary() {
+  const provider = document.getElementById('providerSelect').value;
+  const model = document.getElementById('modelSelect').value;
+  document.getElementById('llmSummary').textContent = `${provider} / ${model || '...'}`;
+}
+
+async function loadSettings() {
+  try {
+    const r = await fetch(`${API}/settings`);
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data.llm_provider) {
+      document.getElementById('providerSelect').value = data.llm_provider;
+      document.getElementById('settingsProvider').value = data.llm_provider;
+      onProviderChange();
+      if (data.llm_model) {
+        document.getElementById('modelSelect').value = data.llm_model;
+        document.getElementById('settingsModel').value = data.llm_model;
+      }
+    }
+    updateLLMSummary();
+  } catch (e) {
+    console.error('Failed to load settings:', e);
+  }
+}
+
+async function testConnection() {
+  const provider = document.getElementById('providerSelect').value;
+  const model = document.getElementById('modelSelect').value;
+  const apiKey = document.getElementById('apiKeyInput').value;
+  const status = document.getElementById('testStatus');
+
+  status.textContent = 'Testing...';
+  status.className = 'test-status';
+
+  try {
+    const r = await fetch(`${API}/settings/test-connection`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, model, api_key: apiKey }),
+    });
+    const data = await r.json();
+    if (data.status === 'ok') {
+      status.textContent = 'Connection successful';
+      status.className = 'test-status ok';
+    } else {
+      status.textContent = data.message || 'Connection failed';
+      status.className = 'test-status error';
+    }
+  } catch (e) {
+    status.textContent = e.message;
+    status.className = 'test-status error';
+  }
+}
+
+// ==============================================
+// Settings Modal
+// ==============================================
+
+function openSettings() {
+  document.getElementById('settingsModal').classList.add('visible');
+  // Sync settings provider/model selects
+  document.getElementById('settingsProvider').value = document.getElementById('providerSelect').value;
+  populateSettingsModels();
+}
+
+function closeSettings() {
+  document.getElementById('settingsModal').classList.remove('visible');
+}
+
+function populateSettingsModels() {
+  const provider = document.getElementById('settingsProvider').value;
+  const sel = document.getElementById('settingsModel');
+  sel.innerHTML = '';
+  for (const m of (providersData[provider] || [])) {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = m;
+    sel.appendChild(opt);
+  }
+}
+
+document.getElementById('settingsProvider').addEventListener('change', populateSettingsModels);
+
+async function saveSettings() {
+  const provider = document.getElementById('settingsProvider').value;
+  const model = document.getElementById('settingsModel').value;
+  const openaiKey = document.getElementById('settingsOpenAIKey').value;
+  const anthropicKey = document.getElementById('settingsAnthropicKey').value;
+
+  try {
+    const body = { llm_provider: provider, llm_model: model };
+    if (openaiKey) body.openai_api_key = openaiKey;
+    if (anthropicKey) body.anthropic_api_key = anthropicKey;
+
+    await fetch(`${API}/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    // Update inline config
+    document.getElementById('providerSelect').value = provider;
+    onProviderChange();
+    document.getElementById('modelSelect').value = model;
+    updateLLMSummary();
+    closeSettings();
+  } catch (e) {
+    alert('Failed to save settings: ' + e.message);
+  }
+}
+
+// ==============================================
+// File Upload
+// ==============================================
+
+function setupDragDrop() {
+  const zone = document.getElementById('uploadZone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
+  });
+}
+
+function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (file) processFile(file);
+}
+
+async function processFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const formatMap = { pdf: 'pdf', docx: 'word', doc: 'word', html: 'html', htm: 'html', md: 'markdown', txt: 'plain_text' };
+  const format = formatMap[ext] || 'plain_text';
+  document.getElementById('formatSelect').value = format;
+
+  if (['pdf', 'docx', 'doc'].includes(ext)) {
+    // Read as base64
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result.split(',')[1];
+      document.getElementById('docInput').value = base64;
+      document.getElementById('docInput').placeholder = `File loaded: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+    };
+    reader.readAsDataURL(file);
+  } else {
+    // Read as text
+    const text = await file.text();
+    document.getElementById('docInput').value = text;
+  }
+}
+
+// ==============================================
+// Enrichment Submission & Polling
+// ==============================================
+
+async function submitEnrichment() {
+  const content = document.getElementById('docInput').value.trim();
+  if (!content) return;
+
+  const format = document.getElementById('formatSelect').value;
+  const provider = document.getElementById('providerSelect').value;
+  const model = document.getElementById('modelSelect').value;
+  const apiKey = document.getElementById('apiKeyInput').value;
+  const btn = document.getElementById('enrichBtn');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Processing...';
+  setStatus('Submitting...', 'running');
+  renderProgressStages('pending');
+
+  try {
+    const body = { content, format };
+    if (provider) body.llm_provider = provider;
+    if (model) body.llm_model = model;
+    if (apiKey) body.api_key = apiKey;
+
+    const r = await fetch(`${API}/enrich`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      throw new Error(err.detail || r.statusText);
+    }
+
+    const data = await r.json();
+    currentJobId = data.job_id;
+    setStatus(`Job ${currentJobId.slice(0,8)}... submitted`, 'running');
+    pollJob();
+  } catch (e) {
+    setStatus(`Error: ${e.message}`, 'failed');
+    btn.disabled = false;
+    btn.textContent = 'Enrich Document';
+  }
+}
+
+function pollJob() {
+  if (pollInterval) clearInterval(pollInterval);
+  if (pollTimeout) clearTimeout(pollTimeout);
+
+  // Max poll duration: 5 minutes
+  pollTimeout = setTimeout(() => {
+    if (pollInterval) clearInterval(pollInterval);
+    setStatus('Timeout: job took too long', 'failed');
+    resetButton();
+  }, 300000);
+
+  pollInterval = setInterval(async () => {
+    try {
+      const r = await fetch(`${API}/enrich/${currentJobId}`);
+      if (!r.ok) return;
+      const job = await r.json();
+      currentJob = job;
+
+      renderProgressStages(job.status);
+
+      if (job.status === 'completed') {
+        stopPolling();
+        renderResults(job);
+        resetButton();
+        const annCount = (job.result?.annotations || []).length;
+        setStatus(`Completed: ${annCount} annotations`, 'completed');
+      } else if (job.status === 'failed') {
+        stopPolling();
+        setStatus(`Failed: ${job.error || 'Unknown error'}`, 'failed');
+        resetButton();
+      } else {
+        setStatus(`Stage: ${STAGE_LABELS[job.status] || job.status}`, 'running');
+      }
+    } catch (e) {
+      console.error('Poll error:', e);
+    }
+  }, 500);
+}
+
+function stopPolling() {
+  if (pollInterval) clearInterval(pollInterval);
+  if (pollTimeout) clearTimeout(pollTimeout);
+  pollInterval = null;
+  pollTimeout = null;
+}
+
+function resetButton() {
+  const btn = document.getElementById('enrichBtn');
+  btn.disabled = false;
+  btn.textContent = 'Enrich Document';
+}
+
+// ==============================================
+// Pipeline Progress
+// ==============================================
+
+function renderProgressStages(currentStatus) {
+  const container = document.getElementById('progressStages');
+  const fill = document.getElementById('progressFill');
+  const stages = ['ingesting', 'normalizing', 'identifying', 'resolving', 'matching', 'judging'];
+  const currentIdx = stages.indexOf(currentStatus);
+  const isComplete = currentStatus === 'completed';
+  const isFailed = currentStatus === 'failed';
+
+  fill.style.width = isComplete ? '100%' : isFailed ? '100%' :
+    currentIdx >= 0 ? `${((currentIdx + 1) / stages.length) * 100}%` : '0%';
+  fill.style.background = isFailed ? 'var(--red)' : isComplete ? 'var(--green)' : 'var(--accent)';
+
+  container.innerHTML = stages.map((s, i) => {
+    let cls = 'stage-pill';
+    if (isComplete) cls += ' done';
+    else if (isFailed && i <= currentIdx) cls += ' error';
+    else if (i < currentIdx) cls += ' done';
+    else if (i === currentIdx) cls += ' active';
+    return `<span class="${cls}">${STAGE_LABELS[s] || s}</span>`;
+  }).join('');
+}
+
+// ==============================================
+// Results Rendering
+// ==============================================
+
+function renderResults(job) {
+  const text = job.result?.canonical_text?.full_text || '';
+  const annotations = job.result?.annotations || [];
+  const metadata = job.result?.metadata || {};
+
+  renderAnnotatedText(text, annotations);
+  renderConceptsList(annotations);
+  renderTriples(metadata.spo_triples || []);
+  renderMetadata(metadata, job);
+  renderExportButtons();
+}
+
+function renderAnnotatedText(text, annotations) {
+  const container = document.getElementById('annotatedText');
+  const empty = document.getElementById('emptyState');
+
+  if (!text) {
+    container.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+
+  empty.style.display = 'none';
+  container.style.display = 'block';
+
+  // Sort annotations by start, then by length descending for nesting
+  const sorted = [...annotations].sort((a, b) => a.span.start - b.span.start || (b.span.end - b.span.start) - (a.span.end - a.span.start));
+
+  let pieces = [];
+  let lastEnd = 0;
+
+  for (const ann of sorted) {
+    if (!ann.concepts || ann.concepts.length === 0) continue;
+    if (ann.span.start < lastEnd) continue; // skip overlapping
+
+    const c = ann.concepts[0];
+    const branch = c.branch || '';
+    const branchColor = BRANCH_COLORS[branch] || 'var(--accent)';
+
+    // Text before this annotation
+    if (ann.span.start > lastEnd) {
+      pieces.push(escapeHtml(text.slice(lastEnd, ann.span.start)));
+    }
+
+    const dataAttrs = [
+      `data-iri="${escapeAttr(c.folio_iri || '')}"`,
+      `data-label="${escapeAttr(c.folio_label || c.concept_text)}"`,
+      `data-def="${escapeAttr(c.folio_definition || '')}"`,
+      `data-branch="${escapeAttr(branch)}"`,
+      `data-confidence="${c.confidence}"`,
+      `data-source="${escapeAttr(c.source || '')}"`,
+    ].join(' ');
+
+    pieces.push(`<span class="annotation-span" ${dataAttrs}>${escapeHtml(text.slice(ann.span.start, ann.span.end))}</span>`);
+    lastEnd = Math.max(lastEnd, ann.span.end);
+  }
+
+  // Remaining text
+  if (lastEnd < text.length) {
+    pieces.push(escapeHtml(text.slice(lastEnd)));
+  }
+
+  container.innerHTML = pieces.join('');
+
+  // Add click handlers
+  container.querySelectorAll('.annotation-span').forEach(el => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); showTooltip(e, el); });
+  });
+}
+
+function showTooltip(event, el) {
+  const tooltip = document.getElementById('tooltip');
+  const label = el.dataset.label;
+  const branch = el.dataset.branch;
+  const def = el.dataset.def;
+  const iri = el.dataset.iri;
+  const conf = parseFloat(el.dataset.confidence);
+  const source = el.dataset.source;
+
+  const branchColor = BRANCH_COLORS[branch] || 'var(--text-dim)';
+
+  tooltip.innerHTML = `
+    <div class="tooltip-label">${escapeHtml(label)}</div>
+    <div class="tooltip-branch" style="background:${branchColor}20;color:${branchColor}">${escapeHtml(branch || 'Unknown Branch')}</div>
+    ${def ? `<div class="tooltip-definition">${escapeHtml(def)}</div>` : ''}
+    <div class="tooltip-meta">
+      <span>Confidence: ${conf > 1 ? (conf).toFixed(0) + '%' : (conf * 100).toFixed(0) + '%'}</span>
+      <span>Source: ${escapeHtml(source || 'unknown')}</span>
+    </div>
+    ${iri ? `<div class="tooltip-iri" style="margin-top:4px"><a href="${escapeAttr(iri)}" target="_blank" rel="noopener">${escapeHtml(iri)}</a></div>` : ''}
+  `;
+
+  tooltip.classList.add('visible');
+
+  // Position tooltip
+  const rect = el.getBoundingClientRect();
+  tooltip.style.left = '-9999px';
+  tooltip.style.top = '-9999px';
+
+  requestAnimationFrame(() => {
+    const tw = tooltip.offsetWidth;
+    const th = tooltip.offsetHeight;
+    let top = rect.bottom + 8;
+    let left = rect.left;
+
+    if (left + tw > window.innerWidth) left = window.innerWidth - tw - 10;
+    if (left < 10) left = 10;
+    if (top + th > window.innerHeight) top = rect.top - th - 8;
+
+    tooltip.style.top = top + 'px';
+    tooltip.style.left = left + 'px';
+  });
+}
+
+// Hide tooltip on click outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.annotation-span') && !e.target.closest('.concept-tooltip')) {
+    document.getElementById('tooltip').classList.remove('visible');
+  }
+});
+
+function renderConceptsList(annotations) {
+  const container = document.getElementById('conceptsList');
+  if (!annotations.length) {
+    container.innerHTML = '<div class="empty-state"><p>No concepts found</p></div>';
+    return;
+  }
+
+  // Deduplicate and group by branch
+  const conceptMap = new Map();
+  for (const ann of annotations) {
+    for (const c of ann.concepts) {
+      const key = c.folio_iri || c.concept_text;
+      if (conceptMap.has(key)) {
+        conceptMap.get(key).count++;
+      } else {
+        conceptMap.set(key, { ...c, count: 1 });
+      }
+    }
+  }
+
+  // Group by branch
+  const groups = {};
+  for (const c of conceptMap.values()) {
+    const branch = c.branch || 'Other';
+    if (!groups[branch]) groups[branch] = [];
+    groups[branch].push(c);
+  }
+
+  // Sort branches, then concepts within each branch by count
+  const sortedBranches = Object.keys(groups).sort();
+  let html = '';
+
+  for (const branch of sortedBranches) {
+    const concepts = groups[branch].sort((a, b) => b.count - a.count);
+    const branchColor = BRANCH_COLORS[branch] || 'var(--text-dim)';
+    const totalOccurrences = concepts.reduce((s, c) => s + c.count, 0);
+
+    html += `<div class="concept-group">`;
+    html += `<div class="concept-group-header" style="color:${branchColor}">
+      ${escapeHtml(branch)}
+      <span class="concept-group-count">${concepts.length} concepts, ${totalOccurrences} occurrences</span>
+    </div>`;
+
+    for (const c of concepts) {
+      const confPct = c.confidence > 1 ? c.confidence : c.confidence * 100;
+      html += `<div class="concept-item">
+        <div class="concept-name" style="color:${branchColor}">${escapeHtml(c.folio_label || c.concept_text)}</div>
+        <div class="concept-meta">${c.count} occurrence${c.count > 1 ? 's' : ''} &middot; ${escapeHtml(c.source || 'unknown')} &middot; ${confPct.toFixed(0)}%</div>
+        <div class="confidence-bar"><div class="confidence-fill" style="width:${Math.min(confPct, 100)}%;background:${branchColor}"></div></div>
+      </div>`;
+    }
+
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function renderTriples(triples) {
+  const container = document.getElementById('triplesList');
+  if (!triples || !triples.length) {
+    container.innerHTML = '<div class="empty-state"><p>No triples extracted</p></div>';
+    return;
+  }
+
+  let html = `<p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">${triples.length} Subject-Predicate-Object triples extracted from dependency parsing:</p>`;
+  html += '<div style="font-size:12px">';
+
+  for (const t of triples) {
+    html += `<div style="padding:8px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px">
+      <span style="color:var(--cyan);font-weight:600">${escapeHtml(t.subject || '')}</span>
+      <span style="color:var(--text-dim)"> \u2192 </span>
+      <span style="color:var(--orange)">${escapeHtml(t.predicate || '')}</span>
+      <span style="color:var(--text-dim)"> \u2192 </span>
+      <span style="color:var(--purple);font-weight:600">${escapeHtml(t.object || '')}</span>
+      ${t.sentence ? `<div style="font-size:10px;color:var(--text-dim);margin-top:4px;font-style:italic">"${escapeHtml(t.sentence.slice(0,120))}${t.sentence.length > 120 ? '...' : ''}"</div>` : ''}
+    </div>`;
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function renderMetadata(metadata, job) {
+  const container = document.getElementById('metadataDisplay');
+  const fields = metadata.extracted_fields || {};
+
+  let html = '<div class="meta-grid">';
+  html += `<div class="meta-key">Job ID</div><div class="meta-value">${escapeHtml(String(job.id))}</div>`;
+  html += `<div class="meta-key">Status</div><div class="meta-value">${escapeHtml(job.status)}</div>`;
+  html += `<div class="meta-key">Created</div><div class="meta-value">${new Date(job.created_at).toLocaleString()}</div>`;
+
+  if (metadata.document_type) {
+    html += `<div class="meta-key">Document Type</div><div class="meta-value">${escapeHtml(metadata.document_type)}</div>`;
+  }
+  if (metadata.document_type_confidence) {
+    html += `<div class="meta-key">Type Confidence</div><div class="meta-value">${(metadata.document_type_confidence * 100).toFixed(0)}%</div>`;
+  }
+
+  // Statistics
+  const resolved = metadata.resolved_concepts || [];
+  const ruler = metadata.ruler_concepts || [];
+  html += `<div class="meta-key">EntityRuler Matches</div><div class="meta-value">${ruler.length}</div>`;
+  html += `<div class="meta-key">Resolved Concepts</div><div class="meta-value">${resolved.length}</div>`;
+  html += `<div class="meta-key">Total Annotations</div><div class="meta-value">${(job.result?.annotations || []).length}</div>`;
+
+  const triples = metadata.spo_triples || [];
+  if (triples.length) {
+    html += `<div class="meta-key">SPO Triples</div><div class="meta-value">${triples.length}</div>`;
+  }
+
+  // Extracted fields
+  for (const [k, v] of Object.entries(fields)) {
+    if (v && !k.startsWith('_')) {
+      const display = Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v);
+      html += `<div class="meta-key">${escapeHtml(k)}</div><div class="meta-value">${escapeHtml(display)}</div>`;
+    }
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function renderExportButtons() {
+  const container = document.getElementById('exportButtons');
+  if (!currentJobId) {
+    container.innerHTML = '<p style="color:var(--text-dim);font-size:12px">Complete an enrichment first.</p>';
+    return;
+  }
+
+  container.innerHTML = EXPORT_FORMATS.map(f =>
+    `<button class="secondary export-btn" onclick="exportFormat('${f.name}', '${f.ext}')">
+      ${f.label}<span class="ext">${f.ext}</span>
+    </button>`
+  ).join('');
+}
+
+async function exportFormat(format, ext) {
+  if (!currentJobId) return;
+  try {
+    const r = await fetch(`${API}/enrich/${currentJobId}/export?format=${format}`);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      throw new Error(err.detail || 'Export failed');
+    }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `folio-enrich-${currentJobId.slice(0,8)}${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert(`Export failed: ${e.message}`);
+  }
+}
+
+// ==============================================
+// Synthetic Document Generator
+// ==============================================
+
+async function openSynthetic() {
+  document.getElementById('syntheticModal').classList.add('visible');
+  await loadDocTypes();
+}
+
+function closeSynthetic() {
+  document.getElementById('syntheticModal').classList.remove('visible');
+}
+
+async function loadDocTypes() {
+  const tree = document.getElementById('docTypeTree');
+  try {
+    const r = await fetch(`${API}/synthetic/types`);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    const types = data.types || {};
+
+    let html = '';
+    for (const [category, subtypes] of Object.entries(types)) {
+      const catId = category.replace(/[^a-zA-Z]/g, '');
+      html += `<div class="doc-type-category" onclick="toggleDocCategory('${catId}', '${escapeAttr(category)}')">
+        <span class="arrow" id="arrow-${catId}">&#9654;</span>
+        <strong>${escapeHtml(category)}</strong>
+      </div>`;
+      html += `<div class="doc-type-subtypes" id="subtypes-${catId}">`;
+      if (Array.isArray(subtypes)) {
+        for (const st of subtypes) {
+          html += `<div class="doc-type-subtype" onclick="selectDocType(this, '${escapeAttr(st)}')">${escapeHtml(st)}</div>`;
+        }
+      }
+      html += '</div>';
+    }
+
+    tree.innerHTML = html;
+  } catch (e) {
+    tree.innerHTML = '<p style="color:var(--text-dim)">Failed to load document types. Make sure the backend is running.</p>';
+  }
+}
+
+function toggleDocCategory(catId, category) {
+  const subtypes = document.getElementById(`subtypes-${catId}`);
+  const arrow = document.getElementById(`arrow-${catId}`);
+
+  if (subtypes.classList.contains('open')) {
+    subtypes.classList.remove('open');
+    arrow.style.transform = 'rotate(0deg)';
+  } else {
+    subtypes.classList.add('open');
+    arrow.style.transform = 'rotate(90deg)';
+    // If clicking category directly (not expanding), select it
+    if (!selectedDocType) {
+      selectedDocType = category;
+    }
+  }
+}
+
+function selectDocType(el, type) {
+  document.querySelectorAll('.doc-type-subtype').forEach(s => s.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedDocType = type;
+}
+
+async function generateSynthetic() {
+  if (!selectedDocType) {
+    alert('Please select a document type first.');
+    return;
+  }
+
+  const length = document.querySelector('input[name="synLength"]:checked')?.value || 'medium';
+  const jurisdiction = document.getElementById('synJurisdiction').value;
+  const btn = document.getElementById('generateBtn');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generating...';
+
+  try {
+    const r = await fetch(`${API}/synthetic`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ doc_type: selectedDocType, length, jurisdiction }),
+    });
+
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      throw new Error(err.detail || 'Generation failed');
+    }
+
+    const data = await r.json();
+    document.getElementById('docInput').value = data.document;
+    document.getElementById('formatSelect').value = 'plain_text';
+    closeSynthetic();
+
+    // Auto-enrich
+    submitEnrichment();
+  } catch (e) {
+    alert('Generation failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generate & Annotate';
+  }
+}
+
+// ==============================================
+// UI Controls
+// ==============================================
+
+function toggleCollapsible(header) {
+  header.classList.toggle('open');
+  const body = header.nextElementSibling;
+  body.classList.toggle('open');
+}
+
+function switchTab(tabEl, name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  tabEl.classList.add('active');
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+function toggleUncertain() {
+  showUncertain = document.getElementById('hideUncertainToggle').checked;
+  // Re-render if we have results
+  if (currentJob) renderAnnotatedText(
+    currentJob.result?.canonical_text?.full_text || '',
+    currentJob.result?.annotations || []
+  );
+}
+
+function loadSample(name) {
+  document.getElementById('docInput').value = SAMPLES[name] || '';
+  document.getElementById('formatSelect').value = 'plain_text';
+}
+
+function clearAll() {
+  document.getElementById('docInput').value = '';
+  document.getElementById('docInput').placeholder = 'Paste your legal document text here...';
+  document.getElementById('annotatedText').innerHTML = '';
+  document.getElementById('annotatedText').style.display = 'none';
+  document.getElementById('emptyState').style.display = 'block';
+  document.getElementById('conceptsList').innerHTML = '';
+  document.getElementById('triplesList').innerHTML = '';
+  document.getElementById('metadataDisplay').innerHTML = '';
+  document.getElementById('exportButtons').innerHTML = '';
+  document.getElementById('tooltip').classList.remove('visible');
+  currentJobId = null;
+  currentJob = null;
+  stopPolling();
+  setStatus('Ready', 'idle');
+  renderProgressStages('pending');
+
+  // Reset to first tab
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab[data-tab="annotated"]').classList.add('active');
+  document.getElementById('tab-annotated').classList.add('active');
+}
+
+function setStatus(text, state) {
+  document.getElementById('statusText').textContent = text;
+  const badge = document.getElementById('statusBadge');
+  const colorMap = { running: 'var(--accent)', completed: 'var(--green)', failed: 'var(--red)', idle: 'var(--text-dim)' };
+  badge.style.color = colorMap[state] || 'var(--text-dim)';
+  badge.textContent = state;
+}
+
+// ==============================================
+// Utilities
+// ==============================================
+
+function escapeHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escapeAttr(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.classList.remove('visible');
+  });
+});
+
+// ==============================================
+// Init
+// ==============================================
+
+init();
+</script>
+</body>
+</html>
