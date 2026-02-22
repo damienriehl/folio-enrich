@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     anthropic_api_key: str = ""
 
+    # Embedding
+    embedding_model: str = "all-MiniLM-L6-v2"
+    semantic_similarity_threshold: float = 0.80
+
+    # Job management
+    job_retention_days: int = 30
+    max_concurrent_jobs: int = 10
+
     # Rate limiting
     rate_limit_requests: int = 60
     rate_limit_window: int = 60

@@ -6,6 +6,7 @@ from app.models.annotation import ConceptMatch
 from app.models.job import Job, JobStatus
 from app.pipeline.stages.base import PipelineStage
 from app.services.entity_ruler.ruler import EntityRulerMatch, FOLIOEntityRuler
+from app.services.entity_ruler.semantic_ruler import SemanticEntityRuler
 from app.services.folio.folio_service import FolioService
 
 logger = logging.getLogger(__name__)
@@ -28,8 +29,9 @@ def _match_confidence(match: EntityRulerMatch) -> float:
 
 
 class EntityRulerStage(PipelineStage):
-    def __init__(self, ruler: FOLIOEntityRuler | None = None) -> None:
+    def __init__(self, ruler: FOLIOEntityRuler | None = None, embedding_service=None) -> None:
         self.ruler = ruler or FOLIOEntityRuler()
+        self._embedding_service = embedding_service
         self._patterns_loaded = False
 
     def _ensure_patterns_loaded(self) -> None:
@@ -57,7 +59,8 @@ class EntityRulerStage(PipelineStage):
             return job
 
         self._ensure_patterns_loaded()
-        matches = self.ruler.find_matches(job.result.canonical_text.full_text)
+        full_text = job.result.canonical_text.full_text
+        matches = self.ruler.find_matches(full_text)
 
         ruler_concepts = []
         for match in matches:
@@ -82,7 +85,28 @@ class EntityRulerStage(PipelineStage):
                 "folio_iri": match.entity_id,
             }
 
+        # Semantic EntityRuler: find near-matches missed by exact matching
+        if self._embedding_service is not None and self._embedding_service.index_size > 0:
+            known_spans = {(m.start_char, m.end_char) for m in matches}
+            semantic_ruler = SemanticEntityRuler(self._embedding_service)
+            semantic_matches = semantic_ruler.find_semantic_matches(full_text, known_spans)
+            for sm in semantic_matches:
+                ruler_concepts.append(
+                    ConceptMatch(
+                        concept_text=sm.text,
+                        folio_iri=sm.iri,
+                        folio_label=sm.matched_label,
+                        confidence=sm.similarity,
+                        source="semantic_ruler",
+                    ).model_dump()
+                )
+            if semantic_matches:
+                logger.info(
+                    "SemanticEntityRuler found %d additional matches for job %s",
+                    len(semantic_matches), job.id,
+                )
+
         job.result.metadata["ruler_concepts"] = ruler_concepts
         job.result.metadata["ruler_match_types"] = match_types
-        logger.info("EntityRuler found %d matches for job %s", len(ruler_concepts), job.id)
+        logger.info("EntityRuler found %d total matches for job %s", len(ruler_concepts), job.id)
         return job

@@ -362,6 +362,24 @@
 
   .annotation-span:hover { background: rgba(108,140,255,0.35); }
 
+  /* Annotation state styles */
+  .annotation-span[data-state="preliminary"] {
+    background: var(--highlight-preliminary);
+    border-bottom-style: dashed;
+    opacity: 0.85;
+  }
+  .annotation-span[data-state="confirmed"] {
+    background: var(--highlight-confirmed);
+    border-bottom-style: solid;
+  }
+  .annotation-span[data-state="rejected"] {
+    background: var(--highlight-rejected);
+    border-bottom-color: var(--red);
+    border-bottom-style: dotted;
+    text-decoration: line-through;
+    opacity: 0.5;
+  }
+
   /* Branch-colored annotations */
   .annotation-span[data-branch="Actor / Player"] { border-bottom-color: var(--branch-actor); background: rgba(94,196,212,0.12); }
   .annotation-span[data-branch="Area of Law"] { border-bottom-color: var(--branch-area-of-law); background: rgba(232,165,76,0.12); }
@@ -773,6 +791,8 @@
           <option value="html">HTML</option>
           <option value="pdf">PDF</option>
           <option value="word">Word (DOCX)</option>
+          <option value="rtf">RTF</option>
+          <option value="email">Email (EML/MSG)</option>
         </select>
         <button class="primary" id="enrichBtn" onclick="submitEnrichment()">Enrich Document</button>
         <button class="secondary" onclick="clearAll()">Clear</button>
@@ -780,8 +800,8 @@
 
       <!-- File upload -->
       <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
-        Drop a file here or click to upload (PDF, DOCX, HTML, MD, TXT)
-        <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.html,.htm,.md,.txt" onchange="handleFileUpload(event)">
+        Drop a file here or click to upload (PDF, DOCX, HTML, MD, TXT, RTF, EML, MSG)
+        <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.html,.htm,.md,.txt,.rtf,.eml,.msg" onchange="handleFileUpload(event)">
       </div>
 
       <!-- Text input -->
@@ -1285,11 +1305,11 @@ function handleFileUpload(event) {
 
 async function processFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
-  const formatMap = { pdf: 'pdf', docx: 'word', doc: 'word', html: 'html', htm: 'html', md: 'markdown', txt: 'plain_text' };
+  const formatMap = { pdf: 'pdf', docx: 'word', doc: 'word', html: 'html', htm: 'html', md: 'markdown', txt: 'plain_text', rtf: 'rtf', eml: 'email', msg: 'email' };
   const format = formatMap[ext] || 'plain_text';
   document.getElementById('formatSelect').value = format;
 
-  if (['pdf', 'docx', 'doc'].includes(ext)) {
+  if (['pdf', 'docx', 'doc', 'rtf', 'msg'].includes(ext)) {
     // Read as base64
     const reader = new FileReader();
     reader.onload = () => {
@@ -1490,6 +1510,7 @@ function renderAnnotatedText(text, annotations) {
       pieces.push(escapeHtml(text.slice(lastEnd, ann.span.start)));
     }
 
+    const state = c.state || 'confirmed';
     const dataAttrs = [
       `data-iri="${escapeAttr(c.folio_iri || '')}"`,
       `data-label="${escapeAttr(c.folio_label || c.concept_text)}"`,
@@ -1497,6 +1518,7 @@ function renderAnnotatedText(text, annotations) {
       `data-branch="${escapeAttr(branch)}"`,
       `data-confidence="${c.confidence}"`,
       `data-source="${escapeAttr(c.source || '')}"`,
+      `data-state="${escapeAttr(state)}"`,
     ].join(' ');
 
     pieces.push(`<span class="annotation-span" ${dataAttrs}>${escapeHtml(text.slice(ann.span.start, ann.span.end))}</span>`);
@@ -1534,6 +1556,7 @@ function showTooltip(event, el) {
     <div class="tooltip-meta">
       <span>Confidence: ${conf > 1 ? (conf).toFixed(0) + '%' : (conf * 100).toFixed(0) + '%'}</span>
       <span>Source: ${escapeHtml(source || 'unknown')}</span>
+      <span>State: ${escapeHtml(el.dataset.state || 'confirmed')}</span>
     </div>
     ${iri ? `<div class="tooltip-iri" style="margin-top:4px"><a href="${escapeAttr(iri)}/html" target="_blank" rel="noopener">${escapeHtml(iri)}/html</a></div>` : ''}
   `;

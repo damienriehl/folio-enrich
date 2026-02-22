@@ -17,6 +17,9 @@ dependencies = [
     "sse-starlette>=2.0.0",
     "pyarrow>=15.0.0",
     "rdflib>=7.0.0",
+    "nupunkt>=0.1.0",
+    "striprtf>=0.0.26",
+    "extract-msg>=0.48.0",
 ]
 
 [project.optional-dependencies]

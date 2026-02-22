@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID
 
 from app.config import settings
-from app.models.job import Job
+from app.models.job import Job, JobStatus
+
+logger = logging.getLogger(__name__)
 
 
 class JobStore:
@@ -52,3 +56,37 @@ class JobStore:
             path.unlink()
             return True
         return False
+
+    async def count_active(self) -> int:
+        """Count jobs currently in progress."""
+        count = 0
+        for path in self.base_dir.glob("*.json"):
+            try:
+                data = json.loads(path.read_text())
+                status = data.get("status", "")
+                if status not in ("completed", "failed", "pending"):
+                    count += 1
+            except Exception:
+                continue
+        return count
+
+    async def cleanup_expired(self, retention_days: int | None = None) -> int:
+        """Delete jobs older than retention period. Returns count of deleted jobs."""
+        if retention_days is None:
+            retention_days = settings.job_retention_days
+        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        deleted = 0
+
+        for path in list(self.base_dir.glob("*.json")):
+            try:
+                data = json.loads(path.read_text())
+                updated = data.get("updated_at") or data.get("created_at")
+                if updated:
+                    ts = datetime.fromisoformat(updated)
+                    if ts < cutoff:
+                        path.unlink()
+                        deleted += 1
+            except Exception:
+                continue
+
+        return deleted

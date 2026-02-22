@@ -79,8 +79,79 @@ class Reconciler:
         ruler_concepts: list[ConceptMatch],
         llm_concepts: list[ConceptMatch],
     ) -> list[ReconciliationResult]:
-        """Enhanced reconciliation that uses embedding similarity for conflict resolution."""
-        # For now, delegate to basic reconciliation
-        # Embedding triage will enhance this when both paths identify different concepts
-        # for the same text span (a true conflict scenario)
-        return self.reconcile(ruler_concepts, llm_concepts)
+        """Enhanced reconciliation that uses embedding similarity for conflict resolution.
+
+        When ruler and LLM identify the same text span but map to different FOLIO
+        concepts, compute cosine similarity between each candidate label and the
+        original text to pick the better match.
+        """
+        if self._embedding_service is None or self._embedding_service.index_size == 0:
+            return self.reconcile(ruler_concepts, llm_concepts)
+
+        ruler_by_text = {c.concept_text.lower(): c for c in ruler_concepts}
+        llm_by_text = {c.concept_text.lower(): c for c in llm_concepts}
+        all_keys = set(ruler_by_text.keys()) | set(llm_by_text.keys())
+        results: list[ReconciliationResult] = []
+
+        for key in all_keys:
+            in_ruler = key in ruler_by_text
+            in_llm = key in llm_by_text
+
+            if in_ruler and in_llm:
+                rc = ruler_by_text[key]
+                lc = llm_by_text[key]
+
+                # Check if they agree on the same concept (same IRI)
+                if rc.folio_iri and lc.folio_iri and rc.folio_iri == lc.folio_iri:
+                    # Both agree — boost confidence
+                    concept = lc
+                    concept.confidence = min(1.0, max(rc.confidence, lc.confidence) + 0.05)
+                    concept.source = "reconciled"
+                    results.append(ReconciliationResult(concept=concept, category="both_agree"))
+                elif rc.folio_iri and lc.folio_iri:
+                    # Conflict: different IRIs for same text span — use embedding triage
+                    ruler_label = rc.folio_label or rc.concept_text
+                    llm_label = lc.folio_label or lc.concept_text
+                    ruler_sim = self._embedding_service.similarity(key, ruler_label)
+                    llm_sim = self._embedding_service.similarity(key, llm_label)
+
+                    if max(ruler_sim, llm_sim) > EMBEDDING_AUTO_RESOLVE_THRESHOLD:
+                        # Auto-resolve to higher-similarity match
+                        if ruler_sim >= llm_sim:
+                            rc.source = "reconciled"
+                            rc.confidence = max(rc.confidence, ruler_sim)
+                            results.append(ReconciliationResult(concept=rc, category="conflict_resolved"))
+                        else:
+                            lc.source = "reconciled"
+                            lc.confidence = max(lc.confidence, llm_sim)
+                            results.append(ReconciliationResult(concept=lc, category="conflict_resolved"))
+                    else:
+                        # Cannot auto-resolve — include both with needs_judge flag
+                        rc.source = "reconciled"
+                        lc.source = "reconciled"
+                        results.append(ReconciliationResult(concept=rc, category="conflict_resolved"))
+                        results.append(ReconciliationResult(concept=lc, category="conflict_resolved"))
+                else:
+                    # No IRIs to compare — default agreement merge
+                    concept = lc
+                    concept.confidence = min(1.0, max(rc.confidence, lc.confidence) + 0.05)
+                    concept.source = "reconciled"
+                    results.append(ReconciliationResult(concept=concept, category="both_agree"))
+
+            elif in_ruler and not in_llm:
+                concept = ruler_by_text[key]
+                if concept.confidence >= RULER_ONLY_MIN_CONFIDENCE:
+                    concept.source = "entity_ruler"
+                    results.append(ReconciliationResult(concept=concept, category="ruler_only"))
+                else:
+                    logger.debug(
+                        "Filtered ruler-only concept '%s' (confidence=%.2f < %.2f threshold)",
+                        key, concept.confidence, RULER_ONLY_MIN_CONFIDENCE,
+                    )
+
+            elif in_llm and not in_ruler:
+                concept = llm_by_text[key]
+                concept.source = "llm"
+                results.append(ReconciliationResult(concept=concept, category="llm_only"))
+
+        return results

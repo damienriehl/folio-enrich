@@ -85,3 +85,45 @@ class TestReconciler:
         results = reconciler.reconcile(ruler, llm)
         assert len(results) == 1
         assert results[0].category == "both_agree"
+
+
+class TestEmbeddingTriage:
+    def test_embedding_triage_without_service_falls_back(self):
+        """Without embedding service, triage delegates to basic reconciliation."""
+        reconciler = Reconciler(embedding_service=None)
+        ruler = [_concept("court", source="entity_ruler", confidence=0.80)]
+        llm = [_concept("court", source="llm", confidence=0.85)]
+        results = reconciler.reconcile_with_embedding_triage(ruler, llm)
+        assert len(results) == 1
+        assert results[0].category == "both_agree"
+
+    def test_embedding_triage_same_iri_agrees(self):
+        """When both paths map to the same IRI, treat as agreement."""
+        from unittest.mock import MagicMock
+        mock_emb = MagicMock()
+        mock_emb.index_size = 100
+        reconciler = Reconciler(embedding_service=mock_emb)
+
+        ruler = [ConceptMatch(concept_text="court", source="entity_ruler",
+                              confidence=0.90, folio_iri="iri1")]
+        llm = [ConceptMatch(concept_text="court", source="llm",
+                            confidence=0.85, folio_iri="iri1")]
+        results = reconciler.reconcile_with_embedding_triage(ruler, llm)
+        assert len(results) == 1
+        assert results[0].category == "both_agree"
+
+    def test_embedding_triage_conflict_resolves(self):
+        """When IRIs differ, embedding similarity should resolve the conflict."""
+        from unittest.mock import MagicMock
+        mock_emb = MagicMock()
+        mock_emb.index_size = 100
+        mock_emb.similarity.side_effect = lambda a, b: 0.90 if "Court" in b else 0.50
+        reconciler = Reconciler(embedding_service=mock_emb)
+
+        ruler = [ConceptMatch(concept_text="court", source="entity_ruler",
+                              confidence=0.90, folio_iri="iri1", folio_label="Court")]
+        llm = [ConceptMatch(concept_text="court", source="llm",
+                            confidence=0.85, folio_iri="iri2", folio_label="Justice")]
+        results = reconciler.reconcile_with_embedding_triage(ruler, llm)
+        assert len(results) >= 1
+        assert results[0].category == "conflict_resolved"

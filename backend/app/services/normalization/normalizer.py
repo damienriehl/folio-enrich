@@ -17,10 +17,21 @@ def normalize_whitespace(text: str) -> str:
 
 
 def split_sentences(text: str) -> list[str]:
-    """Simple regex sentence splitter. Will be replaced by NuPunkt-RS in Phase 5."""
-    # Split on sentence-ending punctuation followed by whitespace and uppercase
-    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z])", text)
-    return [p for p in parts if p.strip()]
+    """Sentence splitter using NuPunkt for legal-domain accuracy.
+
+    NuPunkt handles legal citations (e.g., "42 U.S.C. § 1983", "No. 12-345")
+    without incorrectly splitting at abbreviation periods.
+    Falls back to regex if nupunkt is not installed.
+    """
+    try:
+        from nupunkt import SentenceTokenizer
+        tokenizer = SentenceTokenizer()
+        sentences = tokenizer.tokenize(text)
+        return [s for s in sentences if s.strip()]
+    except ImportError:
+        # Fallback to regex if nupunkt not installed
+        parts = re.split(r"(?<=[.!?])\s+(?=[A-Z])", text)
+        return [p for p in parts if p.strip()]
 
 
 def chunk_text(
@@ -106,6 +117,11 @@ def normalize_and_chunk(
 ) -> CanonicalText:
     normalized = normalize_whitespace(raw_text)
     chunks = chunk_text(normalized)
+
+    # Populate sentence boundaries on each chunk
+    for chunk in chunks:
+        chunk.sentences = split_sentences(chunk.text)
+
     return CanonicalText(
         full_text=normalized,
         chunks=chunks,

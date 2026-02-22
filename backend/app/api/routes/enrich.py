@@ -63,6 +63,15 @@ def _get_llm_for_request(req: EnrichRequest):
 
 @router.post("", status_code=202)
 async def create_enrichment(req: EnrichRequest) -> dict:
+    # Check concurrent job limit
+    from app.config import settings as app_settings
+    active = await _job_store.count_active()
+    if active >= app_settings.max_concurrent_jobs:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many concurrent jobs ({active}/{app_settings.max_concurrent_jobs}). Try again later.",
+        )
+
     doc = DocumentInput(content=req.content, format=req.format, filename=req.filename)
     job = Job(input=doc)
     await _job_store.save(job)

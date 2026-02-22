@@ -32,7 +32,7 @@ class ResolutionStage(PipelineStage):
                     branch=concept_data.get("branch", ""),
                     confidence=concept_data.get("confidence", 0.0),
                     source=concept_data.get("source", "reconciled"),
-                    folio_iri=concept_data.get("folio_iri"),  # Use IRI directly
+                    folio_iri=concept_data.get("folio_iri"),
                 )
                 if resolved:
                     resolved_concepts.append({
@@ -43,6 +43,7 @@ class ResolutionStage(PipelineStage):
                         "branch": resolved.branch,
                         "confidence": resolved.confidence,
                         "source": resolved.source,
+                        "state": "confirmed",  # Successfully resolved → confirmed
                     })
         else:
             # No reconciled concepts — resolve from individual sources
@@ -53,7 +54,7 @@ class ResolutionStage(PipelineStage):
                     branch=concept_data.get("branch", ""),
                     confidence=concept_data.get("confidence", 1.0),
                     source="entity_ruler",
-                    folio_iri=concept_data.get("folio_iri"),  # Use IRI directly
+                    folio_iri=concept_data.get("folio_iri"),
                 )
                 if resolved:
                     resolved_concepts.append({
@@ -64,6 +65,7 @@ class ResolutionStage(PipelineStage):
                         "branch": resolved.branch,
                         "confidence": resolved.confidence,
                         "source": resolved.source,
+                        "state": "confirmed",
                     })
 
             # Then LLM concepts
@@ -91,6 +93,7 @@ class ResolutionStage(PipelineStage):
                             "branch": resolved.branch,
                             "confidence": resolved.confidence,
                             "source": resolved.source,
+                            "state": "confirmed",
                         })
 
         job.result.metadata["resolved_concepts"] = resolved_concepts

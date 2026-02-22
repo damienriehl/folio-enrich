@@ -16,8 +16,9 @@ class ConceptMatch(BaseModel):
     folio_definition: str | None = None
     branch: str | None = None
     confidence: float = 0.0
-    source: str = "llm"  # "llm", "entity_ruler", "reconciled"
+    source: str = "llm"  # "llm", "entity_ruler", "semantic_ruler", "reconciled"
     match_type: str | None = None  # "preferred" or "alternative" (from EntityRuler)
+    state: str = "preliminary"  # "preliminary", "confirmed", "rejected"
 
 
 class Annotation(BaseModel):

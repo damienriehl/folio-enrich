@@ -7,8 +7,8 @@ from app.services.reconciliation.reconciler import Reconciler
 
 
 class ReconciliationStage(PipelineStage):
-    def __init__(self, reconciler: Reconciler | None = None) -> None:
-        self.reconciler = reconciler or Reconciler()
+    def __init__(self, reconciler: Reconciler | None = None, embedding_service=None) -> None:
+        self.reconciler = reconciler or Reconciler(embedding_service=embedding_service)
 
     @property
     def name(self) -> str:
@@ -26,9 +26,13 @@ class ReconciliationStage(PipelineStage):
             for c in chunk_concepts:
                 llm_concepts.append(ConceptMatch(**c))
 
-        results = self.reconciler.reconcile(ruler_concepts, llm_concepts)
+        # Use embedding triage if embedding service is available
+        if self.reconciler._embedding_service is not None:
+            results = self.reconciler.reconcile_with_embedding_triage(ruler_concepts, llm_concepts)
+        else:
+            results = self.reconciler.reconcile(ruler_concepts, llm_concepts)
 
-        # Store reconciled concepts for resolution stage
+        # Store reconciled concepts for resolution stage (all start as "preliminary")
         reconciled = [
             {
                 "concept_text": r.concept.concept_text,
@@ -37,6 +41,7 @@ class ReconciliationStage(PipelineStage):
                 "source": r.concept.source,
                 "folio_iri": r.concept.folio_iri,
                 "category": r.category,
+                "state": "preliminary",
             }
             for r in results
         ]

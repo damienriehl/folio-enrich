@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from app.models.document import DocumentFormat, DocumentInput
+from app.models.document import DocumentFormat, DocumentInput, TextElement
 from app.services.ingestion.base import IngestorBase
 from app.services.ingestion.html_ingestor import HTMLIngestor
 from app.services.ingestion.markdown_ingestor import MarkdownIngestor
 from app.services.ingestion.pdf_ingestor import PDFIngestor
 from app.services.ingestion.plain_text import PlainTextIngestor
 from app.services.ingestion.word_ingestor import WordIngestor
+from app.services.ingestion.rtf_ingestor import RTFIngestor
+from app.services.ingestion.email_ingestor import EmailIngestor
 
 _INGESTORS: dict[DocumentFormat, type[IngestorBase]] = {
     DocumentFormat.PLAIN_TEXT: PlainTextIngestor,
@@ -14,6 +16,8 @@ _INGESTORS: dict[DocumentFormat, type[IngestorBase]] = {
     DocumentFormat.WORD: WordIngestor,
     DocumentFormat.HTML: HTMLIngestor,
     DocumentFormat.MARKDOWN: MarkdownIngestor,
+    DocumentFormat.RTF: RTFIngestor,
+    DocumentFormat.EMAIL: EmailIngestor,
 }
 
 
@@ -39,6 +43,9 @@ def detect_format(filename: str | None, content: str) -> DocumentFormat:
             "pdf": DocumentFormat.PDF,
             "docx": DocumentFormat.WORD,
             "doc": DocumentFormat.WORD,
+            "rtf": DocumentFormat.RTF,
+            "eml": DocumentFormat.EMAIL,
+            "msg": DocumentFormat.EMAIL,
         }
         if ext in ext_map:
             return ext_map[ext]
@@ -56,3 +63,9 @@ def detect_format(filename: str | None, content: str) -> DocumentFormat:
 def ingest(doc: DocumentInput) -> str:
     ingestor = get_ingestor(doc.format)
     return ingestor.ingest(doc)
+
+
+def ingest_with_elements(doc: DocumentInput) -> tuple[str, list[TextElement]]:
+    """Ingest document returning both raw text and structural elements."""
+    ingestor = get_ingestor(doc.format)
+    return ingestor.ingest_with_elements(doc)

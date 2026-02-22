@@ -21,19 +21,31 @@ from app.storage.job_store import JobStore
 logger = logging.getLogger(__name__)
 
 
+def _get_embedding_service():
+    """Get the singleton EmbeddingService if it has indexed labels."""
+    try:
+        from app.services.embedding.service import EmbeddingService
+        svc = EmbeddingService.get_instance()
+        return svc if svc.index_size > 0 else None
+    except Exception:
+        return None
+
+
 def build_stages(llm: LLMProvider | None = None) -> list[PipelineStage]:
     """Build the full pipeline stage list. LLM-dependent stages are included
     only when an LLM provider is available; otherwise they are skipped gracefully."""
+    embedding_service = _get_embedding_service()
+
     stages: list[PipelineStage] = [
         IngestionStage(),
         NormalizationStage(),
-        EntityRulerStage(),
+        EntityRulerStage(embedding_service=embedding_service),
     ]
 
     if llm is not None:
         stages.append(LLMConceptStage(llm))
 
-    stages.append(ReconciliationStage())
+    stages.append(ReconciliationStage(embedding_service=embedding_service))
     stages.append(ResolutionStage())
 
     if llm is not None:

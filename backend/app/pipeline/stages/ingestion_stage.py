@@ -12,7 +12,10 @@ class IngestionStage(PipelineStage):
 
     async def execute(self, job: Job) -> Job:
         job.status = JobStatus.INGESTING
-        raw_text = ingestion.ingest(job.input)
+        raw_text, elements = ingestion.ingest_with_elements(job.input)
         # Store raw text temporarily for next stage
         job.result.metadata["_raw_text"] = raw_text
+        # Store text elements for structural tracking
+        if elements:
+            job.result.metadata["_text_elements"] = [e.model_dump() for e in elements]
         return job

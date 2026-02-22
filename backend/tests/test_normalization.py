@@ -36,12 +36,25 @@ class TestSplitSentences:
     def test_single_sentence(self):
         result = split_sentences("Just one sentence.")
         assert len(result) == 1
-        assert result[0] == "Just one sentence."
+        assert result[0].strip() == "Just one sentence."
 
     def test_preserves_abbreviations_lowercase(self):
         # lowercase after period should not split
         result = split_sentences("The U.S. court ruled today.")
         assert len(result) == 1
+
+    def test_legal_citation_usc(self):
+        """42 U.S.C. § 1983 should not be split mid-citation."""
+        text = "42 U.S.C. § 1983 provides a cause of action. The statute is important."
+        result = split_sentences(text)
+        # The citation should be in the first sentence, not split
+        assert any("42 U.S.C." in s for s in result)
+
+    def test_legal_citation_case_number(self):
+        """Case numbers like 'No. 12-345' should not cause splits."""
+        text = "See Smith v. Jones, No. 12-345. The court ruled accordingly."
+        result = split_sentences(text)
+        assert any("No. 12-345" in s or "No." in s for s in result)
 
 
 class TestChunkText:

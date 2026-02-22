@@ -54,10 +54,13 @@ class BranchJudgeStage(PipelineStage):
             # Update concepts with judge decisions
             for concept, result in zip(ambiguous, results):
                 if isinstance(result, dict):
-                    concept["branch"] = result.get("branch", "")
+                    branch = result.get("branch", "")
+                    concept["branch"] = branch
                     concept["confidence"] = max(
                         concept.get("confidence", 0),
                         result.get("confidence", 0),
                     )
+                    # Judge validates → confirmed; no branch found → rejected
+                    concept["state"] = "confirmed" if branch else "rejected"
 
         return job

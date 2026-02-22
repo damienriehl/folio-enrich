@@ -76,6 +76,21 @@ class EmbeddingService:
         vecs = provider.encode([text_a, text_b])
         return float(np.dot(vecs[0], vecs[1]))
 
+    def index_folio_labels(self, folio_service) -> None:
+        """Index all FOLIO concept labels for semantic search."""
+        labels_dict = folio_service.get_all_labels()
+        labels = list(labels_dict.keys())
+        metadata = [
+            {
+                "iri": info.concept.iri,
+                "label": info.matched_label,
+                "type": info.label_type,
+            }
+            for info in labels_dict.values()
+        ]
+        self.index_labels(labels, metadata)
+        logger.info("Indexed %d FOLIO labels into embedding service", len(labels))
+
     @property
     def index_size(self) -> int:
         return len(self._labels)
