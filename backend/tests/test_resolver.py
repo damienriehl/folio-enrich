@@ -35,6 +35,7 @@ class FakeFolioService(FolioService):
                 parent_iris=[],
             ),
         }
+        self._by_iri = {c.iri: c for c in self._fake_concepts.values()}
 
     def search_by_label(self, label: str, top_k: int = 5) -> list[tuple[FOLIOConcept, float]]:
         key = label.lower()
@@ -45,6 +46,9 @@ class FakeFolioService(FolioService):
             if key in k or k in key:
                 return [(v, 0.7)]
         return []
+
+    def get_concept(self, iri: str) -> FOLIOConcept | None:
+        return self._by_iri.get(iri)
 
 
 class TestConceptResolver:
@@ -85,3 +89,26 @@ class TestConceptResolver:
         r2 = resolver.resolve("court")
         assert r1 is r2
         assert resolver.cache_size == 1
+
+    def test_resolve_by_iri(self):
+        """When folio_iri is provided, resolver looks up directly instead of searching."""
+        resolver = ConceptResolver(FakeFolioService())
+        result = resolver.resolve(
+            "some text",
+            folio_iri="https://folio.openlegalstandard.org/R001",
+            confidence=0.80,
+        )
+        assert result is not None
+        assert result.folio_concept.iri == "https://folio.openlegalstandard.org/R001"
+        assert result.folio_concept.preferred_label == "Breach of Contract"
+
+    def test_resolve_by_iri_fallback_to_search(self):
+        """When IRI lookup fails, falls back to label search."""
+        resolver = ConceptResolver(FakeFolioService())
+        result = resolver.resolve(
+            "court",
+            folio_iri="https://folio.openlegalstandard.org/NONEXISTENT",
+        )
+        # Falls back to search_by_label("court") which finds Court
+        assert result is not None
+        assert result.folio_concept.preferred_label == "Court"

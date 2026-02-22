@@ -15,6 +15,12 @@ class SettingsUpdate(BaseModel):
     anthropic_api_key: str | None = None
 
 
+class TestConnectionRequest(BaseModel):
+    provider: str = "openai"
+    model: str = "gpt-4o-mini"
+    api_key: str = ""
+
+
 PROVIDER_MODELS = {
     "openai": [
         "gpt-4o",
@@ -84,22 +90,22 @@ async def list_providers() -> dict:
 
 
 @router.post("/test-connection")
-async def test_connection(provider: str = "openai", model: str = "gpt-4o-mini", api_key: str = "") -> dict:
+async def test_connection(req: TestConnectionRequest) -> dict:
     """Test an LLM provider connection."""
     from app.services.llm.registry import get_provider
 
-    actual_key = api_key
+    actual_key = req.api_key
     if not actual_key:
-        if provider == "openai":
+        if req.provider == "openai":
             actual_key = settings.openai_api_key
-        elif provider == "anthropic":
+        elif req.provider == "anthropic":
             actual_key = settings.anthropic_api_key
 
     if not actual_key:
-        return {"status": "error", "message": f"No API key for {provider}"}
+        return {"status": "error", "message": f"No API key for {req.provider}"}
 
     try:
-        llm = get_provider(provider, model=model, api_key=actual_key)
+        llm = get_provider(req.provider, model=req.model, api_key=actual_key)
         response = await llm.complete("Say 'connection successful' in exactly two words.")
         return {"status": "ok", "message": "Connection successful", "response": response[:100]}
     except Exception as e:

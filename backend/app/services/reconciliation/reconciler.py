@@ -9,6 +9,11 @@ logger = logging.getLogger(__name__)
 
 EMBEDDING_AUTO_RESOLVE_THRESHOLD = 0.85
 
+# Ruler-only concepts need at least this confidence to be accepted
+# This filters out low-confidence single-word alt-label matches (conf=0.35)
+# while keeping preferred labels (conf=0.80) and multi-word matches (conf>=0.65)
+RULER_ONLY_MIN_CONFIDENCE = 0.60
+
 
 @dataclass
 class ReconciliationResult:
@@ -47,11 +52,19 @@ class Reconciler:
                 results.append(ReconciliationResult(concept=concept, category="both_agree"))
 
             elif in_ruler and not in_llm:
-                # EntityRuler only: accept if multi-word or high confidence
+                # EntityRuler only: accept based on confidence threshold
+                # Multi-word preferred (0.95) and single-word preferred (0.80) pass
+                # Multi-word alt (0.65) passes
+                # Single-word alt (0.35) is rejected — too many false positives
                 concept = ruler_by_text[key]
-                if len(key.split()) > 1 or concept.confidence >= 0.8:
+                if concept.confidence >= RULER_ONLY_MIN_CONFIDENCE:
                     concept.source = "entity_ruler"
                     results.append(ReconciliationResult(concept=concept, category="ruler_only"))
+                else:
+                    logger.debug(
+                        "Filtered ruler-only concept '%s' (confidence=%.2f < %.2f threshold)",
+                        key, concept.confidence, RULER_ONLY_MIN_CONFIDENCE,
+                    )
 
             elif in_llm and not in_ruler:
                 # LLM only: accept, mark as contextual

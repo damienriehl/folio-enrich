@@ -6,8 +6,8 @@ from dataclasses import dataclass
 import spacy
 from spacy.language import Language
 
-from app.services.entity_ruler.pattern_builder import build_patterns
-from app.services.folio.folio_service import FOLIOConcept
+from app.services.entity_ruler.pattern_builder import build_patterns, decode_pattern_id
+from app.services.folio.folio_service import LabelInfo
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,8 @@ class EntityRulerMatch:
     start_char: int
     end_char: int
     label: str
-    entity_id: str  # FOLIO IRI
+    entity_id: str  # FOLIO IRI (decoded, without label_type suffix)
+    match_type: str  # "preferred" or "alternative"
 
 
 class FOLIOEntityRuler:
@@ -33,9 +34,9 @@ class FOLIOEntityRuler:
             self._nlp = spacy.blank("en")
         return self._nlp
 
-    def load_patterns(self, concepts: dict[str, FOLIOConcept]) -> None:
+    def load_patterns(self, labels: dict[str, LabelInfo]) -> None:
         nlp = self._get_nlp()
-        patterns = build_patterns(concepts)
+        patterns = build_patterns(labels)
 
         if "entity_ruler" in nlp.pipe_names:
             nlp.remove_pipe("entity_ruler")
@@ -54,13 +55,15 @@ class FOLIOEntityRuler:
         matches = []
         for ent in doc.ents:
             if ent.label_ == "FOLIO_CONCEPT":
+                iri, match_type = decode_pattern_id(ent.ent_id_)
                 matches.append(
                     EntityRulerMatch(
                         text=ent.text,
                         start_char=ent.start_char,
                         end_char=ent.end_char,
                         label=ent.label_,
-                        entity_id=ent.ent_id_,
+                        entity_id=iri,
+                        match_type=match_type,
                     )
                 )
         return matches

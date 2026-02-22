@@ -26,13 +26,13 @@ class ResolutionStage(PipelineStage):
         resolved_concepts: list[dict] = []
 
         if reconciled:
-            # Resolve reconciled concepts
             for concept_data in reconciled:
                 resolved = self.resolver.resolve(
                     concept_text=concept_data.get("concept_text", ""),
                     branch=concept_data.get("branch", ""),
                     confidence=concept_data.get("confidence", 0.0),
                     source=concept_data.get("source", "reconciled"),
+                    folio_iri=concept_data.get("folio_iri"),  # Use IRI directly
                 )
                 if resolved:
                     resolved_concepts.append({
@@ -46,7 +46,6 @@ class ResolutionStage(PipelineStage):
                     })
         else:
             # No reconciled concepts — resolve from individual sources
-            # Try ruler concepts first
             ruler_raw = job.result.metadata.get("ruler_concepts", [])
             for concept_data in ruler_raw:
                 resolved = self.resolver.resolve(
@@ -54,6 +53,7 @@ class ResolutionStage(PipelineStage):
                     branch=concept_data.get("branch", ""),
                     confidence=concept_data.get("confidence", 1.0),
                     source="entity_ruler",
+                    folio_iri=concept_data.get("folio_iri"),  # Use IRI directly
                 )
                 if resolved:
                     resolved_concepts.append({
@@ -80,6 +80,7 @@ class ResolutionStage(PipelineStage):
                         branch=concept_data.get("branch", ""),
                         confidence=concept_data.get("confidence", 0.0),
                         source="llm",
+                        folio_iri=concept_data.get("folio_iri"),
                     )
                     if resolved:
                         resolved_concepts.append({

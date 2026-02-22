@@ -37,6 +37,7 @@ class HTMLExporter(ExporterBase):
                 f" - {concept.folio_definition or 'No definition'}"
             )
             iri = html.escape(concept.folio_iri or "#")
+            iri_link = f"{iri}/html" if iri != "#" else "#"
 
             close_tag = "</a></span>"
             open_tag = (
@@ -44,7 +45,7 @@ class HTMLExporter(ExporterBase):
                 f'data-iri="{iri}" '
                 f'data-branch="{html.escape(concept.branch or "")}" '
                 f'data-confidence="{concept.confidence:.2f}">'
-                f'<a href="{iri}" title="{tooltip}" class="folio-link">'
+                f'<a href="{iri_link}" title="{tooltip}" class="folio-link">'
             )
 
             # Insert tags at correct positions in the escaped text

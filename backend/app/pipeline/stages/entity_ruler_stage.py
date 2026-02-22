@@ -5,10 +5,26 @@ import logging
 from app.models.annotation import ConceptMatch
 from app.models.job import Job, JobStatus
 from app.pipeline.stages.base import PipelineStage
-from app.services.entity_ruler.ruler import FOLIOEntityRuler
+from app.services.entity_ruler.ruler import EntityRulerMatch, FOLIOEntityRuler
 from app.services.folio.folio_service import FolioService
 
 logger = logging.getLogger(__name__)
+
+# Confidence scores based on match quality
+# Multi-word preferred labels are almost certainly correct
+# Single-word alt labels (e.g., "grant" → Donation) are very unreliable
+_CONFIDENCE = {
+    ("preferred", True): 0.95,   # multi-word preferred label
+    ("preferred", False): 0.80,  # single-word preferred label
+    ("alternative", True): 0.65, # multi-word alternative label
+    ("alternative", False): 0.35,  # single-word alternative label — high false-positive rate
+}
+
+
+def _match_confidence(match: EntityRulerMatch) -> float:
+    """Compute confidence score based on match type and word count."""
+    is_multi_word = len(match.text.split()) > 1
+    return _CONFIDENCE.get((match.match_type, is_multi_word), 0.50)
 
 
 class EntityRulerStage(PipelineStage):
@@ -45,15 +61,28 @@ class EntityRulerStage(PipelineStage):
 
         ruler_concepts = []
         for match in matches:
+            confidence = _match_confidence(match)
             ruler_concepts.append(
                 ConceptMatch(
                     concept_text=match.text,
                     folio_iri=match.entity_id,
-                    confidence=1.0,  # Deterministic match
+                    confidence=confidence,
                     source="entity_ruler",
+                    match_type=match.match_type,
                 ).model_dump()
             )
 
+        # Store match_type metadata separately for reconciliation
+        match_types = {}
+        for match in matches:
+            match_types[match.text.lower()] = {
+                "match_type": match.match_type,
+                "is_multi_word": len(match.text.split()) > 1,
+                "confidence": _match_confidence(match),
+                "folio_iri": match.entity_id,
+            }
+
         job.result.metadata["ruler_concepts"] = ruler_concepts
+        job.result.metadata["ruler_match_types"] = match_types
         logger.info("EntityRuler found %d matches for job %s", len(ruler_concepts), job.id)
         return job

@@ -46,6 +46,8 @@ def _get_llm_for_request(req: EnrichRequest):
             api_key = settings.openai_api_key
         elif provider_name == "anthropic":
             api_key = settings.anthropic_api_key
+        elif provider_name in ("ollama", "lm_studio"):
+            api_key = "local"  # Local models don't need a real API key
 
     if not api_key:
         logger.info("No API key for %s — LLM stages will be skipped", provider_name)

@@ -20,10 +20,14 @@ def get_provider(name: str, **kwargs) -> LLMProvider:
 
 def _register_defaults() -> None:
     from app.services.llm.anthropic_provider import AnthropicProvider
+    from app.services.llm.lm_studio_provider import LMStudioProvider
+    from app.services.llm.ollama_provider import OllamaProvider
     from app.services.llm.openai_provider import OpenAIProvider
 
     register_provider("openai", OpenAIProvider)
     register_provider("anthropic", AnthropicProvider)
+    register_provider("ollama", OllamaProvider)
+    register_provider("lm_studio", LMStudioProvider)
 
 
 _register_defaults()

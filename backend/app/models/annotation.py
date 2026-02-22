@@ -17,6 +17,7 @@ class ConceptMatch(BaseModel):
     branch: str | None = None
     confidence: float = 0.0
     source: str = "llm"  # "llm", "entity_ruler", "reconciled"
+    match_type: str | None = None  # "preferred" or "alternative" (from EntityRuler)
 
 
 class Annotation(BaseModel):

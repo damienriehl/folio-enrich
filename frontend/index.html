@@ -61,14 +61,76 @@
     flex-shrink: 0;
   }
 
-  header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+  header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; white-space: nowrap; }
   header h1 span { color: var(--accent); }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 8px;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow-x: auto;
+  }
+
+  .status-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    cursor: default;
+    transition: border-color 0.2s;
+    position: relative;
+  }
+
+  .status-chip:hover { border-color: var(--accent-dim); }
+
+  .status-chip .chip-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .status-chip .chip-dot.green { background: var(--green); }
+  .status-chip .chip-dot.orange { background: var(--orange); }
+  .status-chip .chip-dot.red { background: var(--red); }
+  .status-chip .chip-dot.gray { background: #555; }
+  .status-chip .chip-dot.blue { background: var(--accent); }
+
+  .status-chip .chip-label { font-weight: 500; color: var(--text); }
+  .status-chip .chip-detail { color: var(--text-dim); }
+
+  /* Tooltip for status chips */
+  .status-chip[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+    color: var(--text);
+    white-space: nowrap;
+    z-index: 100;
+    pointer-events: none;
+  }
 
   .header-right {
     margin-left: auto;
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-shrink: 0;
   }
 
   .status-dot {
@@ -629,8 +691,33 @@
 
 <header>
   <h1><span>FOLIO</span> Enrich</h1>
-  <span class="status-dot" id="healthDot"></span>
-  <span style="font-size:11px;color:var(--text-dim)" id="healthText">Connecting...</span>
+  <div class="status-bar" id="statusBar">
+    <div class="status-chip" id="chipBackend" data-tooltip="Checking...">
+      <span class="chip-dot gray"></span>
+      <span class="chip-label">Backend</span>
+      <span class="chip-detail" id="chipBackendDetail">...</span>
+    </div>
+    <div class="status-chip" id="chipFolio" data-tooltip="FOLIO ontology status">
+      <span class="chip-dot gray"></span>
+      <span class="chip-label">FOLIO</span>
+      <span class="chip-detail" id="chipFolioDetail">...</span>
+    </div>
+    <div class="status-chip" id="chipEmbedding" data-tooltip="Embedding service status">
+      <span class="chip-dot gray"></span>
+      <span class="chip-label">Embedding</span>
+      <span class="chip-detail" id="chipEmbeddingDetail">...</span>
+    </div>
+    <div class="status-chip" id="chipLLM" data-tooltip="LLM provider status">
+      <span class="chip-dot gray"></span>
+      <span class="chip-label">LLM</span>
+      <span class="chip-detail" id="chipLLMDetail">...</span>
+    </div>
+    <div class="status-chip" id="chipSpacy" data-tooltip="spaCy NLP status">
+      <span class="chip-dot gray"></span>
+      <span class="chip-label">spaCy</span>
+      <span class="chip-detail" id="chipSpacyDetail">...</span>
+    </div>
+  </div>
   <div class="header-right">
     <label class="toggle" title="Toggle uncertain annotations">
       <input type="checkbox" id="hideUncertainToggle" checked onchange="toggleUncertain()">
@@ -895,18 +982,88 @@ async function init() {
 }
 
 // ==============================================
-// Health Check
+// Health Check — detailed subsystem status
 // ==============================================
 
+function setChip(id, dotColor, detail, tooltip) {
+  const chip = document.getElementById(id);
+  if (!chip) return;
+  const dot = chip.querySelector('.chip-dot');
+  dot.className = 'chip-dot ' + dotColor;
+  const detailEl = document.getElementById(id + 'Detail');
+  if (detailEl) detailEl.textContent = detail;
+  chip.setAttribute('data-tooltip', tooltip);
+}
+
 async function checkHealth() {
+  // Quick basic check first
   try {
     const r = await fetch(`${API}/health`);
     if (!r.ok) throw new Error();
-    document.getElementById('healthDot').classList.remove('disconnected');
-    document.getElementById('healthText').textContent = 'Backend connected';
+    setChip('chipBackend', 'green', 'Connected', 'Backend is running');
   } catch {
-    document.getElementById('healthDot').classList.add('disconnected');
-    document.getElementById('healthText').textContent = 'Backend offline';
+    setChip('chipBackend', 'red', 'Offline', 'Cannot reach backend at ' + API);
+    setChip('chipFolio', 'gray', '---', 'Backend offline');
+    setChip('chipEmbedding', 'gray', '---', 'Backend offline');
+    setChip('chipLLM', 'gray', '---', 'Backend offline');
+    setChip('chipSpacy', 'gray', '---', 'Backend offline');
+    return;
+  }
+
+  // Detailed subsystem check
+  try {
+    const r = await fetch(`${API}/health/detail`);
+    if (!r.ok) return;
+    const d = await r.json();
+
+    // FOLIO Ontology
+    const f = d.folio_ontology || {};
+    if (f.status === 'ready') {
+      setChip('chipFolio', 'green',
+        `${(f.concepts || 0).toLocaleString()} concepts`,
+        `FOLIO loaded: ${(f.concepts || 0).toLocaleString()} concepts, ${(f.labels_indexed || 0).toLocaleString()} labels indexed`);
+    } else if (f.status === 'not_loaded') {
+      setChip('chipFolio', 'orange', 'Standby', 'FOLIO ontology not yet loaded — loads on first enrichment request');
+    } else {
+      setChip('chipFolio', 'red', 'Error', f.message || 'Failed to load FOLIO ontology');
+    }
+
+    // Embedding
+    const e = d.embedding || {};
+    if (e.status === 'ready') {
+      setChip('chipEmbedding', 'green',
+        e.provider || 'Ready',
+        `Embedding: ${e.provider}, ${(e.index_size || 0).toLocaleString()} vectors indexed`);
+    } else if (e.status === 'not_loaded') {
+      setChip('chipEmbedding', 'orange', 'Standby', 'Embedding service loads on first use');
+    } else {
+      setChip('chipEmbedding', 'red', 'Error', e.message || 'Embedding service error');
+    }
+
+    // LLM
+    const l = d.llm || {};
+    const modelShort = (l.model || '').split('/').pop();
+    if (l.status === 'configured') {
+      setChip('chipLLM', 'green',
+        `${l.provider}/${modelShort}`,
+        `LLM: ${l.provider} / ${l.model} — API key configured`);
+    } else if (l.status === 'no_api_key') {
+      setChip('chipLLM', 'orange',
+        `${l.provider}/${modelShort}`,
+        `LLM: ${l.provider} / ${l.model} — No API key set. EntityRuler-only mode.`);
+    } else {
+      setChip('chipLLM', 'red', 'Error', l.message || 'LLM error');
+    }
+
+    // spaCy
+    const s = d.spacy || {};
+    if (s.status === 'ready') {
+      setChip('chipSpacy', 'green', `v${s.version}`, `spaCy ${s.version} — EntityRuler ready`);
+    } else {
+      setChip('chipSpacy', 'red', 'Error', s.message || 'spaCy not available');
+    }
+  } catch {
+    // Detail endpoint failed — leave subsystem chips at current state
   }
 }
 
@@ -961,6 +1118,10 @@ function onProviderChange() {
   const needsKey = ['openai', 'anthropic'].includes(provider);
   document.getElementById('apiKeyGroup').style.display = needsKey ? 'block' : 'none';
 
+  // Clear test status when switching providers
+  const testStatus = document.getElementById('testStatus');
+  if (testStatus) { testStatus.textContent = ''; testStatus.className = 'test-status'; }
+
   updateLLMSummary();
 }
 
@@ -999,6 +1160,21 @@ async function testConnection() {
   status.textContent = 'Testing...';
   status.className = 'test-status';
 
+  // First, save the provider/model/key to backend settings so health check updates
+  try {
+    const settingsBody = { llm_provider: provider, llm_model: model };
+    if (apiKey) {
+      if (provider === 'openai') settingsBody.openai_api_key = apiKey;
+      else if (provider === 'anthropic') settingsBody.anthropic_api_key = apiKey;
+    }
+    await fetch(`${API}/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settingsBody),
+    });
+  } catch { /* settings save is best-effort */ }
+
+  // Now test the actual connection
   try {
     const r = await fetch(`${API}/settings/test-connection`, {
       method: 'POST',
@@ -1017,6 +1193,10 @@ async function testConnection() {
     status.textContent = e.message;
     status.className = 'test-status error';
   }
+
+  // Refresh health status chips
+  checkHealth();
+  updateLLMSummary();
 }
 
 // ==============================================
@@ -1069,7 +1249,14 @@ async function saveSettings() {
     document.getElementById('providerSelect').value = provider;
     onProviderChange();
     document.getElementById('modelSelect').value = model;
+
+    // Sync the inline API key field with whichever key applies to the chosen provider
+    const inlineKey = document.getElementById('apiKeyInput');
+    if (provider === 'openai' && openaiKey) inlineKey.value = openaiKey;
+    else if (provider === 'anthropic' && anthropicKey) inlineKey.value = anthropicKey;
+
     updateLLMSummary();
+    checkHealth();  // Refresh status chips
     closeSettings();
   } catch (e) {
     alert('Failed to save settings: ' + e.message);
@@ -1138,6 +1325,18 @@ async function submitEnrichment() {
   renderProgressStages('pending');
 
   try {
+    // Save provider/model/key to backend settings first
+    const settingsBody = { llm_provider: provider, llm_model: model };
+    if (apiKey) {
+      if (provider === 'openai') settingsBody.openai_api_key = apiKey;
+      else if (provider === 'anthropic') settingsBody.anthropic_api_key = apiKey;
+    }
+    await fetch(`${API}/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settingsBody),
+    }).catch(() => {});
+
     const body = { content, format };
     if (provider) body.llm_provider = provider;
     if (model) body.llm_model = model;
@@ -1336,7 +1535,7 @@ function showTooltip(event, el) {
       <span>Confidence: ${conf > 1 ? (conf).toFixed(0) + '%' : (conf * 100).toFixed(0) + '%'}</span>
       <span>Source: ${escapeHtml(source || 'unknown')}</span>
     </div>
-    ${iri ? `<div class="tooltip-iri" style="margin-top:4px"><a href="${escapeAttr(iri)}" target="_blank" rel="noopener">${escapeHtml(iri)}</a></div>` : ''}
+    ${iri ? `<div class="tooltip-iri" style="margin-top:4px"><a href="${escapeAttr(iri)}/html" target="_blank" rel="noopener">${escapeHtml(iri)}/html</a></div>` : ''}
   `;
 
   tooltip.classList.add('visible');

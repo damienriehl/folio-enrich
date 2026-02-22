@@ -30,24 +30,44 @@ class ConceptResolver:
         branch: str = "",
         confidence: float = 0.0,
         source: str = "llm",
+        folio_iri: str | None = None,
     ) -> ResolvedConcept | None:
+        """Resolve a concept to a FOLIO concept.
+
+        If folio_iri is provided, look up the concept directly by IRI (fast path).
+        Otherwise, search by label text (slow path with potential mismatches).
+        """
         cache_key = (concept_text.lower(), branch.lower())
         if cache_key in self._cache:
             return self._cache[cache_key]
 
-        results = self.folio.search_by_label(concept_text, top_k=3)
-        if not results:
-            self._cache[cache_key] = None
-            return None
+        best_concept = None
+        score = 0.0
 
-        best_concept, score = results[0]
+        # Fast path: direct IRI lookup (used by EntityRuler which already knows the IRI)
+        if folio_iri:
+            direct = self.folio.get_concept(folio_iri)
+            if direct:
+                best_concept = direct
+                score = confidence  # Trust the confidence from the caller
+            else:
+                logger.warning("IRI lookup failed for %s, falling back to search", folio_iri)
 
-        # If branch hint provided, prefer matches in that branch
-        if branch:
-            for concept, s in results:
-                if branch.lower() in concept.branch.lower():
-                    best_concept, score = concept, s
-                    break
+        # Slow path: search by label text
+        if best_concept is None:
+            results = self.folio.search_by_label(concept_text, top_k=3)
+            if not results:
+                self._cache[cache_key] = None
+                return None
+
+            best_concept, score = results[0]
+
+            # If branch hint provided, prefer matches in that branch
+            if branch:
+                for concept, s in results:
+                    if branch.lower() in concept.branch.lower():
+                        best_concept, score = concept, s
+                        break
 
         resolved = ResolvedConcept(
             concept_text=concept_text,
@@ -69,6 +89,7 @@ class ConceptResolver:
                 c.get("branch", ""),
                 c.get("confidence", 0.0),
                 c.get("source", "llm"),
+                c.get("folio_iri"),
             )
             for c in concepts
         ]

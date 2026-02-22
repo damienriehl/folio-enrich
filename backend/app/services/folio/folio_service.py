@@ -16,6 +16,14 @@ class FOLIOConcept:
     parent_iris: list[str]
 
 
+@dataclass
+class LabelInfo:
+    """A label entry that tracks whether it's a preferred or alternative label."""
+    concept: FOLIOConcept
+    label_type: str  # "preferred" or "alternative"
+    matched_label: str  # The actual label text that matched
+
+
 class FolioService:
     """Singleton wrapper around folio-python for ontology access."""
 
@@ -23,7 +31,7 @@ class FolioService:
 
     def __init__(self) -> None:
         self._folio = None
-        self._labels_cache: dict[str, FOLIOConcept] | None = None
+        self._labels_cache: dict[str, LabelInfo] | None = None
         self._branch_map: dict[str, str] | None = None
 
     @classmethod
@@ -109,25 +117,42 @@ class FolioService:
         except (KeyError, Exception):
             return None
 
-    def get_all_labels(self) -> dict[str, FOLIOConcept]:
-        """Return a mapping of all concept labels (preferred + alternative) to concepts."""
+    def get_all_labels(self) -> dict[str, LabelInfo]:
+        """Return a mapping of all concept labels to LabelInfo with type metadata.
+
+        Preferred labels take priority: if a label is both a preferred label for
+        one concept and an alt label for another, the preferred entry wins.
+        """
         if self._labels_cache is not None:
             return self._labels_cache
 
         folio = self._get_folio()
-        labels: dict[str, FOLIOConcept] = {}
+        labels: dict[str, LabelInfo] = {}
 
         for concept in folio.classes:
             try:
                 fc = self._to_folio_concept(concept)
-                # Index by label
-                label = fc.preferred_label
-                if label:
-                    labels[label.lower()] = fc
-                # Index by alternative labels
+
+                # Index preferred label (always wins over alt)
+                pref = fc.preferred_label
+                if pref:
+                    key = pref.lower()
+                    labels[key] = LabelInfo(
+                        concept=fc,
+                        label_type="preferred",
+                        matched_label=pref,
+                    )
+
+                # Index alternative labels (only if not already a preferred label)
                 for alt in fc.alternative_labels:
                     if alt:
-                        labels[alt.lower()] = fc
+                        key = alt.lower()
+                        if key not in labels or labels[key].label_type != "preferred":
+                            labels[key] = LabelInfo(
+                                concept=fc,
+                                label_type="alternative",
+                                matched_label=alt,
+                            )
             except Exception:
                 continue
 

@@ -34,6 +34,25 @@ class TestReconciler:
         results = reconciler.reconcile(ruler, llm)
         assert len(results) == 0
 
+    def test_ruler_only_alt_label_single_word_dropped(self):
+        """Single-word alternative label matches (e.g., 'grant' → Donation) should be
+        filtered out because confidence=0.35 is below the threshold."""
+        reconciler = Reconciler()
+        ruler = [_concept("grant", source="entity_ruler", confidence=0.35)]
+        llm = []
+        results = reconciler.reconcile(ruler, llm)
+        assert len(results) == 0
+
+    def test_ruler_only_preferred_label_single_word_kept(self):
+        """Single-word preferred label matches (e.g., 'court') should be kept
+        because confidence=0.80 is above the threshold."""
+        reconciler = Reconciler()
+        ruler = [_concept("court", source="entity_ruler", confidence=0.80)]
+        llm = []
+        results = reconciler.reconcile(ruler, llm)
+        assert len(results) == 1
+        assert results[0].category == "ruler_only"
+
     def test_llm_only(self):
         reconciler = Reconciler()
         ruler = []
