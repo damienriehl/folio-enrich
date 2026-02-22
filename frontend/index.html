@@ -59,6 +59,9 @@
     gap: 16px;
     height: 48px;
     flex-shrink: 0;
+    overflow: visible;
+    position: relative;
+    z-index: 50;
   }
 
   header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; white-space: nowrap; }
@@ -71,7 +74,6 @@
     margin-left: 8px;
     flex-shrink: 1;
     min-width: 0;
-    overflow-x: auto;
   }
 
   .status-chip {
@@ -107,13 +109,12 @@
   .status-chip .chip-label { font-weight: 500; color: var(--text); }
   .status-chip .chip-detail { color: var(--text-dim); }
 
-  /* Tooltip for status chips */
+  /* Tooltip for status chips — use fixed positioning to avoid layout shift */
   .status-chip[data-tooltip]:hover::after {
     content: attr(data-tooltip);
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
+    position: fixed;
+    top: 44px;
+    left: auto;
     background: var(--surface3);
     border: 1px solid var(--border);
     border-radius: 4px;
