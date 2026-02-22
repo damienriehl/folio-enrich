@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+import html
+
+from app.models.job import Job
+from app.services.export.base import ExporterBase
+
+
+class HTMLExporter(ExporterBase):
+    @property
+    def format_name(self) -> str:
+        return "html"
+
+    @property
+    def content_type(self) -> str:
+        return "text/html"
+
+    def export(self, job: Job) -> str:
+        if job.result.canonical_text is None:
+            return "<html><body><p>No content</p></body></html>"
+
+        full_text = job.result.canonical_text.full_text
+
+        # Sort annotations by start position (reverse for safe insertion)
+        sorted_anns = sorted(job.result.annotations, key=lambda a: a.span.start, reverse=True)
+
+        # Build annotated HTML by inserting spans
+        result = list(html.escape(full_text))
+
+        for ann in sorted_anns:
+            if not ann.concepts:
+                continue
+            concept = ann.concepts[0]
+            tooltip = html.escape(
+                f"{concept.folio_label or concept.concept_text}"
+                f" ({concept.branch or 'unknown branch'})"
+                f" - {concept.folio_definition or 'No definition'}"
+            )
+            iri = html.escape(concept.folio_iri or "#")
+
+            close_tag = "</a></span>"
+            open_tag = (
+                f'<span class="folio-annotation" '
+                f'data-iri="{iri}" '
+                f'data-branch="{html.escape(concept.branch or "")}" '
+                f'data-confidence="{concept.confidence:.2f}">'
+                f'<a href="{iri}" title="{tooltip}" class="folio-link">'
+            )
+
+            # Insert tags at correct positions in the escaped text
+            end_pos = ann.span.end
+            start_pos = ann.span.start
+            result.insert(end_pos, close_tag)
+            result.insert(start_pos, open_tag)
+
+        body = "".join(result)
+
+        return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>FOLIO Enrich - Annotated Document</title>
+<style>
+.folio-annotation {{ background-color: #e8f4fd; border-bottom: 2px solid #2196F3; cursor: pointer; }}
+.folio-annotation:hover {{ background-color: #bbdefb; }}
+.folio-link {{ color: inherit; text-decoration: none; }}
+body {{ font-family: 'Georgia', serif; line-height: 1.6; max-width: 800px; margin: 40px auto; padding: 0 20px; }}
+</style>
+</head>
+<body>
+<pre style="white-space: pre-wrap; font-family: inherit;">{body}</pre>
+</body>
+</html>"""

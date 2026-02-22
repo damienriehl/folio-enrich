@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+from app.models.job import Job, JobStatus
+from app.pipeline.stages.base import PipelineStage
+from app.services.concept.branch_judge import BranchJudge
+from app.services.llm.base import LLMProvider
+
+
+class BranchJudgeStage(PipelineStage):
+    def __init__(self, llm: LLMProvider) -> None:
+        self.judge = BranchJudge(llm)
+
+    @property
+    def name(self) -> str:
+        return "branch_judge"
+
+    async def execute(self, job: Job) -> Job:
+        job.status = JobStatus.JUDGING
+
+        # Find concepts that need branch disambiguation
+        resolved = job.result.metadata.get("resolved_concepts", [])
+        ambiguous = [c for c in resolved if not c.get("branch")]
+
+        if not ambiguous or job.result.canonical_text is None:
+            return job
+
+        # Build judge items with sentence context
+        full_text = job.result.canonical_text.full_text
+        judge_items = []
+        for concept in ambiguous:
+            # Find sentence containing this concept
+            concept_text = concept.get("concept_text", "")
+            idx = full_text.lower().find(concept_text.lower())
+            if idx >= 0:
+                # Extract surrounding sentence (rough heuristic)
+                start = max(0, full_text.rfind(".", 0, idx) + 1)
+                end = full_text.find(".", idx + len(concept_text))
+                if end == -1:
+                    end = len(full_text)
+                else:
+                    end += 1
+                sentence = full_text[start:end].strip()
+            else:
+                sentence = concept_text
+
+            judge_items.append({
+                "concept_text": concept_text,
+                "sentence": sentence,
+                "candidate_branches": [],  # Let judge pick from all branches
+            })
+
+        if judge_items:
+            results = await self.judge.judge_batch(judge_items)
+            # Update concepts with judge decisions
+            for concept, result in zip(ambiguous, results):
+                if isinstance(result, dict):
+                    concept["branch"] = result.get("branch", "")
+                    concept["confidence"] = max(
+                        concept.get("confidence", 0),
+                        result.get("confidence", 0),
+                    )
+
+        return job

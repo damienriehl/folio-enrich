@@ -1,0 +1,18 @@
+services:
+  folio-enrich:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - FOLIO_ENRICH_DEBUG=false
+      - FOLIO_ENRICH_LLM_PROVIDER=openai
+      - FOLIO_ENRICH_LLM_MODEL=gpt-4o-mini
+      - FOLIO_ENRICH_OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - FOLIO_ENRICH_ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - FOLIO_ENRICH_CORS_ORIGINS=["http://localhost:3000"]
+    volumes:
+      - folio-jobs:/home/appuser/.folio-enrich/jobs
+    restart: unless-stopped
+
+volumes:
+  folio-jobs:
