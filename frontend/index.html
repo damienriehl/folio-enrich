@@ -745,6 +745,107 @@
   .test-status { font-size: 11px; margin-top: 6px; }
   .test-status.ok { color: var(--green); }
   .test-status.error { color: var(--red); }
+
+  .btn-test-sm {
+    font-size: 11px; padding: 2px 8px; margin-left: 8px;
+    border: 1px solid var(--border); border-radius: 4px;
+    background: var(--bg); color: var(--text); cursor: pointer;
+  }
+  .btn-test-sm:hover { background: var(--border); }
+
+  /* Settings modal header */
+  .settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 14px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-header h3 { margin: 0; font-size: 16px; }
+  .settings-header-actions { display: flex; gap: 10px; }
+  .settings-header-actions button {
+    background: none; border: none; cursor: pointer;
+    font-size: 13px; padding: 4px 10px; border-radius: 6px;
+  }
+  .settings-header-actions .btn-cancel { color: var(--text-dim); }
+  .settings-header-actions .btn-cancel:hover { background: var(--surface2); }
+  .settings-header-actions .btn-save {
+    color: var(--accent); font-weight: 600;
+  }
+  .settings-header-actions .btn-save:hover { background: var(--highlight); }
+
+  .settings-section-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--text-dim); margin-bottom: 10px;
+  }
+
+  /* Provider cards */
+  .provider-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    background: var(--surface);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .provider-card.active {
+    border-color: var(--accent);
+    background: var(--highlight);
+  }
+  .provider-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .provider-card-header input[type="radio"] {
+    accent-color: var(--accent);
+    margin: 0;
+    cursor: pointer;
+  }
+  .provider-card-header .provider-name {
+    font-weight: 600; font-size: 13px; flex: 1;
+  }
+  .provider-card-header .btn-test-card {
+    font-size: 11px; padding: 2px 10px;
+    border: 1px solid var(--border); border-radius: 4px;
+    background: var(--bg); color: var(--text); cursor: pointer;
+  }
+  .provider-card-header .btn-test-card:hover { background: var(--border); }
+  .provider-card-header .test-status {
+    font-size: 11px; min-width: 60px;
+  }
+
+  .provider-card-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .provider-card-field .field-label {
+    font-size: 11px; color: var(--text-dim); width: 46px;
+    text-align: right; flex-shrink: 0;
+  }
+  .provider-card-field input,
+  .provider-card-field select {
+    flex: 1; min-width: 0;
+    font-size: 12px; padding: 5px 8px;
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+  }
+  .provider-card-field .btn-refresh {
+    background: var(--bg); color: var(--text-dim);
+    border: 1px solid var(--border); border-radius: 4px;
+    cursor: pointer; font-size: 13px; padding: 3px 7px;
+    line-height: 1;
+  }
+  .provider-card-field .btn-refresh:hover { background: var(--border); color: var(--text); }
+
+  .provider-card-cost {
+    font-size: 11px; color: var(--text-dim);
+    padding-left: 54px; margin-top: 2px;
+  }
 </style>
 </head>
 <body>
@@ -911,21 +1012,16 @@
 
 <!-- Settings Modal -->
 <div class="modal-overlay" id="settingsModal">
-  <div class="modal">
-    <h3>Settings</h3>
-    <div class="form-group">
-      <label>Default LLM Provider</label>
-      <select id="settingsProvider"></select>
+  <div class="modal" style="max-width:560px">
+    <div class="settings-header">
+      <h3>LLM Provider Settings</h3>
+      <div class="settings-header-actions">
+        <button class="btn-cancel" onclick="closeSettings()">Cancel</button>
+        <button class="btn-save" onclick="saveSettings()">Save &amp; Close</button>
+      </div>
     </div>
-    <div class="form-group">
-      <label>Default Model</label>
-      <select id="settingsModel"></select>
-    </div>
-    <div id="settingsApiKeys"></div>
-    <div class="modal-actions">
-      <button class="secondary" onclick="closeSettings()">Cancel</button>
-      <button class="primary" onclick="saveSettings()">Save Settings</button>
-    </div>
+    <div class="settings-section-label">Cloud Providers</div>
+    <div id="settingsProviderCards"></div>
   </div>
 </div>
 
@@ -975,6 +1071,7 @@ let accumulatedAnnotations = [];
 let activityEntries = [];
 let providersData = {};   // provider name → metadata {display_name, requires_api_key, default_model, api_key_set}
 let knownModels = {};     // provider name → [{id, name, context_window}]
+let pricingData = {};     // model id → {input_cost_per_1k, output_cost_per_1k, ...}
 let selectedDocType = null;
 let showUncertain = true;
 
@@ -1134,37 +1231,41 @@ async function checkHealth() {
 
 async function loadProviders() {
   try {
-    // Fetch provider metadata and known models in parallel
-    const [provR, modR] = await Promise.all([
+    // Fetch provider metadata, known models, and pricing in parallel
+    const [provR, modR, priceR] = await Promise.all([
       fetch(`${API}/settings/providers`),
       fetch(`${API}/settings/known-models`),
+      fetch(`${API}/settings/pricing`).catch(() => null),
     ]);
 
     if (provR.ok) {
       const data = await provR.json();
       providersData = data.providers || {};
 
-      // Populate provider selects
-      for (const sel of [document.getElementById('providerSelect'), document.getElementById('settingsProvider')]) {
-        sel.innerHTML = '';
-        for (const [name, meta] of Object.entries(providersData)) {
-          const opt = document.createElement('option');
-          opt.value = name;
-          opt.textContent = meta.display_name || name;
-          sel.appendChild(opt);
-        }
+      // Populate inline provider select
+      const sel = document.getElementById('providerSelect');
+      sel.innerHTML = '';
+      for (const [name, meta] of Object.entries(providersData)) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = meta.display_name || name;
+        sel.appendChild(opt);
       }
 
       // Set current
       if (data.current) {
         document.getElementById('providerSelect').value = data.current.provider;
-        document.getElementById('settingsProvider').value = data.current.provider;
       }
     }
 
     if (modR.ok) {
       const modData = await modR.json();
       knownModels = modData.models || {};
+    }
+
+    if (priceR && priceR.ok) {
+      const priceData = await priceR.json();
+      pricingData = priceData.models || priceData || {};
     }
 
     onProviderChange();
@@ -1256,11 +1357,9 @@ async function loadSettings() {
     const data = await r.json();
     if (data.llm_provider) {
       document.getElementById('providerSelect').value = data.llm_provider;
-      document.getElementById('settingsProvider').value = data.llm_provider;
       onProviderChange();
       if (data.llm_model) {
         document.getElementById('modelSelect').value = data.llm_model;
-        document.getElementById('settingsModel').value = data.llm_model;
       }
     }
     updateLLMSummary();
@@ -1340,50 +1439,158 @@ function _providerKeyField(provider) {
 
 function openSettings() {
   document.getElementById('settingsModal').classList.add('visible');
-  document.getElementById('settingsProvider').value = document.getElementById('providerSelect').value;
-  populateSettingsModels();
-  populateSettingsApiKeys();
+  populateSettingsCards();
 }
 
 function closeSettings() {
   document.getElementById('settingsModal').classList.remove('visible');
 }
 
-function populateSettingsModels() {
-  const provider = document.getElementById('settingsProvider').value;
-  const sel = document.getElementById('settingsModel');
-  populateModelSelect(sel, provider);
-}
-
-function populateSettingsApiKeys() {
-  const container = document.getElementById('settingsApiKeys');
+function populateSettingsCards() {
+  const container = document.getElementById('settingsProviderCards');
   const cloudProviders = Object.entries(providersData).filter(([_, m]) => m.requires_api_key !== false);
+  const activeProvider = document.getElementById('providerSelect').value;
 
   let html = '';
   for (const [name, meta] of cloudProviders) {
-    const fieldId = `settingsKey_${name}`;
-    html += `<div class="form-group">
-      <label>${escapeHtml(meta.display_name || name)} API Key</label>
-      <input type="password" id="${fieldId}" placeholder="API key for ${escapeHtml(meta.display_name || name)}">
+    const displayName = escapeHtml(meta.display_name || name);
+    const isActive = name === activeProvider;
+    const escapedName = escapeAttr(name);
+    html += `<div class="provider-card${isActive ? ' active' : ''}" id="providerCard_${escapedName}">
+      <div class="provider-card-header">
+        <input type="radio" name="settingsActiveProvider" value="${escapedName}"${isActive ? ' checked' : ''}>
+        <span class="provider-name">${displayName}</span>
+        <button type="button" class="btn-test-card" onclick="testSettingsProvider('${escapedName}')">Test</button>
+        <span class="test-status" id="settingsTestStatus_${escapedName}"></span>
+      </div>
+      <div class="provider-card-field">
+        <span class="field-label">Key</span>
+        <input type="password" id="settingsKey_${escapedName}" placeholder="API key for ${displayName}">
+      </div>
+      <div class="provider-card-field">
+        <span class="field-label">Model</span>
+        <select id="settingsModel_${escapedName}" onchange="updateSettingsCost('${escapedName}')"></select>
+        <button type="button" class="btn-refresh" onclick="refreshSettingsModels('${escapedName}')" title="Refresh model list from API">&#8635;</button>
+      </div>
+      <div class="provider-card-cost" id="settingsCost_${escapedName}"></div>
     </div>`;
   }
   container.innerHTML = html;
+
+  // Populate model selects and costs
+  for (const [name] of cloudProviders) {
+    const sel = document.getElementById(`settingsModel_${name}`);
+    populateModelSelect(sel, name);
+    // Try to set the current model if this is the active provider
+    if (name === activeProvider) {
+      const currentModel = document.getElementById('modelSelect').value;
+      if (currentModel) sel.value = currentModel;
+    }
+    updateSettingsCost(name);
+  }
+
+  // Radio button change listeners
+  container.querySelectorAll('input[name="settingsActiveProvider"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      container.querySelectorAll('.provider-card').forEach(card => card.classList.remove('active'));
+      if (radio.checked) {
+        document.getElementById(`providerCard_${radio.value}`).classList.add('active');
+      }
+    });
+  });
 }
 
-document.getElementById('settingsProvider').addEventListener('change', () => {
-  populateSettingsModels();
-});
+function updateSettingsCost(providerName) {
+  const costEl = document.getElementById(`settingsCost_${providerName}`);
+  if (!costEl) return;
+  const sel = document.getElementById(`settingsModel_${providerName}`);
+  if (!sel) return;
+  const modelId = sel.value;
+
+  const pricing = pricingData[modelId];
+  if (pricing && (pricing.input_cost_per_1k || pricing.output_cost_per_1k)) {
+    const inputCost = pricing.input_cost_per_1k || 0;
+    const outputCost = pricing.output_cost_per_1k || 0;
+    costEl.textContent = `Est. cost: ~$${((inputCost + outputCost) / 2).toFixed(4)} per pipeline node`;
+  } else {
+    costEl.textContent = '';
+  }
+}
+
+async function refreshSettingsModels(providerName) {
+  const apiKey = document.getElementById(`settingsKey_${providerName}`).value;
+  const sel = document.getElementById(`settingsModel_${providerName}`);
+  const currentModel = sel.value;
+
+  try {
+    const r = await fetch(`${API}/settings/models`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: providerName, api_key: apiKey || undefined }),
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    const models = data.models || [];
+    if (models.length > 0) {
+      sel.innerHTML = '';
+      for (const m of models) {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        const ctx = m.context_window ? ` (${(m.context_window / 1000).toFixed(0)}K)` : '';
+        opt.textContent = (m.name || m.id) + ctx;
+        sel.appendChild(opt);
+      }
+      if (currentModel) sel.value = currentModel;
+      updateSettingsCost(providerName);
+    }
+  } catch (e) {
+    console.debug('Model refresh failed for', providerName, e);
+  }
+}
+
+async function testSettingsProvider(providerName) {
+  const apiKey = document.getElementById(`settingsKey_${providerName}`).value;
+  const modelSel = document.getElementById(`settingsModel_${providerName}`);
+  const model = modelSel ? modelSel.value : '';
+  const status = document.getElementById(`settingsTestStatus_${providerName}`);
+
+  status.textContent = 'Testing...';
+  status.className = 'test-status';
+
+  try {
+    const r = await fetch(`${API}/settings/test-connection`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: providerName, model, api_key: apiKey || undefined }),
+    });
+    const data = await r.json();
+    if (data.success) {
+      status.textContent = 'Connected';
+      status.className = 'test-status ok';
+    } else {
+      status.textContent = data.message || 'Failed';
+      status.className = 'test-status error';
+    }
+  } catch (e) {
+    status.textContent = e.message;
+    status.className = 'test-status error';
+  }
+}
 
 async function saveSettings() {
-  const provider = document.getElementById('settingsProvider').value;
-  const model = document.getElementById('settingsModel').value;
+  // Read selected provider from radio
+  const checkedRadio = document.querySelector('input[name="settingsActiveProvider"]:checked');
+  if (!checkedRadio) { closeSettings(); return; }
+  const provider = checkedRadio.value;
+  const modelSel = document.getElementById(`settingsModel_${provider}`);
+  const model = modelSel ? modelSel.value : '';
 
   try {
     const body = { llm_provider: provider, llm_model: model };
 
-    // Collect API keys from settings modal
+    // Collect API keys from all provider cards
     const cloudProviders = Object.entries(providersData).filter(([_, m]) => m.requires_api_key !== false);
-    for (const [name, _] of cloudProviders) {
+    for (const [name] of cloudProviders) {
       const input = document.getElementById(`settingsKey_${name}`);
       if (input && input.value) {
         const keyField = _providerKeyField(name);
