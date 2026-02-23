@@ -160,6 +160,7 @@ class PipelineOrchestrator:
         llm: LLMProvider | None = None,
     ) -> None:
         self.job_store = job_store
+        self._llm = llm
         self._config: PipelineConfig | None = None
         if stages is not None:
             # Legacy flat mode: use stages list directly
@@ -250,6 +251,19 @@ class PipelineOrchestrator:
             job.updated_at = datetime.now(timezone.utc)
             await self.job_store.save(job)
 
+            # Post-completion: Area of Law assessment (runs after pipeline results are available)
+            if self._llm is not None:
+                try:
+                    from app.services.concept.area_of_law_assessor import AreaOfLawAssessor
+                    assessor = AreaOfLawAssessor(self._llm)
+                    areas = await assessor.assess(job)
+                    job.result.metadata["areas_of_law"] = areas
+                    _log_activity(job, "area_of_law",
+                        f"Classified: {', '.join(a['area'] for a in areas)}")
+                    await self.job_store.save(job)
+                except Exception as e:
+                    logger.warning("Area of law assessment failed: %s", e)
+
         except Exception as e:
             logger.exception("Pipeline failed for job %s", job.id)
             _log_activity(job, "orchestrator", f"Pipeline failed: {e}")
@@ -279,6 +293,19 @@ class PipelineOrchestrator:
             job.status = JobStatus.COMPLETED
             job.updated_at = datetime.now(timezone.utc)
             await self.job_store.save(job)
+
+            # Post-completion: Area of Law assessment (runs after pipeline results are available)
+            if self._llm is not None:
+                try:
+                    from app.services.concept.area_of_law_assessor import AreaOfLawAssessor
+                    assessor = AreaOfLawAssessor(self._llm)
+                    areas = await assessor.assess(job)
+                    job.result.metadata["areas_of_law"] = areas
+                    _log_activity(job, "area_of_law",
+                        f"Classified: {', '.join(a['area'] for a in areas)}")
+                    await self.job_store.save(job)
+                except Exception as e:
+                    logger.warning("Area of law assessment failed: %s", e)
 
         except Exception as e:
             logger.exception("Pipeline failed for job %s", job.id)

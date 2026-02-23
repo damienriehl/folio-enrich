@@ -2005,6 +2005,8 @@ function startSSE() {
     setStatus(`Completed: ${data.total_annotations} annotations`, 'completed');
     // Fetch final job for full render (concepts list, metadata, triples, exports)
     fetchFinalJob();
+    // Re-fetch after delay to pick up post-pipeline assessments (e.g., areas of law)
+    setTimeout(() => fetchFinalJob(), 4000);
   });
 
   eventSource.addEventListener('error', (e) => {
@@ -2366,6 +2368,14 @@ function renderMetadata(metadata, job) {
   const triples = metadata.spo_triples || [];
   if (triples.length) {
     html += `<div class="meta-key">SPO Triples</div><div class="meta-value">${triples.length}</div>`;
+  }
+
+  // Areas of Law (post-pipeline assessment)
+  const areas = metadata.areas_of_law || [];
+  if (areas.length) {
+    html += `<div class="meta-key">Areas of Law</div><div class="meta-value">${
+      areas.map(a => escapeHtml(a.area)).join(', ')
+    }</div>`;
   }
 
   // Extracted fields

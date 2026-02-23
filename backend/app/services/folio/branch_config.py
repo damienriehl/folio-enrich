@@ -37,6 +37,7 @@ BRANCH_CONFIG: dict[str, dict[str, str]] = {
 EXCLUDED_BRANCHES: frozenset[str] = frozenset({
     "Standards Compatibility",
     "ZZZ - SANDBOX: UNDER CONSTRUCTION",
+    "Area of Law",
 })
 
 # Lookup by display name -> branch key

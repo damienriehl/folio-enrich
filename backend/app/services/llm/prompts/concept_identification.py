@@ -18,6 +18,7 @@ Rules:
 - A concept can be 1-5 words long
 - Prefer the most specific concept (e.g., "breach of contract" over just "breach")
 - Do not include common English words that are not legal concepts in context
+- Do NOT identify "area of law" categories (e.g., "litigation", "corporate law", "real estate law") — these are document-level classifications, not text-level concepts
 
 Respond with JSON:
 {{"concepts": [{{"concept_text": "...", "branch_hint": "...", "confidence": 0.95}}]}}

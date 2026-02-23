@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from app.models.annotation import ConceptMatch
 from app.models.job import Job, JobStatus
 from app.pipeline.stages.base import PipelineStage
+from app.services.folio.branch_config import EXCLUDED_BRANCHES
 from app.services.folio.resolver import ConceptResolver
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ class ResolutionStage(PipelineStage):
                     source=concept_data.get("source", "reconciled"),
                     folio_iri=concept_data.get("folio_iri"),
                 )
-                if resolved:
+                if resolved and resolved.branch not in EXCLUDED_BRANCHES:
                     resolved_concepts.append(self._to_resolved_dict(resolved))
         else:
             # No reconciled concepts — resolve from individual sources
@@ -65,7 +66,7 @@ class ResolutionStage(PipelineStage):
                     source="entity_ruler",
                     folio_iri=concept_data.get("folio_iri"),
                 )
-                if resolved:
+                if resolved and resolved.branch not in EXCLUDED_BRANCHES:
                     resolved_concepts.append(self._to_resolved_dict(resolved))
 
             # Then LLM concepts
@@ -84,7 +85,7 @@ class ResolutionStage(PipelineStage):
                         source="llm",
                         folio_iri=concept_data.get("folio_iri"),
                     )
-                    if resolved:
+                    if resolved and resolved.branch not in EXCLUDED_BRANCHES:
                         resolved_concepts.append(self._to_resolved_dict(resolved))
 
         job.result.metadata["resolved_concepts"] = resolved_concepts

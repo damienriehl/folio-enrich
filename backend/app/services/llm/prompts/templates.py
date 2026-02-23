@@ -3,7 +3,6 @@ from __future__ import annotations
 FOLIO_BRANCHES = [
     "Legal Actors",
     "Legal Analytics",
-    "Legal Areas",
     "Legal Authorities",
     "Legal Communication",
     "Legal Concepts",
@@ -19,7 +18,6 @@ FOLIO_BRANCHES = [
     "Legal Instruments",
     "Legal Jurisdictions",
     "Legal Matter Lifecycle",
-    "Legal Practice Areas",
     "Legal Processes",
     "Legal Professional Development",
     "Legal Rights",
