@@ -24,12 +24,14 @@ class CSVExporter(ExporterBase):
         writer.writerow([
             "span_start", "span_end", "span_text",
             "concept_text", "folio_iri", "folio_label",
-            "branch", "confidence", "source",
+            "branch", "branch_color", "confidence", "source",
+            "hierarchy_path", "definition",
         ])
 
         # Rows
         for ann in job.result.annotations:
             for concept in ann.concepts:
+                hierarchy = " > ".join(concept.hierarchy_path) if concept.hierarchy_path else ""
                 writer.writerow([
                     ann.span.start,
                     ann.span.end,
@@ -38,8 +40,11 @@ class CSVExporter(ExporterBase):
                     concept.folio_iri or "",
                     concept.folio_label or "",
                     concept.branch or "",
+                    concept.branch_color or "",
                     f"{concept.confidence:.4f}",
                     concept.source,
+                    hierarchy,
+                    concept.folio_definition or "",
                 ])
 
         return output.getvalue()

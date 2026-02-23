@@ -197,3 +197,16 @@ async def test_connection(req: ConnectionTestRequest) -> ConnectionTestResponse:
             success=False,
             message=str(e),
         )
+
+
+@router.get("/pricing")
+async def get_pricing() -> dict:
+    """Return LLM cost-per-document estimates from LiteLLM pricing DB."""
+    from app.services.llm.pricing import fetch_pricing
+
+    prices, fetched_at = await fetch_pricing()
+    return {
+        "prices": prices,
+        "fetched_at": fetched_at,
+        "model_count": len(prices),
+    }

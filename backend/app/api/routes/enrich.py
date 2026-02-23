@@ -89,6 +89,16 @@ async def create_enrichment(req: EnrichRequest) -> dict:
     return {"job_id": str(job.id), "status": job.status.value}
 
 
+@router.get("/branches")
+async def list_branches() -> dict:
+    """Return all non-excluded FOLIO branches with colors and concept counts."""
+    from app.services.folio.folio_service import FolioService
+
+    service = FolioService.get_instance()
+    branches = service.get_all_branches()
+    return {"branches": branches, "total": len(branches)}
+
+
 @router.get("/{job_id}")
 async def get_enrichment(job_id: UUID) -> Job:
     job = await _job_store.load(job_id)

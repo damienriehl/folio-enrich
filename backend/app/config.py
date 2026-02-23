@@ -36,7 +36,11 @@ class Settings(BaseSettings):
     github_models_api_key: str = ""
 
     # Embedding
+    embedding_provider: str = "local"  # local, ollama, openai
     embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_api_key: str = ""
+    embedding_base_url: str = ""
+    embedding_disabled: bool = False
     semantic_similarity_threshold: float = 0.80
 
     # Job management

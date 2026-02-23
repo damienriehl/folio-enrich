@@ -3,6 +3,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from app.services.folio.branch_config import (
+    EXCLUDED_BRANCHES,
+    get_branch_color,
+    get_branch_display_name,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,19 +56,41 @@ class FolioService:
         return self._folio
 
     def _build_branch_map(self) -> None:
-        """Build a map from concept IRI to branch name."""
+        """Build a map from concept IRI to branch display name."""
         if self._folio is None:
             return
         self._branch_map = {}
         try:
             branches = self._folio.get_folio_branches()
             for branch_type, concepts in branches.items():
-                branch_name = branch_type.value if hasattr(branch_type, "value") else str(branch_type)
+                # Use display name from branch_config when possible
+                branch_key = branch_type.name if hasattr(branch_type, "name") else str(branch_type)
+                branch_name = get_branch_display_name(branch_key)
                 for concept in concepts:
                     if hasattr(concept, "iri"):
                         self._branch_map[concept.iri] = branch_name
         except Exception:
             logger.warning("Failed to build branch map", exc_info=True)
+
+    def get_all_branches(self) -> list[dict]:
+        """Get all non-excluded branches with concept counts and colors."""
+        folio = self._get_folio()
+        branches_dict = folio.get_folio_branches(max_depth=16)
+
+        result: list[dict] = []
+        for ft_key, classes in branches_dict.items():
+            branch_key = ft_key.name if hasattr(ft_key, "name") else str(ft_key).split(".")[-1]
+            display_name = get_branch_display_name(branch_key)
+            if display_name in EXCLUDED_BRANCHES:
+                continue
+            color = get_branch_color(display_name)
+            result.append({
+                "name": display_name,
+                "color": color,
+                "concept_count": len(classes),
+            })
+        result.sort(key=lambda b: b["name"])
+        return result
 
     def _get_branch(self, iri: str, parent_iris: list[str]) -> str:
         """Determine the branch for a concept by checking its IRI and ancestors."""

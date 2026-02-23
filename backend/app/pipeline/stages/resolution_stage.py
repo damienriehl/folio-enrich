@@ -18,6 +18,23 @@ class ResolutionStage(PipelineStage):
     def name(self) -> str:
         return "resolution"
 
+    @staticmethod
+    def _to_resolved_dict(resolved) -> dict:
+        """Convert a ResolvedConcept to a dict with enriched metadata."""
+        return {
+            "concept_text": resolved.concept_text,
+            "folio_iri": resolved.folio_concept.iri,
+            "folio_label": resolved.folio_concept.preferred_label,
+            "folio_definition": resolved.folio_concept.definition,
+            "branch": resolved.branch,
+            "branch_color": resolved.branch_color,
+            "confidence": resolved.confidence,
+            "source": resolved.source,
+            "state": "confirmed",
+            "hierarchy_path": resolved.hierarchy_path,
+            "iri_hash": resolved.iri_hash,
+        }
+
     async def execute(self, job: Job) -> Job:
         job.status = JobStatus.RESOLVING
 
@@ -35,16 +52,7 @@ class ResolutionStage(PipelineStage):
                     folio_iri=concept_data.get("folio_iri"),
                 )
                 if resolved:
-                    resolved_concepts.append({
-                        "concept_text": resolved.concept_text,
-                        "folio_iri": resolved.folio_concept.iri,
-                        "folio_label": resolved.folio_concept.preferred_label,
-                        "folio_definition": resolved.folio_concept.definition,
-                        "branch": resolved.branch,
-                        "confidence": resolved.confidence,
-                        "source": resolved.source,
-                        "state": "confirmed",  # Successfully resolved → confirmed
-                    })
+                    resolved_concepts.append(self._to_resolved_dict(resolved))
         else:
             # No reconciled concepts — resolve from individual sources
             ruler_raw = job.result.metadata.get("ruler_concepts", [])
@@ -57,16 +65,7 @@ class ResolutionStage(PipelineStage):
                     folio_iri=concept_data.get("folio_iri"),
                 )
                 if resolved:
-                    resolved_concepts.append({
-                        "concept_text": resolved.concept_text,
-                        "folio_iri": resolved.folio_concept.iri,
-                        "folio_label": resolved.folio_concept.preferred_label,
-                        "folio_definition": resolved.folio_concept.definition,
-                        "branch": resolved.branch,
-                        "confidence": resolved.confidence,
-                        "source": resolved.source,
-                        "state": "confirmed",
-                    })
+                    resolved_concepts.append(self._to_resolved_dict(resolved))
 
             # Then LLM concepts
             llm_concepts = job.result.metadata.get("llm_concepts", {})
@@ -85,16 +84,7 @@ class ResolutionStage(PipelineStage):
                         folio_iri=concept_data.get("folio_iri"),
                     )
                     if resolved:
-                        resolved_concepts.append({
-                            "concept_text": resolved.concept_text,
-                            "folio_iri": resolved.folio_concept.iri,
-                            "folio_label": resolved.folio_concept.preferred_label,
-                            "folio_definition": resolved.folio_concept.definition,
-                            "branch": resolved.branch,
-                            "confidence": resolved.confidence,
-                            "source": resolved.source,
-                            "state": "confirmed",
-                        })
+                        resolved_concepts.append(self._to_resolved_dict(resolved))
 
         job.result.metadata["resolved_concepts"] = resolved_concepts
         logger.info("Resolved %d concepts for job %s", len(resolved_concepts), job.id)

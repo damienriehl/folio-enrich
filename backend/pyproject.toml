@@ -21,6 +21,8 @@ dependencies = [
     "striprtf>=0.0.26",
     "extract-msg>=0.48.0",
     "httpx>=0.28.0",
+    "faiss-cpu>=1.8",
+    "openpyxl>=3.1.0",
 ]
 
 [project.optional-dependencies]

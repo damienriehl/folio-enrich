@@ -45,10 +45,10 @@ def _make_job() -> Job:
 
 
 class TestTier2Exports:
-    def test_all_12_formats_registered(self):
+    def test_all_13_formats_registered(self):
         formats = list_formats()
-        assert len(formats) == 12
-        expected = {"json", "jsonld", "xml", "csv", "jsonl", "parquet", "elasticsearch", "neo4j", "rag", "rdf", "brat", "html"}
+        assert len(formats) == 13
+        expected = {"json", "jsonld", "xml", "csv", "jsonl", "parquet", "elasticsearch", "neo4j", "rag", "rdf", "brat", "html", "excel"}
         assert set(formats) == expected
 
     def test_parquet_export(self):
@@ -99,3 +99,30 @@ class TestTier2Exports:
         assert "<html>" in result
         assert "folio-annotation" in result
         assert "court" in result
+
+    def test_excel_export(self):
+        from app.services.export.excel_exporter import ExcelExporter
+        job = _make_job()
+        result = ExcelExporter().export(job)
+        assert isinstance(result, bytes)
+        assert len(result) > 0
+        # Verify it's a valid xlsx by checking magic bytes (PK zip)
+        assert result[:2] == b"PK"
+
+    def test_excel_export_has_data(self):
+        from io import BytesIO
+        from openpyxl import load_workbook
+        from app.services.export.excel_exporter import ExcelExporter
+        job = _make_job()
+        result = ExcelExporter().export(job)
+        wb = load_workbook(BytesIO(result))
+        ws = wb.active
+        assert ws.title == "FOLIO Annotations"
+        # Header row + 1 data row
+        rows = list(ws.rows)
+        assert len(rows) == 2
+        # Check header
+        assert rows[0][0].value == "Span Start"
+        # Check data
+        assert rows[1][2].value == "court"  # span text
+        assert rows[1][3].value == "court"  # concept text

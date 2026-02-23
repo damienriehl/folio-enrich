@@ -39,9 +39,24 @@ class HTMLExporter(ExporterBase):
             iri = html.escape(concept.folio_iri or "#")
             iri_link = f"{iri}/html" if iri != "#" else "#"
 
+            # Confidence-based styling
+            conf = concept.confidence
+            if conf >= 0.90:
+                border_color = "#228B22"  # green
+            elif conf >= 0.60:
+                border_color = "#FFD700"  # gold
+            elif conf >= 0.45:
+                border_color = "#FF8C00"  # orange
+            else:
+                border_color = "#D3D3D3"  # gray
+
+            # Branch color for background tint
+            branch_color = concept.branch_color or "#2196F3"
+
             close_tag = "</a></span>"
             open_tag = (
                 f'<span class="folio-annotation" '
+                f'style="border-bottom-color: {border_color}; background-color: {branch_color}18;" '
                 f'data-iri="{iri}" '
                 f'data-branch="{html.escape(concept.branch or "")}" '
                 f'data-confidence="{concept.confidence:.2f}">'
