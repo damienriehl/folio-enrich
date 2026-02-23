@@ -117,7 +117,8 @@ class TestEmbeddingTriage:
         from unittest.mock import MagicMock
         mock_emb = MagicMock()
         mock_emb.index_size = 100
-        mock_emb.similarity.side_effect = lambda a, b: 0.90 if "Court" in b else 0.50
+        # similarity_batch receives [("court","Court"), ("court","Justice")]
+        mock_emb.similarity_batch.return_value = [0.90, 0.50]
         reconciler = Reconciler(embedding_service=mock_emb)
 
         ruler = [ConceptMatch(concept_text="court", source="entity_ruler",

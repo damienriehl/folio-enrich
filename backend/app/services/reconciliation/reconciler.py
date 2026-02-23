@@ -83,7 +83,8 @@ class Reconciler:
 
         When ruler and LLM identify the same text span but map to different FOLIO
         concepts, compute cosine similarity between each candidate label and the
-        original text to pick the better match.
+        original text to pick the better match.  Similarity pairs are batch-embedded
+        in a single forward pass.
         """
         if self._embedding_service is None or self._embedding_service.index_size == 0:
             return self.reconcile(ruler_concepts, llm_concepts)
@@ -93,6 +94,9 @@ class Reconciler:
         all_keys = set(ruler_by_text.keys()) | set(llm_by_text.keys())
         results: list[ReconciliationResult] = []
 
+        # First pass: categorize keys and collect IRI conflicts for batch resolution
+        conflicts: list[tuple[str, ConceptMatch, ConceptMatch]] = []
+
         for key in all_keys:
             in_ruler = key in ruler_by_text
             in_llm = key in llm_by_text
@@ -101,38 +105,14 @@ class Reconciler:
                 rc = ruler_by_text[key]
                 lc = llm_by_text[key]
 
-                # Check if they agree on the same concept (same IRI)
                 if rc.folio_iri and lc.folio_iri and rc.folio_iri == lc.folio_iri:
-                    # Both agree — boost confidence
                     concept = lc
                     concept.confidence = min(1.0, max(rc.confidence, lc.confidence) + 0.05)
                     concept.source = "reconciled"
                     results.append(ReconciliationResult(concept=concept, category="both_agree"))
                 elif rc.folio_iri and lc.folio_iri:
-                    # Conflict: different IRIs for same text span — use embedding triage
-                    ruler_label = rc.folio_label or rc.concept_text
-                    llm_label = lc.folio_label or lc.concept_text
-                    ruler_sim = self._embedding_service.similarity(key, ruler_label)
-                    llm_sim = self._embedding_service.similarity(key, llm_label)
-
-                    if max(ruler_sim, llm_sim) > EMBEDDING_AUTO_RESOLVE_THRESHOLD:
-                        # Auto-resolve to higher-similarity match
-                        if ruler_sim >= llm_sim:
-                            rc.source = "reconciled"
-                            rc.confidence = max(rc.confidence, ruler_sim)
-                            results.append(ReconciliationResult(concept=rc, category="conflict_resolved"))
-                        else:
-                            lc.source = "reconciled"
-                            lc.confidence = max(lc.confidence, llm_sim)
-                            results.append(ReconciliationResult(concept=lc, category="conflict_resolved"))
-                    else:
-                        # Cannot auto-resolve — include both with needs_judge flag
-                        rc.source = "reconciled"
-                        lc.source = "reconciled"
-                        results.append(ReconciliationResult(concept=rc, category="conflict_resolved"))
-                        results.append(ReconciliationResult(concept=lc, category="conflict_resolved"))
+                    conflicts.append((key, rc, lc))
                 else:
-                    # No IRIs to compare — default agreement merge
                     concept = lc
                     concept.confidence = min(1.0, max(rc.confidence, lc.confidence) + 0.05)
                     concept.source = "reconciled"
@@ -153,5 +133,35 @@ class Reconciler:
                 concept = llm_by_text[key]
                 concept.source = "llm"
                 results.append(ReconciliationResult(concept=concept, category="llm_only"))
+
+        # Batch resolve IRI conflicts via embedding similarity
+        if conflicts:
+            pairs = []
+            for key, rc, lc in conflicts:
+                ruler_label = rc.folio_label or rc.concept_text
+                llm_label = lc.folio_label or lc.concept_text
+                pairs.append((key, ruler_label))
+                pairs.append((key, llm_label))
+
+            sims = self._embedding_service.similarity_batch(pairs)
+
+            for i, (key, rc, lc) in enumerate(conflicts):
+                ruler_sim = sims[i * 2]
+                llm_sim = sims[i * 2 + 1]
+
+                if max(ruler_sim, llm_sim) > EMBEDDING_AUTO_RESOLVE_THRESHOLD:
+                    if ruler_sim >= llm_sim:
+                        rc.source = "reconciled"
+                        rc.confidence = max(rc.confidence, ruler_sim)
+                        results.append(ReconciliationResult(concept=rc, category="conflict_resolved"))
+                    else:
+                        lc.source = "reconciled"
+                        lc.confidence = max(lc.confidence, llm_sim)
+                        results.append(ReconciliationResult(concept=lc, category="conflict_resolved"))
+                else:
+                    rc.source = "reconciled"
+                    lc.source = "reconciled"
+                    results.append(ReconciliationResult(concept=rc, category="conflict_resolved"))
+                    results.append(ReconciliationResult(concept=lc, category="conflict_resolved"))
 
         return results

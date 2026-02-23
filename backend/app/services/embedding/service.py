@@ -185,10 +185,49 @@ class EmbeddingService:
             )
         return results
 
+    def search_batch(self, queries: list[str], top_k: int = 5) -> list[list[SearchResult]]:
+        """Search for multiple queries at once using a single batch embedding call."""
+        if self._embeddings is None or len(self._labels) == 0 or not queries:
+            return [[] for _ in queries]
+
+        provider = self._get_provider()
+        query_vecs = provider.encode(queries)  # (N, dim)
+
+        # Batch similarity: (N, dim) @ (M, dim).T = (N, M)
+        all_scores = query_vecs @ self._embeddings.T
+
+        results = []
+        for i in range(len(queries)):
+            scores = all_scores[i]
+            top_indices = np.argsort(scores)[::-1][:top_k]
+            query_results = []
+            for idx in top_indices:
+                query_results.append(
+                    SearchResult(
+                        label=self._labels[idx],
+                        score=float(scores[idx]),
+                        metadata=self._metadata[idx],
+                    )
+                )
+            results.append(query_results)
+
+        return results
+
     def similarity(self, text_a: str, text_b: str) -> float:
         provider = self._get_provider()
         vecs = provider.encode([text_a, text_b])
         return float(np.dot(vecs[0], vecs[1]))
+
+    def similarity_batch(self, pairs: list[tuple[str, str]]) -> list[float]:
+        """Compute similarity for multiple text pairs in a single batch embedding call."""
+        if not pairs:
+            return []
+        provider = self._get_provider()
+        all_texts = []
+        for a, b in pairs:
+            all_texts.extend([a, b])
+        vecs = provider.encode(all_texts)  # (2N, dim)
+        return [float(np.dot(vecs[i], vecs[i + 1])) for i in range(0, len(all_texts), 2)]
 
     def index_folio_labels(self, folio_service) -> None:
         """Index all FOLIO concept labels for semantic search."""

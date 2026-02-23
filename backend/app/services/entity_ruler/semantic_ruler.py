@@ -33,38 +33,46 @@ class SemanticEntityRuler:
         if self._embedding_service is None or self._embedding_service.index_size == 0:
             return []
 
-        # Extract candidate phrases (2-4 word n-grams)
+        # Phase 1: Collect all candidate n-grams, filtering known spans
         words = text.split()
-        matches = []
+        candidates = []  # (phrase, start, end)
 
         for n in range(2, 5):
             pos = 0
             for i in range(len(words) - n + 1):
                 phrase = " ".join(words[i : i + n])
-                # Find start position in original text
                 start = text.find(phrase, pos)
                 if start == -1:
                     continue
                 end = start + len(phrase)
                 pos = start + 1
 
-                # Skip if already matched
                 if any(
                     s <= start < e or s < end <= e
                     for s, e in known_spans
                 ):
                     continue
 
-                # Search embeddings
-                results = self._embedding_service.search(phrase, top_k=1)
-                if results and results[0].score >= self.threshold:
-                    matches.append(SemanticMatch(
-                        text=phrase,
-                        start=start,
-                        end=end,
-                        matched_label=results[0].label,
-                        similarity=results[0].score,
-                        iri=results[0].metadata.get("iri", ""),
-                    ))
+                candidates.append((phrase, start, end))
+
+        if not candidates:
+            return []
+
+        # Phase 2: Batch embed all candidates in a single forward pass
+        phrases = [c[0] for c in candidates]
+        batch_results = self._embedding_service.search_batch(phrases, top_k=1)
+
+        # Phase 3: Filter by threshold
+        matches = []
+        for (phrase, start, end), results in zip(candidates, batch_results):
+            if results and results[0].score >= self.threshold:
+                matches.append(SemanticMatch(
+                    text=phrase,
+                    start=start,
+                    end=end,
+                    matched_label=results[0].label,
+                    similarity=results[0].score,
+                    iri=results[0].metadata.get("iri", ""),
+                ))
 
         return matches
