@@ -18,6 +18,7 @@ async def job_event_stream(
     last_status = None
     seen_ids: set[str] = set()
     last_states: dict[str, str] = {}
+    last_activity_count: int = 0
 
     while True:
         job = await job_store.load(job_id)
@@ -57,6 +58,13 @@ async def job_event_stream(
                 # State changed
                 last_states[ann_id] = ann_state
                 yield {"event": "annotation_update", "data": json.dumps(ann_data)}
+
+        # Emit new activity log entries
+        activity_log = job.result.metadata.get("activity_log", [])
+        if len(activity_log) > last_activity_count:
+            for entry in activity_log[last_activity_count:]:
+                yield {"event": "activity", "data": json.dumps(entry)}
+            last_activity_count = len(activity_log)
 
         # Terminal states
         if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):

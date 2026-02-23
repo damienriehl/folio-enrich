@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from app.models.job import Job, JobStatus
 from app.pipeline.stages.base import PipelineStage
 from app.services.llm.base import LLMProvider
@@ -42,4 +44,7 @@ class MetadataStage(PipelineStage):
         job.result.metadata["document_type_confidence"] = classification.get("confidence", 0.0)
         job.result.metadata["extracted_fields"] = fields
 
+        conf = round(classification.get("confidence", 0.0) * 100)
+        log = job.result.metadata.setdefault("activity_log", [])
+        log.append({"ts": datetime.now(timezone.utc).isoformat(), "stage": self.name, "msg": f"Classified as {doc_type} ({conf}% confidence)"})
         return job

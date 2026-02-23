@@ -471,6 +471,47 @@
     align-items: center;
   }
 
+  .activity-log {
+    max-height: 120px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+    margin-top: 6px;
+    padding-top: 4px;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 11px;
+  }
+
+  .activity-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 1px 0;
+    line-height: 1.5;
+  }
+
+  .activity-ts {
+    color: var(--text-dim);
+    opacity: 0.6;
+    flex-shrink: 0;
+    font-size: 10px;
+  }
+
+  .activity-stage {
+    flex-shrink: 0;
+    padding: 0 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--surface2);
+    color: var(--accent);
+  }
+
+  .activity-stage.orchestrator { color: var(--text-dim); }
+
+  .activity-msg {
+    color: var(--text);
+  }
+
   /* Concepts sidebar */
   .concept-group { margin-bottom: 16px; }
   .concept-group-header {
@@ -823,6 +864,7 @@
     <div class="pipeline-progress" id="pipelineProgress">
       <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
       <div class="progress-stages" id="progressStages"></div>
+      <div class="activity-log" id="activityLog"></div>
       <div class="status-text">
         <span id="statusText">Ready</span>
         <span id="statusBadge" style="font-size:10px;color:var(--text-dim)">idle</span>
@@ -930,6 +972,7 @@ let pollInterval = null;
 let pollTimeout = null;
 let eventSource = null;
 let accumulatedAnnotations = [];
+let activityEntries = [];
 let providersData = {};   // provider name → metadata {display_name, requires_api_key, default_model, api_key_set}
 let knownModels = {};     // provider name → [{id, name, context_window}]
 let selectedDocType = null;
@@ -1556,6 +1599,12 @@ function startSSE() {
     updateAnnotationInView(data);
   });
 
+  eventSource.addEventListener('activity', (e) => {
+    const data = JSON.parse(e.data);
+    activityEntries.push(data);
+    renderActivityLog();
+  });
+
   eventSource.addEventListener('complete', (e) => {
     const data = JSON.parse(e.data);
     closeSSE();
@@ -1593,6 +1642,17 @@ function closeSSE() {
     eventSource.close();
     eventSource = null;
   }
+}
+
+function renderActivityLog() {
+  const container = document.getElementById('activityLog');
+  if (!container) return;
+  container.innerHTML = activityEntries.map(e => {
+    const t = e.ts ? new Date(e.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '';
+    const cls = e.stage === 'orchestrator' ? ' orchestrator' : '';
+    return `<div class="activity-entry"><span class="activity-ts">${t}</span><span class="activity-stage${cls}">${e.stage}</span><span class="activity-msg">${e.msg}</span></div>`;
+  }).join('');
+  container.scrollTop = container.scrollHeight;
 }
 
 function addAnnotationToView(data) {
@@ -2111,6 +2171,8 @@ function clearAll() {
   currentJob = null;
   closeSSE();
   accumulatedAnnotations = [];
+  activityEntries = [];
+  document.getElementById('activityLog').innerHTML = '';
   stopPolling();
   setStatus('Ready', 'idle');
   renderProgressStages('pending');

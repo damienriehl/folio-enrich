@@ -26,4 +26,9 @@ class LLMConceptStage(PipelineStage):
         job.result.metadata["llm_concepts"] = {
             str(k): [c.model_dump() for c in v] for k, v in results.items()
         }
+
+        from datetime import datetime, timezone
+        total = sum(len(v) for v in results.values())
+        log = job.result.metadata.setdefault("activity_log", [])
+        log.append({"ts": datetime.now(timezone.utc).isoformat(), "stage": self.name, "msg": f"LLM extracted {total} concepts from {len(chunks)} chunks"})
         return job

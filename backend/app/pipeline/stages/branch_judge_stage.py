@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from app.models.job import Job, JobStatus
 from app.pipeline.stages.base import PipelineStage
 from app.services.concept.branch_judge import BranchJudge
@@ -63,4 +65,6 @@ class BranchJudgeStage(PipelineStage):
                     # Judge validates → confirmed; no branch found → rejected
                     concept["state"] = "confirmed" if branch else "rejected"
 
+        log = job.result.metadata.setdefault("activity_log", [])
+        log.append({"ts": datetime.now(timezone.utc).isoformat(), "stage": self.name, "msg": f"Judged {len(ambiguous)} ambiguous concepts for branch assignment"})
         return job

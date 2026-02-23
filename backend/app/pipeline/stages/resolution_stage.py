@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from app.models.annotation import ConceptMatch
 from app.models.job import Job, JobStatus
@@ -87,5 +88,8 @@ class ResolutionStage(PipelineStage):
                         resolved_concepts.append(self._to_resolved_dict(resolved))
 
         job.result.metadata["resolved_concepts"] = resolved_concepts
+
+        log = job.result.metadata.setdefault("activity_log", [])
+        log.append({"ts": datetime.now(timezone.utc).isoformat(), "stage": self.name, "msg": f"Resolved {len(resolved_concepts)} concepts with FOLIO definitions"})
         logger.info("Resolved %d concepts for job %s", len(resolved_concepts), job.id)
         return job

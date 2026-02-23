@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from app.models.annotation import Annotation, ConceptMatch, Span
 from app.models.job import Job, JobStatus
 from app.pipeline.stages.base import PipelineStage
@@ -88,5 +90,11 @@ class StringMatchStage(PipelineStage):
 
         # Sort by span start
         new_annotations.sort(key=lambda a: a.span.start)
+
+        updated = sum(1 for s in seen_spans if s in existing_by_span)
+        new_count = len([a for a in new_annotations if a.state == "confirmed"]) - updated
+        log = job.result.metadata.setdefault("activity_log", [])
+        log.append({"ts": datetime.now(timezone.utc).isoformat(), "stage": self.name, "msg": f"Annotated {len(new_annotations)} spans ({updated} updated, {max(0, new_count)} new)"})
+
         job.result.annotations = new_annotations
         return job

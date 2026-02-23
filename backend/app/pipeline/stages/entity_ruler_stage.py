@@ -140,6 +140,17 @@ class EntityRulerStage(PipelineStage):
                 last_end = ann.span.end
 
         job.result.annotations = deduped
+
+        # Activity log
+        from datetime import datetime, timezone
+        preferred = sum(1 for m in matches if m.match_type == "preferred")
+        alternative = len(matches) - preferred
+        msg = f"Found {len(ruler_concepts)} matches ({preferred} preferred, {alternative} alternative)"
+        if semantic_matches:
+            msg += f" + {len(semantic_matches)} semantic"
+        log = job.result.metadata.setdefault("activity_log", [])
+        log.append({"ts": datetime.now(timezone.utc).isoformat(), "stage": self.name, "msg": msg})
+
         logger.info("EntityRuler found %d total matches for job %s", len(ruler_concepts), job.id)
         return job
 

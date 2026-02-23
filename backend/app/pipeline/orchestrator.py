@@ -142,6 +142,16 @@ def _try_get_llm() -> LLMProvider | None:
         return None
 
 
+def _log_activity(job: Job, stage: str, msg: str) -> None:
+    """Append an activity log entry to job metadata."""
+    log = job.result.metadata.setdefault("activity_log", [])
+    log.append({
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "stage": stage,
+        "msg": msg,
+    })
+
+
 class PipelineOrchestrator:
     def __init__(
         self,
@@ -184,10 +194,14 @@ class PipelineOrchestrator:
                 job.updated_at = datetime.now(timezone.utc)
                 await self.job_store.save(job)
 
+            _log_activity(job, "orchestrator", "Ingestion and normalization complete")
+
             # Phase 2: Parallel EntityRuler and LLM
             job.status = JobStatus.ENRICHING
             job.updated_at = datetime.now(timezone.utc)
             await self.job_store.save(job)
+
+            _log_activity(job, "orchestrator", "Running EntityRuler and LLM in parallel...")
 
             async def run_entity_ruler(j: Job) -> None:
                 if config.entity_ruler is None:
@@ -215,6 +229,8 @@ class PipelineOrchestrator:
 
             await asyncio.gather(run_entity_ruler(job), run_llm_concept(job))
 
+            _log_activity(job, "orchestrator", "Parallel enrichment complete")
+
             # Phase 3: Sequential post-parallel stages
             for stage in config.post_parallel:
                 logger.info("Running stage %s for job %s", stage.name, job.id)
@@ -229,12 +245,14 @@ class PipelineOrchestrator:
                 job.updated_at = datetime.now(timezone.utc)
                 await self.job_store.save(job)
 
+            _log_activity(job, "orchestrator", f"Pipeline complete \u2014 {len(job.result.annotations)} annotations")
             job.status = JobStatus.COMPLETED
             job.updated_at = datetime.now(timezone.utc)
             await self.job_store.save(job)
 
         except Exception as e:
             logger.exception("Pipeline failed for job %s", job.id)
+            _log_activity(job, "orchestrator", f"Pipeline failed: {e}")
             job.status = JobStatus.FAILED
             job.error = str(e)
             job.updated_at = datetime.now(timezone.utc)

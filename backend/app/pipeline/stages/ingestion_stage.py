@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from app.models.job import Job, JobStatus
 from app.pipeline.stages.base import PipelineStage
 from app.services.ingestion import registry as ingestion
@@ -18,4 +20,8 @@ class IngestionStage(PipelineStage):
         # Store text elements for structural tracking
         if elements:
             job.result.metadata["_text_elements"] = [e.model_dump() for e in elements]
+
+        log = job.result.metadata.setdefault("activity_log", [])
+        fmt = job.input.format or "unknown"
+        log.append({"ts": datetime.now(timezone.utc).isoformat(), "stage": self.name, "msg": f"Ingested {len(raw_text):,} characters from {fmt}"})
         return job

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from app.models.job import Job
 from app.pipeline.stages.base import PipelineStage
 from app.services.dependency.parser import DependencyParser
@@ -43,4 +45,6 @@ class DependencyStage(PipelineStage):
             for t in triples
         ]
 
+        log = job.result.metadata.setdefault("activity_log", [])
+        log.append({"ts": datetime.now(timezone.utc).isoformat(), "stage": self.name, "msg": f"Extracted {len(triples)} subject-predicate-object triples"})
         return job

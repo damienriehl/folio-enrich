@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from app.models.annotation import ConceptMatch
 from app.models.job import Job, JobStatus
 from app.pipeline.stages.base import PipelineStage
@@ -64,4 +66,9 @@ class ReconciliationStage(PipelineStage):
                 ann.state = "rejected"
             # "ruler_only" stays as "preliminary" (confirmed later by resolution)
 
+        confirmed = sum(1 for a in job.result.annotations if a.state == "confirmed")
+        ruler_only = sum(1 for r in results if r.category == "ruler_only")
+        rejected = sum(1 for a in job.result.annotations if a.state == "rejected")
+        log = job.result.metadata.setdefault("activity_log", [])
+        log.append({"ts": datetime.now(timezone.utc).isoformat(), "stage": self.name, "msg": f"Reconciled: {confirmed} confirmed, {ruler_only} ruler-only, {rejected} rejected"})
         return job
