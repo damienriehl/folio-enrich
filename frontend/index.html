@@ -435,25 +435,26 @@
   /* Concept tooltip */
   .concept-tooltip {
     position: fixed;
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: #ffffff;
+    border: 1px solid #d0d0da;
     border-radius: 10px;
     padding: 16px;
     max-width: 400px;
     min-width: 250px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
     z-index: 1000;
     display: none;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #1a1a2e;
   }
 
   .concept-tooltip.visible { display: block; }
 
-  .tooltip-label { font-size: 15px; font-weight: 600; color: var(--accent); margin-bottom: 2px; }
+  .tooltip-label { font-size: 15px; font-weight: 600; color: #3b64e0; margin-bottom: 2px; }
   .tooltip-branch { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding: 2px 6px; border-radius: 3px; display: inline-block; }
-  .tooltip-definition { font-size: 13px; color: var(--text); line-height: 1.5; margin-bottom: 8px; }
-  .tooltip-meta { font-size: 11px; color: var(--text-dim); display: flex; gap: 12px; margin-bottom: 6px; }
-  .tooltip-iri a { color: var(--accent-dim); text-decoration: none; font-size: 11px; word-break: break-all; }
+  .tooltip-definition { font-size: 13px; color: #1a1a2e; line-height: 1.5; margin-bottom: 8px; }
+  .tooltip-meta { font-size: 11px; color: #6b6b80; display: flex; gap: 12px; margin-bottom: 6px; }
+  .tooltip-iri a { color: #3b64e0; text-decoration: none; font-size: 11px; word-break: break-all; }
   .tooltip-iri a:hover { text-decoration: underline; }
 
   /* Pipeline progress */
@@ -642,7 +643,7 @@
   .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0,0,0,0.3);
     z-index: 2000;
     display: none;
     align-items: center;
@@ -652,28 +653,59 @@
   .modal-overlay.visible { display: flex; }
 
   .modal {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: #ffffff;
+    border: 1px solid #d0d0da;
     border-radius: 12px;
     padding: 24px;
     max-width: 540px;
     width: 90%;
     max-height: 80vh;
     overflow-y: auto;
+    color: #1a1a2e;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.15);
   }
 
   .modal h3 {
     font-size: 16px;
     margin-bottom: 16px;
+    color: #1a1a2e;
   }
 
+  .modal::-webkit-scrollbar-thumb { background: #c0c0cc; }
+  .modal::-webkit-scrollbar-thumb:hover { background: #9090a0; }
+
   .modal .form-group { margin-bottom: 14px; }
+  .modal .form-group label { color: #4a4a60; }
 
   .modal-actions {
     display: flex;
     gap: 8px;
     justify-content: flex-end;
     margin-top: 20px;
+  }
+
+  /* Modal input/select overrides for light background */
+  .modal select,
+  .modal input[type="text"],
+  .modal input[type="password"] {
+    background: #f5f5f8;
+    color: #1a1a2e;
+    border: 1px solid #c0c0cc;
+  }
+  .modal select:hover,
+  .modal input:hover { border-color: #3b64e0; }
+  .modal select:focus,
+  .modal input:focus { outline: none; border-color: #3b64e0; }
+
+  /* Modal button overrides */
+  .modal button.secondary {
+    background: transparent;
+    border-color: #c0c0cc;
+    color: #4a4a60;
+  }
+  .modal button.secondary:hover {
+    border-color: #3b64e0;
+    color: #1a1a2e;
   }
 
   /* Synthetic generator */
@@ -686,9 +718,10 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    color: #1a1a2e;
   }
 
-  .doc-type-category:hover { background: var(--surface2); }
+  .doc-type-category:hover { background: #f0f0f5; }
 
   .doc-type-subtypes {
     display: none;
@@ -702,26 +735,27 @@
     cursor: pointer;
     border-radius: 4px;
     font-size: 11px;
-    color: var(--text-dim);
+    color: #6b6b80;
   }
 
-  .doc-type-subtype:hover { background: var(--surface2); color: var(--text); }
-  .doc-type-subtype.selected { background: rgba(108,140,255,0.15); color: var(--accent); }
+  .doc-type-subtype:hover { background: #f0f0f5; color: #1a1a2e; }
+  .doc-type-subtype.selected { background: rgba(59,100,224,0.10); color: #3b64e0; }
 
   .radio-group { display: flex; gap: 12px; margin-top: 4px; }
-  .radio-group label { font-size: 12px; color: var(--text); display: flex; align-items: center; gap: 4px; cursor: pointer; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .radio-group label { font-size: 12px; color: #1a1a2e; display: flex; align-items: center; gap: 4px; cursor: pointer; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .radio-group input[type="radio"] { accent-color: #3b64e0; }
 
   /* Toggle switch */
-  .toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
+  .toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6b6b80; cursor: pointer; }
   .toggle input { display: none; }
   .toggle-track {
     width: 32px; height: 18px;
-    background: var(--surface3);
+    background: #c0c0cc;
     border-radius: 9px;
     position: relative;
     transition: background 0.2s;
   }
-  .toggle input:checked + .toggle-track { background: var(--accent); }
+  .toggle input:checked + .toggle-track { background: #3b64e0; }
   .toggle-thumb {
     width: 14px; height: 14px;
     background: #fff;
@@ -799,15 +833,15 @@
   }
 
   .test-status { font-size: 11px; margin-top: 6px; }
-  .test-status.ok { color: var(--green); }
-  .test-status.error { color: var(--red); }
+  .test-status.ok { color: #1e8c4a; }
+  .test-status.error { color: #c82828; }
 
   .btn-test-sm {
     font-size: 11px; padding: 2px 8px; margin-left: 8px;
-    border: 1px solid var(--border); border-radius: 4px;
-    background: var(--bg); color: var(--text); cursor: pointer;
+    border: 1px solid #c0c0cc; border-radius: 4px;
+    background: #f5f5f8; color: #1a1a2e; cursor: pointer;
   }
-  .btn-test-sm:hover { background: var(--border); }
+  .btn-test-sm:hover { background: #e0e0e8; }
 
   /* Settings modal header */
   .settings-header {
@@ -816,38 +850,38 @@
     justify-content: space-between;
     padding-bottom: 14px;
     margin-bottom: 16px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid #d0d0da;
   }
-  .settings-header h3 { margin: 0; font-size: 16px; }
+  .settings-header h3 { margin: 0; font-size: 16px; color: #1a1a2e; }
   .settings-header-actions { display: flex; gap: 10px; }
   .settings-header-actions button {
     background: none; border: none; cursor: pointer;
     font-size: 13px; padding: 4px 10px; border-radius: 6px;
   }
-  .settings-header-actions .btn-cancel { color: var(--text-dim); }
-  .settings-header-actions .btn-cancel:hover { background: var(--surface2); }
+  .settings-header-actions .btn-cancel { color: #6b6b80; }
+  .settings-header-actions .btn-cancel:hover { background: #f0f0f5; }
   .settings-header-actions .btn-save {
-    color: var(--accent); font-weight: 600;
+    color: #3b64e0; font-weight: 600;
   }
-  .settings-header-actions .btn-save:hover { background: var(--highlight); }
+  .settings-header-actions .btn-save:hover { background: rgba(59,100,224,0.08); }
 
   .settings-section-label {
     font-size: 11px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.5px; color: var(--text-dim); margin-bottom: 10px;
+    letter-spacing: 0.5px; color: #6b6b80; margin-bottom: 10px;
   }
 
   /* Provider cards */
   .provider-card {
-    border: 1px solid var(--border);
+    border: 1px solid #d0d0da;
     border-radius: 8px;
     padding: 12px 14px;
     margin-bottom: 10px;
-    background: var(--surface);
+    background: #ffffff;
     transition: border-color 0.15s, background 0.15s;
   }
   .provider-card.active {
-    border-color: var(--accent);
-    background: var(--highlight);
+    border-color: #3b64e0;
+    background: rgba(59,100,224,0.05);
   }
   .provider-card-header {
     display: flex;
@@ -856,19 +890,19 @@
     margin-bottom: 8px;
   }
   .provider-card-header input[type="radio"] {
-    accent-color: var(--accent);
+    accent-color: #3b64e0;
     margin: 0;
     cursor: pointer;
   }
   .provider-card-header .provider-name {
-    font-weight: 600; font-size: 13px; flex: 1;
+    font-weight: 600; font-size: 13px; flex: 1; color: #1a1a2e;
   }
   .provider-card-header .btn-test-card {
     font-size: 11px; padding: 2px 10px;
-    border: 1px solid var(--border); border-radius: 4px;
-    background: var(--bg); color: var(--text); cursor: pointer;
+    border: 1px solid #c0c0cc; border-radius: 4px;
+    background: #f5f5f8; color: #1a1a2e; cursor: pointer;
   }
-  .provider-card-header .btn-test-card:hover { background: var(--border); }
+  .provider-card-header .btn-test-card:hover { background: #e0e0e8; }
   .provider-card-header .test-status {
     font-size: 11px; min-width: 60px;
   }
@@ -880,26 +914,26 @@
     margin-bottom: 6px;
   }
   .provider-card-field .field-label {
-    font-size: 11px; color: var(--text-dim); width: 46px;
+    font-size: 11px; color: #6b6b80; width: 46px;
     text-align: right; flex-shrink: 0;
   }
   .provider-card-field input,
   .provider-card-field select {
     flex: 1; min-width: 0;
     font-size: 12px; padding: 5px 8px;
-    background: var(--bg); color: var(--text);
-    border: 1px solid var(--border); border-radius: 4px;
+    background: #f5f5f8; color: #1a1a2e;
+    border: 1px solid #c0c0cc; border-radius: 4px;
   }
   .provider-card-field .btn-refresh {
-    background: var(--bg); color: var(--text-dim);
-    border: 1px solid var(--border); border-radius: 4px;
+    background: #f5f5f8; color: #6b6b80;
+    border: 1px solid #c0c0cc; border-radius: 4px;
     cursor: pointer; font-size: 13px; padding: 3px 7px;
     line-height: 1;
   }
-  .provider-card-field .btn-refresh:hover { background: var(--border); color: var(--text); }
+  .provider-card-field .btn-refresh:hover { background: #e0e0e8; color: #1a1a2e; }
 
   .provider-card-cost {
-    font-size: 11px; color: var(--text-dim);
+    font-size: 11px; color: #6b6b80;
     padding-left: 54px; margin-top: 2px;
   }
 </style>
@@ -1132,10 +1166,10 @@
 <div class="modal-overlay" id="syntheticModal">
   <div class="modal" style="max-width:600px">
     <h3>Generate Synthetic Legal Document</h3>
-    <p style="font-size:12px;color:var(--text-dim);margin-bottom:16px">Select a document type to generate a realistic legal document for testing.</p>
+    <p style="font-size:12px;color:#6b6b80;margin-bottom:16px">Select a document type to generate a realistic legal document for testing.</p>
     <div class="doc-type-tree" id="docTypeTree"></div>
     <div style="margin-top:16px">
-      <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim)">Length</label>
+      <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#6b6b80">Length</label>
       <div class="radio-group">
         <label><input type="radio" name="synLength" value="short" checked> Short (1-5 pages)</label>
         <label><input type="radio" name="synLength" value="medium"> Medium (10-30 pages)</label>
@@ -2421,7 +2455,7 @@ async function loadDocTypes() {
 
     tree.innerHTML = html;
   } catch (e) {
-    tree.innerHTML = '<p style="color:var(--text-dim)">Failed to load document types. Make sure the backend is running.</p>';
+    tree.innerHTML = '<p style="color:#6b6b80">Failed to load document types. Make sure the backend is running.</p>';
   }
 }
 
