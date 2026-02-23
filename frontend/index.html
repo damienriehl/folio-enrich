@@ -199,6 +199,30 @@
     padding: 16px;
   }
 
+  /* White-paper document view for right panel */
+  .panel:not(.panel-left) > .panel-body {
+    background: #ffffff;
+    color: #1a1a2e;
+  }
+
+  /* Right-panel button overrides for white background */
+  .panel:not(.panel-left) > .panel-body button.secondary {
+    background: transparent;
+    border-color: #c0c0cc;
+    color: #4a4a60;
+  }
+  .panel:not(.panel-left) > .panel-body button.secondary:hover {
+    border-color: #3b64e0;
+    color: #1a1a2e;
+  }
+
+  /* Right-panel inline text overrides */
+  .panel:not(.panel-left) > .panel-body p[style] { color: #6b6b80 !important; }
+
+  /* Right-panel scrollbar — light track for white background */
+  .panel:not(.panel-left) > .panel-body::-webkit-scrollbar-thumb { background: #c0c0cc; }
+  .panel:not(.panel-left) > .panel-body::-webkit-scrollbar-thumb:hover { background: #9090a0; }
+
   /* Forms and inputs */
   .form-group {
     margin-bottom: 12px;
@@ -349,54 +373,64 @@
     line-height: 1.8;
     white-space: pre-wrap;
     word-wrap: break-word;
+    color: #1a1a2e;
   }
 
   .annotation-span {
-    background: var(--highlight-confirmed);
-    border-bottom: 2px solid var(--accent);
+    background: rgba(59,100,224,0.13);
+    border-bottom: 2px solid #3b64e0;
     cursor: pointer;
     border-radius: 2px;
     padding: 1px 2px;
     transition: background 0.15s;
     position: relative;
+    color: #1a1a2e;
   }
 
-  .annotation-span:hover { background: rgba(108,140,255,0.35); }
+  .annotation-span:hover { background: rgba(59,100,224,0.25); }
 
   /* Annotation state styles */
   .annotation-span[data-state="preliminary"] {
-    background: var(--highlight-preliminary);
+    background: rgba(59,100,224,0.07);
     border-bottom-style: dashed;
     opacity: 0.85;
   }
   .annotation-span[data-state="confirmed"] {
-    background: var(--highlight-confirmed);
+    background: rgba(59,100,224,0.13);
     border-bottom-style: solid;
   }
   .annotation-span[data-state="rejected"] {
-    background: var(--highlight-rejected);
-    border-bottom-color: var(--red);
+    background: rgba(200,40,40,0.08);
+    border-bottom-color: #c82828;
     border-bottom-style: dotted;
     text-decoration: line-through;
     opacity: 0.5;
   }
 
-  /* Branch-colored annotations */
-  .annotation-span[data-branch="Actor / Player"] { border-bottom-color: var(--branch-actor); background: rgba(94,196,212,0.12); }
-  .annotation-span[data-branch="Area of Law"] { border-bottom-color: var(--branch-area-of-law); background: rgba(232,165,76,0.12); }
-  .annotation-span[data-branch="Document / Artifact"] { border-bottom-color: var(--branch-document); background: rgba(176,126,232,0.12); }
-  .annotation-span[data-branch="Engagement Terms"] { border-bottom-color: var(--branch-engagement); background: rgba(76,175,124,0.12); }
-  .annotation-span[data-branch="Event"] { border-bottom-color: var(--branch-event); background: rgba(224,85,85,0.12); }
-  .annotation-span[data-branch="Location"] { border-bottom-color: var(--branch-location); background: rgba(108,140,255,0.12); }
-  .annotation-span[data-branch="Governmental Body"] { border-bottom-color: var(--branch-governmental); background: rgba(232,135,160,0.12); }
-  .annotation-span[data-branch="Legal Entity"] { border-bottom-color: var(--branch-legal-entity); background: rgba(123,237,159,0.12); }
-  .annotation-span[data-branch="Industry"] { border-bottom-color: var(--branch-industry); background: rgba(240,192,64,0.12); }
-  .annotation-span[data-branch="Service"] { border-bottom-color: var(--branch-service); background: rgba(80,200,255,0.12); }
+  /* Branch-colored annotations — WCAG-safe on white background
+     Border colors darkened for >=3:1 contrast against #fff (non-text UI).
+     Background tints at 0.12-0.15 alpha keep text at >=4.5:1 against #1a1a2e. */
+  .annotation-span[data-branch="Actor / Player"]       { border-bottom-color: #2a8f9e; background: rgba(42,143,158,0.13); }
+  .annotation-span[data-branch="Area of Law"]           { border-bottom-color: #b07418; background: rgba(176,116,24,0.12); }
+  .annotation-span[data-branch="Document / Artifact"]   { border-bottom-color: #7e4bbf; background: rgba(126,75,191,0.11); }
+  .annotation-span[data-branch="Engagement Terms"]      { border-bottom-color: #2e8a54; background: rgba(46,138,84,0.12); }
+  .annotation-span[data-branch="Event"]                 { border-bottom-color: #c82828; background: rgba(200,40,40,0.10); }
+  .annotation-span[data-branch="Location"]              { border-bottom-color: #3b64e0; background: rgba(59,100,224,0.12); }
+  .annotation-span[data-branch="Governmental Body"]     { border-bottom-color: #be4068; background: rgba(190,64,104,0.11); }
+  .annotation-span[data-branch="Legal Entity"]          { border-bottom-color: #1e8c4a; background: rgba(30,140,74,0.12); }
+  .annotation-span[data-branch="Industry"]              { border-bottom-color: #a68310; background: rgba(166,131,16,0.12); }
+  .annotation-span[data-branch="Service"]               { border-bottom-color: #1a84b8; background: rgba(26,132,184,0.12); }
 
-  .annotation-span[data-branch="Actor / Player"]:hover { background: rgba(94,196,212,0.25); }
-  .annotation-span[data-branch="Area of Law"]:hover { background: rgba(232,165,76,0.25); }
-  .annotation-span[data-branch="Document / Artifact"]:hover { background: rgba(176,126,232,0.25); }
-  .annotation-span[data-branch="Location"]:hover { background: rgba(108,140,255,0.25); }
+  .annotation-span[data-branch="Actor / Player"]:hover       { background: rgba(42,143,158,0.24); }
+  .annotation-span[data-branch="Area of Law"]:hover           { background: rgba(176,116,24,0.22); }
+  .annotation-span[data-branch="Document / Artifact"]:hover   { background: rgba(126,75,191,0.22); }
+  .annotation-span[data-branch="Engagement Terms"]:hover      { background: rgba(46,138,84,0.22); }
+  .annotation-span[data-branch="Event"]:hover                 { background: rgba(200,40,40,0.20); }
+  .annotation-span[data-branch="Location"]:hover              { background: rgba(59,100,224,0.22); }
+  .annotation-span[data-branch="Governmental Body"]:hover     { background: rgba(190,64,104,0.20); }
+  .annotation-span[data-branch="Legal Entity"]:hover          { background: rgba(30,140,74,0.22); }
+  .annotation-span[data-branch="Industry"]:hover              { background: rgba(166,131,16,0.22); }
+  .annotation-span[data-branch="Service"]:hover               { background: rgba(26,132,184,0.22); }
 
   /* Concept tooltip */
   .concept-tooltip {
@@ -539,15 +573,17 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     padding: 6px 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid #d0d0da;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    color: #1a1a2e;
   }
 
   .concept-group-count {
     font-size: 10px;
-    background: var(--surface2);
+    background: #eeeef3;
+    color: #4a4a60;
     padding: 1px 6px;
     border-radius: 8px;
     font-weight: 400;
@@ -555,19 +591,20 @@
 
   .concept-item {
     padding: 8px 10px;
-    border: 1px solid var(--border);
+    border: 1px solid #d0d0da;
     border-radius: 6px;
     margin-top: 4px;
     cursor: pointer;
     transition: background 0.15s;
     font-size: 12px;
+    color: #1a1a2e;
   }
 
-  .concept-item:hover { background: var(--surface2); }
-  .concept-name { font-weight: 600; }
-  .concept-meta { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  .concept-item:hover { background: #f0f0f5; }
+  .concept-name { font-weight: 600; color: #1a1a2e; }
+  .concept-meta { font-size: 10px; color: #6b6b80; margin-top: 2px; }
 
-  .confidence-bar { height: 2px; background: var(--border); border-radius: 1px; margin-top: 4px; overflow: hidden; }
+  .confidence-bar { height: 2px; background: #d0d0da; border-radius: 1px; margin-top: 4px; overflow: hidden; }
   .confidence-fill { height: 100%; border-radius: 1px; }
 
   /* Export buttons */
@@ -588,7 +625,7 @@
     gap: 2px;
   }
 
-  .export-btn .ext { font-size: 9px; color: var(--text-dim); }
+  .export-btn .ext { font-size: 9px; color: #6b6b80; }
 
   /* Metadata grid */
   .meta-grid {
@@ -598,8 +635,8 @@
     font-size: 12px;
   }
 
-  .meta-key { color: var(--text-dim); font-weight: 500; padding: 2px 0; }
-  .meta-value { color: var(--text); padding: 2px 0; word-break: break-word; }
+  .meta-key { color: #6b6b80; font-weight: 500; padding: 2px 0; }
+  .meta-value { color: #1a1a2e; padding: 2px 0; word-break: break-word; }
 
   /* Settings modal */
   .modal-overlay {
@@ -711,10 +748,10 @@
   .empty-state {
     text-align: center;
     padding: 40px 20px;
-    color: var(--text-dim);
+    color: #6b6b80;
   }
 
-  .empty-state h3 { font-size: 14px; margin-bottom: 6px; color: var(--text); }
+  .empty-state h3 { font-size: 14px; margin-bottom: 6px; color: #1a1a2e; }
 
   /* File upload zone */
   .upload-zone {
@@ -1066,7 +1103,7 @@
         <div id="metadataDisplay"></div>
       </div>
       <div class="tab-content" id="tab-export">
-        <p style="color:var(--text-dim);font-size:12px;margin-bottom:12px">Download annotations in any of the 12 supported formats:</p>
+        <p style="color:#6b6b80;font-size:12px;margin-bottom:12px">Download annotations in any of the 12 supported formats:</p>
         <div class="export-grid" id="exportButtons"></div>
       </div>
     </div>
@@ -1154,21 +1191,21 @@ const STAGE_LABELS = {
 };
 
 const BRANCH_COLORS = {
-  'Actor / Player': 'var(--branch-actor)',
-  'Area of Law': 'var(--branch-area-of-law)',
-  'Document / Artifact': 'var(--branch-document)',
-  'Engagement Terms': 'var(--branch-engagement)',
-  'Event': 'var(--branch-event)',
-  'Location': 'var(--branch-location)',
-  'Governmental Body': 'var(--branch-governmental)',
-  'Legal Entity': 'var(--branch-legal-entity)',
-  'Industry': 'var(--branch-industry)',
-  'Service': 'var(--branch-service)',
-  'Objectives': 'var(--orange)',
-  'Legal Authorities': 'var(--purple)',
-  'Status': 'var(--cyan)',
-  'Currency': 'var(--orange)',
-  'Forums and Venues': 'var(--branch-governmental)',
+  'Actor / Player': '#2a8f9e',
+  'Area of Law': '#b07418',
+  'Document / Artifact': '#7e4bbf',
+  'Engagement Terms': '#2e8a54',
+  'Event': '#c82828',
+  'Location': '#3b64e0',
+  'Governmental Body': '#be4068',
+  'Legal Entity': '#1e8c4a',
+  'Industry': '#a68310',
+  'Service': '#1a84b8',
+  'Objectives': '#9e6b0a',
+  'Legal Authorities': '#6b3fa0',
+  'Status': '#1a7a7a',
+  'Currency': '#9e6b0a',
+  'Forums and Venues': '#be4068',
 };
 
 const EXPORT_FORMATS = [
@@ -2099,7 +2136,7 @@ function renderAnnotatedText(text, annotations) {
 
     const c = ann.concepts[0];
     const branch = c.branch || '';
-    const branchColor = BRANCH_COLORS[branch] || 'var(--accent)';
+    const branchColor = BRANCH_COLORS[branch] || '#3b64e0';
 
     // Text before this annotation
     if (ann.span.start > lastEnd) {
@@ -2143,7 +2180,7 @@ function showTooltip(event, el) {
   const conf = parseFloat(el.dataset.confidence);
   const source = el.dataset.source;
 
-  const branchColor = BRANCH_COLORS[branch] || 'var(--text-dim)';
+  const branchColor = BRANCH_COLORS[branch] || '#6b6b80';
 
   tooltip.innerHTML = `
     <div class="tooltip-label">${escapeHtml(label)}</div>
@@ -2220,7 +2257,7 @@ function renderConceptsList(annotations) {
 
   for (const branch of sortedBranches) {
     const concepts = groups[branch].sort((a, b) => b.count - a.count);
-    const branchColor = BRANCH_COLORS[branch] || 'var(--text-dim)';
+    const branchColor = BRANCH_COLORS[branch] || '#6b6b80';
     const totalOccurrences = concepts.reduce((s, c) => s + c.count, 0);
 
     html += `<div class="concept-group">`;
@@ -2251,17 +2288,17 @@ function renderTriples(triples) {
     return;
   }
 
-  let html = `<p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">${triples.length} Subject-Predicate-Object triples extracted from dependency parsing:</p>`;
+  let html = `<p style="font-size:12px;color:#6b6b80;margin-bottom:12px">${triples.length} Subject-Predicate-Object triples extracted from dependency parsing:</p>`;
   html += '<div style="font-size:12px">';
 
   for (const t of triples) {
-    html += `<div style="padding:8px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px">
-      <span style="color:var(--cyan);font-weight:600">${escapeHtml(t.subject || '')}</span>
-      <span style="color:var(--text-dim)"> \u2192 </span>
-      <span style="color:var(--orange)">${escapeHtml(t.predicate || '')}</span>
-      <span style="color:var(--text-dim)"> \u2192 </span>
-      <span style="color:var(--purple);font-weight:600">${escapeHtml(t.object || '')}</span>
-      ${t.sentence ? `<div style="font-size:10px;color:var(--text-dim);margin-top:4px;font-style:italic">"${escapeHtml(t.sentence.slice(0,120))}${t.sentence.length > 120 ? '...' : ''}"</div>` : ''}
+    html += `<div style="padding:8px;border:1px solid #d0d0da;border-radius:6px;margin-bottom:4px">
+      <span style="color:#1a7a7a;font-weight:600">${escapeHtml(t.subject || '')}</span>
+      <span style="color:#6b6b80"> \u2192 </span>
+      <span style="color:#9e6b0a">${escapeHtml(t.predicate || '')}</span>
+      <span style="color:#6b6b80"> \u2192 </span>
+      <span style="color:#6b3fa0;font-weight:600">${escapeHtml(t.object || '')}</span>
+      ${t.sentence ? `<div style="font-size:10px;color:#6b6b80;margin-top:4px;font-style:italic">"${escapeHtml(t.sentence.slice(0,120))}${t.sentence.length > 120 ? '...' : ''}"</div>` : ''}
     </div>`;
   }
 
@@ -2312,7 +2349,7 @@ function renderMetadata(metadata, job) {
 function renderExportButtons() {
   const container = document.getElementById('exportButtons');
   if (!currentJobId) {
-    container.innerHTML = '<p style="color:var(--text-dim);font-size:12px">Complete an enrichment first.</p>';
+    container.innerHTML = '<p style="color:#6b6b80;font-size:12px">Complete an enrichment first.</p>';
     return;
   }
 
