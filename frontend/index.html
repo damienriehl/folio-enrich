@@ -265,7 +265,7 @@
 
   textarea {
     width: 100%;
-    min-height: 180px;
+    min-height: 100px;
     background: var(--surface2);
     color: var(--text);
     border: 1px solid var(--border);
@@ -471,15 +471,34 @@
     align-items: center;
   }
 
-  .activity-log {
-    max-height: 120px;
-    overflow-y: auto;
+  .activity-log-wrapper {
+    position: relative;
     border-top: 1px solid var(--border);
     margin-top: 6px;
     padding-top: 4px;
+  }
+
+  .activity-log {
+    max-height: 240px;
+    overflow-y: auto;
     font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
     font-size: 11px;
   }
+
+  .btn-copy-log {
+    position: absolute;
+    top: 4px;
+    right: 0;
+    background: var(--surface2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 10px;
+    padding: 1px 6px;
+    cursor: pointer;
+    z-index: 1;
+  }
+  .btn-copy-log:hover { background: var(--border); color: var(--text); }
 
   .activity-entry {
     display: flex;
@@ -868,7 +887,7 @@
       <span class="chip-label">Embedding</span>
       <span class="chip-detail" id="chipEmbeddingDetail">...</span>
     </div>
-    <div class="status-chip" id="chipLLM" data-tooltip="LLM provider status">
+    <div class="status-chip" id="chipLLM" data-tooltip="LLM provider status" onclick="openSettings()" style="cursor:pointer">
       <span class="chip-dot gray"></span>
       <span class="chip-label">LLM</span>
       <span class="chip-detail" id="chipLLMDetail">...</span>
@@ -885,8 +904,6 @@
       <span class="toggle-track"><span class="toggle-thumb"></span></span>
       <span>Show all</span>
     </label>
-    <button class="header-btn" onclick="openSettings()">Settings</button>
-    <button class="header-btn" onclick="openSynthetic()">Generate</button>
   </div>
 </header>
 
@@ -957,6 +974,7 @@
           <button class="secondary sample-btn" onclick="loadSample('motion')">Motion to Dismiss</button>
           <button class="secondary sample-btn" onclick="loadSample('contract')">Contract Clause</button>
           <button class="secondary sample-btn" onclick="loadSample('opinion')">Court Opinion</button>
+          <button class="secondary sample-btn" onclick="openSynthetic()">Generate...</button>
         </div>
       </div>
     </div>
@@ -965,7 +983,10 @@
     <div class="pipeline-progress" id="pipelineProgress">
       <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
       <div class="progress-stages" id="progressStages"></div>
-      <div class="activity-log" id="activityLog"></div>
+      <div class="activity-log-wrapper">
+        <button class="btn-copy-log" onclick="copyActivityLog()" title="Copy log to clipboard">Copy</button>
+        <div class="activity-log" id="activityLog"></div>
+      </div>
       <div class="status-text">
         <span id="statusText">Ready</span>
         <span id="statusBadge" style="font-size:10px;color:var(--text-dim)">idle</span>
@@ -1034,8 +1055,8 @@
     <div style="margin-top:16px">
       <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim)">Length</label>
       <div class="radio-group">
-        <label><input type="radio" name="synLength" value="short"> Short (1-5 pages)</label>
-        <label><input type="radio" name="synLength" value="medium" checked> Medium (10-30 pages)</label>
+        <label><input type="radio" name="synLength" value="short" checked> Short (1-5 pages)</label>
+        <label><input type="radio" name="synLength" value="medium"> Medium (10-30 pages)</label>
         <label><input type="radio" name="synLength" value="long"> Long (50-100 pages)</label>
       </div>
     </div>
@@ -1860,6 +1881,18 @@ function renderActivityLog() {
     return `<div class="activity-entry"><span class="activity-ts">${t}</span><span class="activity-stage${cls}">${e.stage}</span><span class="activity-msg">${e.msg}</span></div>`;
   }).join('');
   container.scrollTop = container.scrollHeight;
+}
+
+function copyActivityLog() {
+  const entries = activityEntries.map(e => {
+    const t = e.ts ? new Date(e.ts).toISOString() : '';
+    return `${t}\t${e.stage}\t${e.msg}`;
+  }).join('\n');
+  navigator.clipboard.writeText(entries).then(() => {
+    const btn = document.querySelector('.btn-copy-log');
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  }).catch(() => {});
 }
 
 function addAnnotationToView(data) {
