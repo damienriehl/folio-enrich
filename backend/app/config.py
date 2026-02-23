@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o-mini"
     openai_api_key: str = ""
     anthropic_api_key: str = ""
+    google_api_key: str = ""
+    mistral_api_key: str = ""
+    cohere_api_key: str = ""
+    meta_llama_api_key: str = ""
+    groq_api_key: str = ""
+    xai_api_key: str = ""
+    github_models_api_key: str = ""
 
     # Embedding
     embedding_model: str = "all-MiniLM-L6-v2"

@@ -21,6 +21,12 @@ class FakeClassifierLLM(LLMProvider):
     async def structured(self, prompt: str, schema: dict, **kwargs: Any) -> dict:
         return {"document_type": "Motion to Dismiss", "confidence": 0.92, "reasoning": "test"}
 
+    async def test_connection(self) -> bool:
+        return True
+
+    async def list_models(self):
+        return []
+
 
 class FakeExtractorLLM(LLMProvider):
     async def complete(self, prompt: str, **kwargs: Any) -> str:
@@ -40,6 +46,12 @@ class FakeExtractorLLM(LLMProvider):
             "governing_law": "",
             "claim_types": ["Breach of Contract"],
         }
+
+    async def test_connection(self) -> bool:
+        return True
+
+    async def list_models(self):
+        return []
 
 
 class TestDocumentClassifier:

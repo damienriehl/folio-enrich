@@ -1,20 +1,31 @@
 from __future__ import annotations
 
 import json
-import os
+import logging
 from typing import Any
 
+from app.models.llm_models import ModelInfo
 from app.services.llm.base import LLMProvider
+
+logger = logging.getLogger(__name__)
+
+_FALLBACK_MODELS: list[ModelInfo] = [
+    ModelInfo(id="claude-opus-4-20250514", name="Claude Opus 4", context_window=200000),
+    ModelInfo(id="claude-sonnet-4-20250514", name="Claude Sonnet 4", context_window=200000),
+    ModelInfo(id="claude-haiku-4-5-20251001", name="Claude Haiku 4.5", context_window=200000),
+    ModelInfo(id="claude-sonnet-4-6-20250219", name="Claude Sonnet 4.6", context_window=200000),
+    ModelInfo(id="claude-opus-4-6-20250219", name="Claude Opus 4.6", context_window=200000),
+]
 
 
 class AnthropicProvider(LLMProvider):
     def __init__(
         self,
-        model: str = "claude-sonnet-4-20250514",
         api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
     ) -> None:
-        self.model = model
-        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+        super().__init__(api_key=api_key, base_url=base_url, model=model)
         self._client = None
 
     def _get_client(self):
@@ -32,12 +43,26 @@ class AnthropicProvider(LLMProvider):
     async def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
         client = self._get_client()
         max_tokens = kwargs.pop("max_tokens", 4096)
-        response = await client.messages.create(
-            model=kwargs.pop("model", self.model),
-            max_tokens=max_tokens,
-            messages=messages,
-            **kwargs,
-        )
+
+        # Separate system message from user/assistant messages
+        system_msg = None
+        chat_messages = []
+        for msg in messages:
+            if msg.get("role") == "system":
+                system_msg = msg.get("content", "")
+            else:
+                chat_messages.append(msg)
+
+        create_kwargs: dict[str, Any] = {
+            "model": kwargs.pop("model", self.model or "claude-sonnet-4-20250514"),
+            "max_tokens": max_tokens,
+            "messages": chat_messages or [{"role": "user", "content": ""}],
+        }
+        if system_msg:
+            create_kwargs["system"] = system_msg
+
+        create_kwargs.update(kwargs)
+        response = await client.messages.create(**create_kwargs)
         return response.content[0].text if response.content else ""
 
     async def structured(
@@ -52,5 +77,33 @@ class AnthropicProvider(LLMProvider):
         text = text.strip()
         if text.startswith("```"):
             lines = text.split("\n")
-            text = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+            text = "\n".join(
+                lines[1:-1] if lines[-1].startswith("```") else lines[1:]
+            )
         return json.loads(text)
+
+    async def test_connection(self) -> bool:
+        client = self._get_client()
+        response = await client.messages.create(
+            model=self.model or "claude-sonnet-4-20250514",
+            max_tokens=1,
+            messages=[{"role": "user", "content": "Hi"}],
+        )
+        return bool(response.content)
+
+    async def list_models(self) -> list[ModelInfo]:
+        try:
+            client = self._get_client()
+            models = []
+            response = await client.models.list(limit=100)
+            for m in response.data:
+                models.append(
+                    ModelInfo(
+                        id=m.id,
+                        name=getattr(m, "display_name", m.id),
+                    )
+                )
+            return sorted(models, key=lambda m: m.id) if models else _FALLBACK_MODELS
+        except Exception:
+            logger.debug("Failed to list Anthropic models dynamically, using fallback", exc_info=True)
+            return _FALLBACK_MODELS

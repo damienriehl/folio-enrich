@@ -18,6 +18,12 @@ class FakeSyntheticLLM(LLMProvider):
     async def structured(self, prompt: str, schema: dict, **kwargs: Any) -> dict:
         return {}
 
+    async def test_connection(self) -> bool:
+        return True
+
+    async def list_models(self):
+        return []
+
 
 class TestSyntheticGenerator:
     @pytest.mark.asyncio

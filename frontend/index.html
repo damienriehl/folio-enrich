@@ -879,14 +879,7 @@
       <label>Default Model</label>
       <select id="settingsModel"></select>
     </div>
-    <div class="form-group">
-      <label>OpenAI API Key</label>
-      <input type="password" id="settingsOpenAIKey" placeholder="sk-...">
-    </div>
-    <div class="form-group">
-      <label>Anthropic API Key</label>
-      <input type="password" id="settingsAnthropicKey" placeholder="sk-ant-...">
-    </div>
+    <div id="settingsApiKeys"></div>
     <div class="modal-actions">
       <button class="secondary" onclick="closeSettings()">Cancel</button>
       <button class="primary" onclick="saveSettings()">Save Settings</button>
@@ -935,7 +928,8 @@ let currentJobId = null;
 let currentJob = null;
 let pollInterval = null;
 let pollTimeout = null;
-let providersData = {};
+let providersData = {};   // provider name → metadata {display_name, requires_api_key, default_model, api_key_set}
+let knownModels = {};     // provider name → [{id, name, context_window}]
 let selectedDocType = null;
 let showUncertain = true;
 
@@ -1094,26 +1088,37 @@ async function checkHealth() {
 
 async function loadProviders() {
   try {
-    const r = await fetch(`${API}/settings/providers`);
-    if (!r.ok) return;
-    const data = await r.json();
-    providersData = data.providers || {};
+    // Fetch provider metadata and known models in parallel
+    const [provR, modR] = await Promise.all([
+      fetch(`${API}/settings/providers`),
+      fetch(`${API}/settings/known-models`),
+    ]);
 
-    // Populate provider selects
-    for (const sel of [document.getElementById('providerSelect'), document.getElementById('settingsProvider')]) {
-      sel.innerHTML = '';
-      for (const name of Object.keys(providersData)) {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name.charAt(0).toUpperCase() + name.slice(1);
-        sel.appendChild(opt);
+    if (provR.ok) {
+      const data = await provR.json();
+      providersData = data.providers || {};
+
+      // Populate provider selects
+      for (const sel of [document.getElementById('providerSelect'), document.getElementById('settingsProvider')]) {
+        sel.innerHTML = '';
+        for (const [name, meta] of Object.entries(providersData)) {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = meta.display_name || name;
+          sel.appendChild(opt);
+        }
+      }
+
+      // Set current
+      if (data.current) {
+        document.getElementById('providerSelect').value = data.current.provider;
+        document.getElementById('settingsProvider').value = data.current.provider;
       }
     }
 
-    // Set current
-    if (data.current) {
-      document.getElementById('providerSelect').value = data.current.provider;
-      document.getElementById('settingsProvider').value = data.current.provider;
+    if (modR.ok) {
+      const modData = await modR.json();
+      knownModels = modData.models || {};
     }
 
     onProviderChange();
@@ -1124,19 +1129,14 @@ async function loadProviders() {
 
 function onProviderChange() {
   const provider = document.getElementById('providerSelect').value;
+  const meta = providersData[provider] || {};
   const modelSelect = document.getElementById('modelSelect');
-  modelSelect.innerHTML = '';
 
-  const models = providersData[provider] || [];
-  for (const m of models) {
-    const opt = document.createElement('option');
-    opt.value = m;
-    opt.textContent = m;
-    modelSelect.appendChild(opt);
-  }
+  // Populate model dropdown from known models
+  populateModelSelect(modelSelect, provider);
 
-  // Show/hide API key based on provider
-  const needsKey = ['openai', 'anthropic'].includes(provider);
+  // Show/hide API key based on provider metadata
+  const needsKey = meta.requires_api_key !== false;
   document.getElementById('apiKeyGroup').style.display = needsKey ? 'block' : 'none';
 
   // Clear test status when switching providers
@@ -1144,6 +1144,57 @@ function onProviderChange() {
   if (testStatus) { testStatus.textContent = ''; testStatus.className = 'test-status'; }
 
   updateLLMSummary();
+}
+
+function populateModelSelect(sel, provider) {
+  sel.innerHTML = '';
+  const models = knownModels[provider] || [];
+  for (const m of models) {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    const ctx = m.context_window ? ` (${(m.context_window / 1000).toFixed(0)}K)` : '';
+    opt.textContent = m.name + ctx;
+    sel.appendChild(opt);
+  }
+  // If no known models, add a placeholder
+  if (!models.length) {
+    const opt = document.createElement('option');
+    opt.value = (providersData[provider] || {}).default_model || 'default';
+    opt.textContent = opt.value;
+    sel.appendChild(opt);
+  }
+}
+
+async function fetchDynamicModels() {
+  const provider = document.getElementById('providerSelect').value;
+  const apiKey = document.getElementById('apiKeyInput').value;
+  const modelSelect = document.getElementById('modelSelect');
+  const currentModel = modelSelect.value;
+
+  try {
+    const r = await fetch(`${API}/settings/models`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, api_key: apiKey || undefined }),
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    const models = data.models || [];
+    if (models.length > 0) {
+      modelSelect.innerHTML = '';
+      for (const m of models) {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        const ctx = m.context_window ? ` (${(m.context_window / 1000).toFixed(0)}K)` : '';
+        opt.textContent = (m.name || m.id) + ctx;
+        modelSelect.appendChild(opt);
+      }
+      // Restore previous selection if still available
+      if (currentModel) modelSelect.value = currentModel;
+    }
+  } catch (e) {
+    console.debug('Dynamic model fetch failed:', e);
+  }
 }
 
 function updateLLMSummary() {
@@ -1181,12 +1232,13 @@ async function testConnection() {
   status.textContent = 'Testing...';
   status.className = 'test-status';
 
-  // First, save the provider/model/key to backend settings so health check updates
+  // Save provider/model/key to backend settings so health check updates
   try {
     const settingsBody = { llm_provider: provider, llm_model: model };
     if (apiKey) {
-      if (provider === 'openai') settingsBody.openai_api_key = apiKey;
-      else if (provider === 'anthropic') settingsBody.anthropic_api_key = apiKey;
+      // Map provider to correct API key field
+      const keyField = _providerKeyField(provider);
+      if (keyField) settingsBody[keyField] = apiKey;
     }
     await fetch(`${API}/settings`, {
       method: 'PUT',
@@ -1195,17 +1247,19 @@ async function testConnection() {
     });
   } catch { /* settings save is best-effort */ }
 
-  // Now test the actual connection
+  // Test the connection
   try {
     const r = await fetch(`${API}/settings/test-connection`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, model, api_key: apiKey }),
+      body: JSON.stringify({ provider, model, api_key: apiKey || undefined }),
     });
     const data = await r.json();
-    if (data.status === 'ok') {
-      status.textContent = 'Connection successful';
+    if (data.success) {
+      status.textContent = 'Connection successful' + (data.model ? ` (${data.model})` : '');
       status.className = 'test-status ok';
+      // Also fetch dynamic model list on successful connection
+      fetchDynamicModels();
     } else {
       status.textContent = data.message || 'Connection failed';
       status.className = 'test-status error';
@@ -1215,9 +1269,23 @@ async function testConnection() {
     status.className = 'test-status error';
   }
 
-  // Refresh health status chips
   checkHealth();
   updateLLMSummary();
+}
+
+function _providerKeyField(provider) {
+  const map = {
+    openai: 'openai_api_key',
+    anthropic: 'anthropic_api_key',
+    google: 'google_api_key',
+    mistral: 'mistral_api_key',
+    cohere: 'cohere_api_key',
+    meta_llama: 'meta_llama_api_key',
+    groq: 'groq_api_key',
+    xai: 'xai_api_key',
+    github_models: 'github_models_api_key',
+  };
+  return map[provider] || null;
 }
 
 // ==============================================
@@ -1226,9 +1294,9 @@ async function testConnection() {
 
 function openSettings() {
   document.getElementById('settingsModal').classList.add('visible');
-  // Sync settings provider/model selects
   document.getElementById('settingsProvider').value = document.getElementById('providerSelect').value;
   populateSettingsModels();
+  populateSettingsApiKeys();
 }
 
 function closeSettings() {
@@ -1238,27 +1306,44 @@ function closeSettings() {
 function populateSettingsModels() {
   const provider = document.getElementById('settingsProvider').value;
   const sel = document.getElementById('settingsModel');
-  sel.innerHTML = '';
-  for (const m of (providersData[provider] || [])) {
-    const opt = document.createElement('option');
-    opt.value = m;
-    opt.textContent = m;
-    sel.appendChild(opt);
-  }
+  populateModelSelect(sel, provider);
 }
 
-document.getElementById('settingsProvider').addEventListener('change', populateSettingsModels);
+function populateSettingsApiKeys() {
+  const container = document.getElementById('settingsApiKeys');
+  const cloudProviders = Object.entries(providersData).filter(([_, m]) => m.requires_api_key !== false);
+
+  let html = '';
+  for (const [name, meta] of cloudProviders) {
+    const fieldId = `settingsKey_${name}`;
+    html += `<div class="form-group">
+      <label>${escapeHtml(meta.display_name || name)} API Key</label>
+      <input type="password" id="${fieldId}" placeholder="API key for ${escapeHtml(meta.display_name || name)}">
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+document.getElementById('settingsProvider').addEventListener('change', () => {
+  populateSettingsModels();
+});
 
 async function saveSettings() {
   const provider = document.getElementById('settingsProvider').value;
   const model = document.getElementById('settingsModel').value;
-  const openaiKey = document.getElementById('settingsOpenAIKey').value;
-  const anthropicKey = document.getElementById('settingsAnthropicKey').value;
 
   try {
     const body = { llm_provider: provider, llm_model: model };
-    if (openaiKey) body.openai_api_key = openaiKey;
-    if (anthropicKey) body.anthropic_api_key = anthropicKey;
+
+    // Collect API keys from settings modal
+    const cloudProviders = Object.entries(providersData).filter(([_, m]) => m.requires_api_key !== false);
+    for (const [name, _] of cloudProviders) {
+      const input = document.getElementById(`settingsKey_${name}`);
+      if (input && input.value) {
+        const keyField = _providerKeyField(name);
+        if (keyField) body[keyField] = input.value;
+      }
+    }
 
     await fetch(`${API}/settings`, {
       method: 'PUT',
@@ -1271,13 +1356,13 @@ async function saveSettings() {
     onProviderChange();
     document.getElementById('modelSelect').value = model;
 
-    // Sync the inline API key field with whichever key applies to the chosen provider
+    // Sync inline API key with the key for the current provider
     const inlineKey = document.getElementById('apiKeyInput');
-    if (provider === 'openai' && openaiKey) inlineKey.value = openaiKey;
-    else if (provider === 'anthropic' && anthropicKey) inlineKey.value = anthropicKey;
+    const keyInput = document.getElementById(`settingsKey_${provider}`);
+    if (keyInput && keyInput.value) inlineKey.value = keyInput.value;
 
     updateLLMSummary();
-    checkHealth();  // Refresh status chips
+    checkHealth();
     closeSettings();
   } catch (e) {
     alert('Failed to save settings: ' + e.message);
@@ -1349,8 +1434,8 @@ async function submitEnrichment() {
     // Save provider/model/key to backend settings first
     const settingsBody = { llm_provider: provider, llm_model: model };
     if (apiKey) {
-      if (provider === 'openai') settingsBody.openai_api_key = apiKey;
-      else if (provider === 'anthropic') settingsBody.anthropic_api_key = apiKey;
+      const keyField = _providerKeyField(provider);
+      if (keyField) settingsBody[keyField] = apiKey;
     }
     await fetch(`${API}/settings`, {
       method: 'PUT',

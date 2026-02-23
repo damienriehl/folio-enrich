@@ -34,28 +34,31 @@ class EnrichRequest(BaseModel):
 def _get_llm_for_request(req: EnrichRequest):
     """Create an LLM provider from request params or fall back to settings."""
     from app.config import settings
-    from app.services.llm.registry import get_provider
+    from app.services.llm.registry import REQUIRES_API_KEY, get_provider
+    from app.api.routes.settings import _get_api_key_for_provider
+    from app.models.llm_models import LLMProviderType
 
     provider_name = req.llm_provider or settings.llm_provider
     model = req.llm_model or settings.llm_model
-    api_key = req.api_key
 
-    # Determine API key
-    if not api_key:
-        if provider_name == "openai":
-            api_key = settings.openai_api_key
-        elif provider_name == "anthropic":
-            api_key = settings.anthropic_api_key
-        elif provider_name in ("ollama", "lm_studio"):
-            api_key = "local"  # Local models don't need a real API key
+    # Normalize provider name to enum
+    try:
+        normalized = provider_name.replace("-", "_")
+        if normalized == "lm_studio":
+            normalized = "lmstudio"
+        provider_type = LLMProviderType(normalized)
+    except ValueError:
+        logger.warning("Unknown provider %s — LLM stages will be skipped", provider_name)
+        return None
 
-    if not api_key:
+    api_key = _get_api_key_for_provider(provider_type, req.api_key)
+
+    if REQUIRES_API_KEY.get(provider_type, True) and not api_key:
         logger.info("No API key for %s — LLM stages will be skipped", provider_name)
         return None
 
     try:
-        kwargs = {"model": model, "api_key": api_key}
-        return get_provider(provider_name, **kwargs)
+        return get_provider(provider_type, api_key=api_key, model=model)
     except Exception:
         logger.warning("Failed to create LLM provider %s", provider_name, exc_info=True)
         return None

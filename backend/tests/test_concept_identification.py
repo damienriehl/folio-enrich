@@ -29,6 +29,12 @@ class FakeLLMProvider(LLMProvider):
     async def structured(self, prompt: str, schema: dict, **kwargs: Any) -> dict:
         return {"concepts": self.concepts}
 
+    async def test_connection(self) -> bool:
+        return True
+
+    async def list_models(self):
+        return []
+
 
 class FailingLLMProvider(LLMProvider):
     async def complete(self, prompt: str, **kwargs: Any) -> str:
@@ -39,6 +45,12 @@ class FailingLLMProvider(LLMProvider):
 
     async def structured(self, prompt: str, schema: dict, **kwargs: Any) -> dict:
         raise RuntimeError("LLM error")
+
+    async def test_connection(self) -> bool:
+        return False
+
+    async def list_models(self):
+        return []
 
 
 class TestLLMConceptIdentifier:

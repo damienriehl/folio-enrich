@@ -65,25 +65,34 @@ def _try_get_llm() -> LLMProvider | None:
     """Try to create an LLM provider from settings. Returns None if no API key."""
     try:
         from app.config import settings
-        from app.services.llm.registry import get_provider
+        from app.models.llm_models import LLMProviderType
+        from app.services.llm.registry import REQUIRES_API_KEY, get_provider
+        from app.api.routes.settings import _get_api_key_for_provider
 
-        provider_name = settings.llm_provider
-        kwargs: dict = {"model": settings.llm_model}
+        provider_name = settings.llm_provider.replace("-", "_")
+        if provider_name == "lm_studio":
+            provider_name = "lmstudio"
 
-        if provider_name == "openai" and settings.openai_api_key:
-            kwargs["api_key"] = settings.openai_api_key
-            return get_provider("openai", **kwargs)
-        elif provider_name == "anthropic" and settings.anthropic_api_key:
-            kwargs["api_key"] = settings.anthropic_api_key
-            return get_provider("anthropic", **kwargs)
-        elif provider_name == "openai" and not settings.openai_api_key:
-            logger.warning("No OpenAI API key configured — LLM stages will be skipped")
+        try:
+            provider_type = LLMProviderType(provider_name)
+        except ValueError:
+            logger.warning("Unknown LLM provider %s — LLM stages will be skipped", provider_name)
             return None
-        elif provider_name == "anthropic" and not settings.anthropic_api_key:
-            logger.warning("No Anthropic API key configured — LLM stages will be skipped")
+
+        api_key = _get_api_key_for_provider(provider_type)
+
+        if REQUIRES_API_KEY.get(provider_type, True) and not api_key:
+            logger.warning(
+                "No API key for %s — LLM stages will be skipped",
+                provider_type.value,
+            )
             return None
-        else:
-            return get_provider(provider_name, **kwargs)
+
+        return get_provider(
+            provider_type=provider_type,
+            api_key=api_key,
+            model=settings.llm_model,
+        )
     except Exception:
         logger.warning("Failed to create LLM provider — LLM stages will be skipped", exc_info=True)
         return None

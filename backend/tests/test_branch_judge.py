@@ -18,6 +18,12 @@ class FakeBranchLLM(LLMProvider):
     async def structured(self, prompt: str, schema: dict, **kwargs: Any) -> dict:
         return {"branch": "Legal Processes", "confidence": 0.92, "reasoning": "test"}
 
+    async def test_connection(self) -> bool:
+        return True
+
+    async def list_models(self):
+        return []
+
 
 class TestBranchJudge:
     @pytest.mark.asyncio

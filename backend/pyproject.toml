@@ -20,6 +20,7 @@ dependencies = [
     "nupunkt>=0.1.0",
     "striprtf>=0.0.26",
     "extract-msg>=0.48.0",
+    "httpx>=0.28.0",
 ]
 
 [project.optional-dependencies]
