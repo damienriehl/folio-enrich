@@ -15,24 +15,24 @@ DEFAULT_BASE_URLS: dict[LLMProviderType, str] = {
     LLMProviderType.custom: "http://localhost:8080/v1",
     LLMProviderType.groq: "https://api.groq.com/openai/v1",
     LLMProviderType.xai: "https://api.x.ai/v1",
-    LLMProviderType.github_models: "https://models.inference.ai.azure.com",
+    LLMProviderType.github_models: "https://models.github.ai/inference",
     LLMProviderType.llamafile: "http://localhost:8080/v1",
 }
 
 DEFAULT_MODELS: dict[LLMProviderType, str] = {
-    LLMProviderType.openai: "gpt-4o-mini",
-    LLMProviderType.anthropic: "claude-sonnet-4-20250514",
-    LLMProviderType.google: "gemini-2.0-flash",
-    LLMProviderType.mistral: "mistral-small-latest",
-    LLMProviderType.cohere: "command-r-plus",
-    LLMProviderType.meta_llama: "Llama-4-Scout-17B-16E-Instruct",
-    LLMProviderType.ollama: "llama3.2",
-    LLMProviderType.lmstudio: "local-model",
-    LLMProviderType.custom: "custom-model",
-    LLMProviderType.groq: "llama-3.3-70b-versatile",
-    LLMProviderType.xai: "grok-3-mini",
-    LLMProviderType.github_models: "gpt-4o-mini",
-    LLMProviderType.llamafile: "local-model",
+    LLMProviderType.openai: "gpt-4o",                  # mid: between mini and o3
+    LLMProviderType.anthropic: "claude-sonnet-4-6",     # mid: between Haiku and Opus
+    LLMProviderType.google: "gemini-2.5-flash",         # mid: between flash-lite and pro
+    LLMProviderType.mistral: "mistral-medium-latest",   # mid: between small and large
+    LLMProviderType.cohere: "command-a-03-2025",        # mid: current-gen flagship
+    LLMProviderType.meta_llama: "llama-4-scout",        # mid: lighter Llama 4
+    LLMProviderType.ollama: "",
+    LLMProviderType.lmstudio: "",
+    LLMProviderType.custom: "",
+    LLMProviderType.groq: "llama-3.3-70b-versatile",   # mid: between 8B and 120B
+    LLMProviderType.xai: "grok-3",                     # mid: between mini and grok 4
+    LLMProviderType.github_models: "openai/gpt-4o",    # mid
+    LLMProviderType.llamafile: "",
 }
 
 PROVIDER_DISPLAY_NAMES: dict[LLMProviderType, str] = {
@@ -67,76 +67,75 @@ REQUIRES_API_KEY: dict[LLMProviderType, bool] = {
     LLMProviderType.llamafile: False,
 }
 
+# Well-known models per provider (shown without API key; refresh fetches live).
+# Ordered: oldest/cheapest → newest/most powerful.
 KNOWN_MODELS: dict[LLMProviderType, list[ModelInfo]] = {
     LLMProviderType.openai: [
-        ModelInfo(id="gpt-4o", name="GPT-4o", context_window=128000),
         ModelInfo(id="gpt-4o-mini", name="GPT-4o Mini", context_window=128000),
-        ModelInfo(id="gpt-4-turbo", name="GPT-4 Turbo", context_window=128000),
-        ModelInfo(id="gpt-4", name="GPT-4", context_window=8192),
-        ModelInfo(id="gpt-3.5-turbo", name="GPT-3.5 Turbo", context_window=16385),
-        ModelInfo(id="o1", name="o1", context_window=200000),
-        ModelInfo(id="o1-mini", name="o1 Mini", context_window=128000),
+        ModelInfo(id="gpt-4.1-nano", name="GPT-4.1 Nano", context_window=1047576),
         ModelInfo(id="o3-mini", name="o3 Mini", context_window=200000),
+        ModelInfo(id="gpt-4o", name="GPT-4o", context_window=128000),
+        ModelInfo(id="gpt-4.1-mini", name="GPT-4.1 Mini", context_window=1047576),
+        ModelInfo(id="o4-mini", name="o4 Mini", context_window=200000),
+        ModelInfo(id="gpt-4.1", name="GPT-4.1", context_window=1047576),
+        ModelInfo(id="o3", name="o3", context_window=200000),
     ],
     LLMProviderType.anthropic: [
-        ModelInfo(id="claude-opus-4-20250514", name="Claude Opus 4", context_window=200000),
-        ModelInfo(id="claude-sonnet-4-20250514", name="Claude Sonnet 4", context_window=200000),
         ModelInfo(id="claude-haiku-4-5-20251001", name="Claude Haiku 4.5", context_window=200000),
-        ModelInfo(id="claude-sonnet-4-6-20250219", name="Claude Sonnet 4.6", context_window=200000),
-        ModelInfo(id="claude-opus-4-6-20250219", name="Claude Opus 4.6", context_window=200000),
+        ModelInfo(id="claude-sonnet-4-5-20250929", name="Claude Sonnet 4.5", context_window=200000),
+        ModelInfo(id="claude-sonnet-4-6", name="Claude Sonnet 4.6", context_window=200000),
+        ModelInfo(id="claude-opus-4-6", name="Claude Opus 4.6", context_window=200000),
     ],
     LLMProviderType.google: [
-        ModelInfo(id="gemini-2.0-flash", name="Gemini 2.0 Flash", context_window=1048576),
-        ModelInfo(id="gemini-2.0-flash-lite", name="Gemini 2.0 Flash-Lite", context_window=1048576),
-        ModelInfo(id="gemini-1.5-pro", name="Gemini 1.5 Pro", context_window=2097152),
-        ModelInfo(id="gemini-1.5-flash", name="Gemini 1.5 Flash", context_window=1048576),
+        ModelInfo(id="gemini-2.5-flash-lite", name="Gemini 2.5 Flash-Lite", context_window=1048576),
+        ModelInfo(id="gemini-2.5-flash", name="Gemini 2.5 Flash", context_window=1048576),
+        ModelInfo(id="gemini-3-flash-preview", name="Gemini 3 Flash", context_window=200000),
+        ModelInfo(id="gemini-2.5-pro", name="Gemini 2.5 Pro", context_window=1048576),
+        ModelInfo(id="gemini-3-pro-preview", name="Gemini 3 Pro", context_window=1048576),
+        ModelInfo(id="gemini-3.1-pro-preview", name="Gemini 3.1 Pro", context_window=1048576),
     ],
     LLMProviderType.mistral: [
-        ModelInfo(id="mistral-large-latest", name="Mistral Large", context_window=128000),
-        ModelInfo(id="mistral-small-latest", name="Mistral Small", context_window=32000),
-        ModelInfo(id="codestral-latest", name="Codestral", context_window=32000),
-        ModelInfo(id="open-mistral-nemo", name="Mistral Nemo", context_window=128000),
+        ModelInfo(id="mistral-small-latest", name="Mistral Small 3.2", context_window=128000),
+        ModelInfo(id="codestral-latest", name="Codestral", context_window=128000),
+        ModelInfo(id="mistral-medium-latest", name="Mistral Medium 3.1", context_window=128000),
+        ModelInfo(id="devstral-latest", name="Devstral 2", context_window=256000),
+        ModelInfo(id="mistral-large-latest", name="Mistral Large 3", context_window=260000),
     ],
     LLMProviderType.cohere: [
-        ModelInfo(id="command-r-plus", name="Command R+", context_window=128000),
-        ModelInfo(id="command-r", name="Command R", context_window=128000),
-        ModelInfo(id="command-light", name="Command Light", context_window=4096),
+        ModelInfo(id="command-r-08-2024", name="Command R", context_window=128000),
+        ModelInfo(id="command-r-plus-08-2024", name="Command R+", context_window=128000),
+        ModelInfo(id="command-a-03-2025", name="Command A", context_window=256000),
+        ModelInfo(id="command-a-vision-07-2025", name="Command A Vision", context_window=128000),
+        ModelInfo(id="command-a-reasoning-08-2025", name="Command A Reasoning", context_window=256000),
     ],
     LLMProviderType.meta_llama: [
-        ModelInfo(id="Llama-4-Scout-17B-16E-Instruct", name="Llama 4 Scout", context_window=10000000),
-        ModelInfo(id="Llama-4-Maverick-17B-128E-Instruct", name="Llama 4 Maverick", context_window=1000000),
-        ModelInfo(id="Llama-3.3-70B-Instruct", name="Llama 3.3 70B", context_window=128000),
+        ModelInfo(id="llama-3.3-70b-instruct", name="Llama 3.3 70B", context_window=128000),
+        ModelInfo(id="llama-4-scout", name="Llama 4 Scout", context_window=512000),
+        ModelInfo(id="llama-4-maverick", name="Llama 4 Maverick", context_window=256000),
     ],
     LLMProviderType.groq: [
-        ModelInfo(id="llama-3.3-70b-versatile", name="Llama 3.3 70B", context_window=128000),
-        ModelInfo(id="llama-3.1-8b-instant", name="Llama 3.1 8B", context_window=128000),
-        ModelInfo(id="mixtral-8x7b-32768", name="Mixtral 8x7B", context_window=32768),
-        ModelInfo(id="gemma2-9b-it", name="Gemma 2 9B", context_window=8192),
+        ModelInfo(id="llama-3.1-8b-instant", name="Llama 3.1 8B Instant", context_window=128000),
+        ModelInfo(id="llama-3.3-70b-versatile", name="Llama 3.3 70B Versatile", context_window=128000),
+        ModelInfo(id="qwen/qwen3-32b", name="Qwen3 32B", context_window=131072),
+        ModelInfo(id="meta-llama/llama-4-scout-17b-16e-instruct", name="Llama 4 Scout", context_window=131072),
+        ModelInfo(id="openai/gpt-oss-120b", name="GPT-OSS 120B", context_window=131072),
     ],
     LLMProviderType.xai: [
         ModelInfo(id="grok-3-mini", name="Grok 3 Mini", context_window=131072),
         ModelInfo(id="grok-3", name="Grok 3", context_window=131072),
-        ModelInfo(id="grok-2", name="Grok 2", context_window=131072),
+        ModelInfo(id="grok-4-0709", name="Grok 4", context_window=256000),
     ],
     LLMProviderType.github_models: [
-        ModelInfo(id="gpt-4o", name="GPT-4o", context_window=128000),
-        ModelInfo(id="gpt-4o-mini", name="GPT-4o Mini", context_window=128000),
-        ModelInfo(id="Phi-3.5-mini-instruct", name="Phi 3.5 Mini", context_window=128000),
+        ModelInfo(id="openai/gpt-4o-mini", name="OpenAI GPT-4o Mini", context_window=128000),
+        ModelInfo(id="meta/llama-3.3-70b-instruct", name="Meta Llama 3.3 70B", context_window=128000),
+        ModelInfo(id="openai/gpt-4o", name="OpenAI GPT-4o", context_window=128000),
+        ModelInfo(id="mistral-ai/mistral-large-2411", name="Mistral Large", context_window=128000),
     ],
-    LLMProviderType.ollama: [
-        ModelInfo(id="llama3.2", name="Llama 3.2"),
-        ModelInfo(id="llama3.1", name="Llama 3.1"),
-        ModelInfo(id="mistral", name="Mistral"),
-        ModelInfo(id="codellama", name="Code Llama"),
-        ModelInfo(id="gemma2", name="Gemma 2"),
-    ],
-    LLMProviderType.lmstudio: [
-        ModelInfo(id="local-model", name="Local Model"),
-    ],
+    # Local providers: no known models (user-dependent)
+    LLMProviderType.ollama: [],
+    LLMProviderType.lmstudio: [],
     LLMProviderType.custom: [],
-    LLMProviderType.llamafile: [
-        ModelInfo(id="local-model", name="Local Model"),
-    ],
+    LLMProviderType.llamafile: [],
 }
 
 # Provider type → concrete class mapping (lazy imports)
