@@ -29,12 +29,17 @@ async def job_event_stream(
         # Emit status changes
         if job.status != last_status:
             last_status = job.status
+            status_payload: dict = {
+                "job_id": str(job.id),
+                "status": job.status.value,
+            }
+            # Send normalized text once so frontend can align spans
+            if job.result.canonical_text is not None and "normalized_text_sent" not in last_states:
+                status_payload["canonical_text"] = job.result.canonical_text.full_text
+                last_states["normalized_text_sent"] = "yes"
             yield {
                 "event": "status",
-                "data": json.dumps({
-                    "job_id": str(job.id),
-                    "status": job.status.value,
-                }),
+                "data": json.dumps(status_payload),
             }
 
         # Emit new and updated annotations using ID-based tracking

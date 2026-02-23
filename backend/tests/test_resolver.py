@@ -37,6 +37,10 @@ class FakeFolioService(FolioService):
         }
         self._by_iri = {c.iri: c for c in self._fake_concepts.values()}
 
+    def _get_folio(self):
+        """Raise so multi_strategy_search falls back to search_by_label."""
+        raise RuntimeError("FakeFolioService: no real ontology")
+
     def search_by_label(self, label: str, top_k: int = 5) -> list[tuple[FOLIOConcept, float]]:
         key = label.lower()
         if key in self._fake_concepts:

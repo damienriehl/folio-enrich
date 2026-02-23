@@ -1089,6 +1089,7 @@ let pollInterval = null;
 let pollTimeout = null;
 let eventSource = null;
 let accumulatedAnnotations = [];
+let normalizedText = null;      // canonical full_text from backend, used for progressive rendering
 let activityEntries = [];
 let providersData = {};   // provider name → metadata {display_name, requires_api_key, default_model, api_key_set}
 let knownModels = {};     // provider name → [{id, name, context_window}]
@@ -1803,6 +1804,7 @@ function resetButton() {
 function startSSE() {
   closeSSE();
   accumulatedAnnotations = [];
+  normalizedText = null;
 
   eventSource = new EventSource(`${API}/enrich/${currentJobId}/stream`);
 
@@ -1810,6 +1812,7 @@ function startSSE() {
     const data = JSON.parse(e.data);
     renderProgressStages(data.status);
     setStatus(`Stage: ${STAGE_LABELS[data.status] || data.status}`, 'running');
+    if (data.canonical_text) normalizedText = data.canonical_text;
   });
 
   eventSource.addEventListener('preliminary_annotation', (e) => {
@@ -1925,8 +1928,8 @@ function rerenderAnnotatedText() {
     state: a.state,
   }));
 
-  // We need the canonical text — get it from the input
-  const text = document.getElementById('docInput').value.trim();
+  // Use normalized text (spans are relative to it); fall back to raw input
+  const text = normalizedText || document.getElementById('docInput').value.trim();
   if (text) {
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('annotatedText').style.display = 'block';
