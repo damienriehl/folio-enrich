@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from app.models.job import Job, JobStatus
@@ -29,6 +31,48 @@ def _get_embedding_service():
         return svc if svc.index_size > 0 else None
     except Exception:
         return None
+
+
+@dataclass
+class PipelineConfig:
+    """Configuration for the three-phase parallel pipeline."""
+    pre_parallel: list[PipelineStage] = field(default_factory=list)
+    entity_ruler: PipelineStage | None = None
+    llm_concept: PipelineStage | None = None
+    post_parallel: list[PipelineStage] = field(default_factory=list)
+
+
+def build_pipeline_config(llm: LLMProvider | None = None) -> PipelineConfig:
+    """Build a PipelineConfig with parallel EntityRuler and LLM stages."""
+    embedding_service = _get_embedding_service()
+
+    config = PipelineConfig(
+        pre_parallel=[
+            IngestionStage(),
+            NormalizationStage(),
+        ],
+        entity_ruler=EntityRulerStage(embedding_service=embedding_service),
+    )
+
+    if llm is not None:
+        config.llm_concept = LLMConceptStage(llm)
+
+    config.post_parallel = [
+        ReconciliationStage(embedding_service=embedding_service),
+        ResolutionStage(),
+    ]
+
+    if llm is not None:
+        config.post_parallel.append(BranchJudgeStage(llm))
+
+    config.post_parallel.append(StringMatchStage())
+
+    if llm is not None:
+        config.post_parallel.append(MetadataStage(llm))
+
+    config.post_parallel.append(DependencyStage())
+
+    return config
 
 
 def build_stages(llm: LLMProvider | None = None) -> list[PipelineStage]:
@@ -106,12 +150,100 @@ class PipelineOrchestrator:
         llm: LLMProvider | None = None,
     ) -> None:
         self.job_store = job_store
+        self._config: PipelineConfig | None = None
         if stages is not None:
+            # Legacy flat mode: use stages list directly
             self.stages = stages
         else:
-            self.stages = build_stages(llm)
+            # New parallel mode: build PipelineConfig
+            self._config = build_pipeline_config(llm)
+            self.stages = build_stages(llm)  # kept for backward compat
 
     async def run(self, job: Job) -> Job:
+        if self._config is not None:
+            return await self._run_parallel(job)
+        return await self._run_flat(job)
+
+    async def _run_parallel(self, job: Job) -> Job:
+        """Three-phase pipeline: pre-parallel → parallel(EntityRuler ∥ LLM) → post-parallel."""
+        config = self._config
+        assert config is not None
+
+        try:
+            # Phase 1: Sequential pre-parallel stages (Ingestion, Normalization)
+            for stage in config.pre_parallel:
+                logger.info("Running stage %s for job %s", stage.name, job.id)
+                try:
+                    job = await stage.execute(job)
+                except Exception as stage_err:
+                    logger.warning(
+                        "Stage %s failed for job %s: %s — continuing",
+                        stage.name, job.id, stage_err,
+                    )
+                    continue
+                job.updated_at = datetime.now(timezone.utc)
+                await self.job_store.save(job)
+
+            # Phase 2: Parallel EntityRuler and LLM
+            job.status = JobStatus.ENRICHING
+            job.updated_at = datetime.now(timezone.utc)
+            await self.job_store.save(job)
+
+            async def run_entity_ruler(j: Job) -> None:
+                if config.entity_ruler is None:
+                    return
+                logger.info("Running stage %s for job %s (parallel)", config.entity_ruler.name, j.id)
+                try:
+                    await config.entity_ruler.execute(j)
+                    j.updated_at = datetime.now(timezone.utc)
+                    await self.job_store.save(j)
+                except Exception as e:
+                    logger.warning("Stage %s failed for job %s: %s — continuing",
+                                   config.entity_ruler.name, j.id, e)
+
+            async def run_llm_concept(j: Job) -> None:
+                if config.llm_concept is None:
+                    return
+                logger.info("Running stage %s for job %s (parallel)", config.llm_concept.name, j.id)
+                try:
+                    await config.llm_concept.execute(j)
+                    j.updated_at = datetime.now(timezone.utc)
+                    await self.job_store.save(j)
+                except Exception as e:
+                    logger.warning("Stage %s failed for job %s: %s — continuing",
+                                   config.llm_concept.name, j.id, e)
+
+            await asyncio.gather(run_entity_ruler(job), run_llm_concept(job))
+
+            # Phase 3: Sequential post-parallel stages
+            for stage in config.post_parallel:
+                logger.info("Running stage %s for job %s", stage.name, job.id)
+                try:
+                    job = await stage.execute(job)
+                except Exception as stage_err:
+                    logger.warning(
+                        "Stage %s failed for job %s: %s — continuing",
+                        stage.name, job.id, stage_err,
+                    )
+                    continue
+                job.updated_at = datetime.now(timezone.utc)
+                await self.job_store.save(job)
+
+            job.status = JobStatus.COMPLETED
+            job.updated_at = datetime.now(timezone.utc)
+            await self.job_store.save(job)
+
+        except Exception as e:
+            logger.exception("Pipeline failed for job %s", job.id)
+            job.status = JobStatus.FAILED
+            job.error = str(e)
+            job.updated_at = datetime.now(timezone.utc)
+            await self.job_store.save(job)
+
+        return job
+
+    async def _run_flat(self, job: Job) -> Job:
+        """Legacy sequential pipeline for backward compatibility with stages= parameter."""
         try:
             for stage in self.stages:
                 logger.info("Running stage %s for job %s", stage.name, job.id)
@@ -122,7 +254,6 @@ class PipelineOrchestrator:
                         "Stage %s failed for job %s: %s — continuing",
                         stage.name, job.id, stage_err,
                     )
-                    # Non-fatal: continue pipeline with partial results
                     continue
                 job.updated_at = datetime.now(timezone.utc)
                 await self.job_store.save(job)

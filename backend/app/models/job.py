@@ -14,6 +14,7 @@ class JobStatus(str, enum.Enum):
     PENDING = "pending"
     INGESTING = "ingesting"
     NORMALIZING = "normalizing"
+    ENRICHING = "enriching"
     IDENTIFYING = "identifying"
     RESOLVING = "resolving"
     MATCHING = "matching"

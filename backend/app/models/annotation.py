@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from pydantic import BaseModel, Field
 
 
@@ -27,5 +29,7 @@ class ConceptMatch(BaseModel):
 
 
 class Annotation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
     span: Span
     concepts: list[ConceptMatch] = Field(default_factory=list)
+    state: str = "preliminary"  # "preliminary", "confirmed", "rejected"

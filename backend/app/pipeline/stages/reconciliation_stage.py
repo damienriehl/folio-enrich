@@ -46,4 +46,22 @@ class ReconciliationStage(PipelineStage):
             for r in results
         ]
         job.result.metadata["reconciled_concepts"] = reconciled
+
+        # Update preliminary annotation states based on reconciliation results
+        reconciled_by_text = {}
+        for r in results:
+            reconciled_by_text[r.concept.concept_text.lower()] = r.category
+
+        for ann in job.result.annotations:
+            if ann.state != "preliminary":
+                continue
+            concept_text = ann.concepts[0].concept_text.lower() if ann.concepts else ""
+            category = reconciled_by_text.get(concept_text)
+            if category in ("both_agree", "conflict_resolved"):
+                ann.state = "confirmed"
+            elif category is None:
+                # Not in reconciled set — low confidence, filtered out
+                ann.state = "rejected"
+            # "ruler_only" stays as "preliminary" (confirmed later by resolution)
+
         return job

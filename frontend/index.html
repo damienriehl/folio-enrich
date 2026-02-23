@@ -923,25 +923,27 @@
 </div>
 
 <script>
-const API = 'http://localhost:8730';
+const API = 'http://localhost:8731';
 let currentJobId = null;
 let currentJob = null;
 let pollInterval = null;
 let pollTimeout = null;
+let eventSource = null;
+let accumulatedAnnotations = [];
 let providersData = {};   // provider name → metadata {display_name, requires_api_key, default_model, api_key_set}
 let knownModels = {};     // provider name → [{id, name, context_window}]
 let selectedDocType = null;
 let showUncertain = true;
 
 const PIPELINE_STAGES = [
-  'pending', 'ingesting', 'normalizing', 'identifying',
+  'pending', 'ingesting', 'normalizing', 'enriching', 'identifying',
   'resolving', 'matching', 'judging', 'exporting', 'completed'
 ];
 
 const STAGE_LABELS = {
   pending: 'Queued', ingesting: 'Ingesting', normalizing: 'Normalizing',
-  identifying: 'Identifying', resolving: 'Resolving', matching: 'Matching',
-  judging: 'Judging', exporting: 'Exporting', completed: 'Done'
+  enriching: 'Enriching', identifying: 'Identifying', resolving: 'Resolving',
+  matching: 'Matching', judging: 'Judging', exporting: 'Exporting', completed: 'Done'
 };
 
 const BRANCH_COLORS = {
@@ -975,6 +977,7 @@ const EXPORT_FORMATS = [
   { name: 'rdf', label: 'RDF/Turtle', ext: '.ttl' },
   { name: 'brat', label: 'brat', ext: '.ann' },
   { name: 'html', label: 'HTML', ext: '.html' },
+  { name: 'excel', label: 'Excel', ext: '.xlsx' },
 ];
 
 const SAMPLES = {
@@ -1462,7 +1465,7 @@ async function submitEnrichment() {
     const data = await r.json();
     currentJobId = data.job_id;
     setStatus(`Job ${currentJobId.slice(0,8)}... submitted`, 'running');
-    pollJob();
+    startSSE();
   } catch (e) {
     setStatus(`Error: ${e.message}`, 'failed');
     btn.disabled = false;
@@ -1492,7 +1495,7 @@ function pollJob() {
 
       if (job.status === 'completed') {
         stopPolling();
-        renderResults(job);
+        try { renderResults(job); } catch (re) { console.error('Render error:', re); }
         resetButton();
         const annCount = (job.result?.annotations || []).length;
         setStatus(`Completed: ${annCount} annotations`, 'completed');
@@ -1523,13 +1526,134 @@ function resetButton() {
 }
 
 // ==============================================
+// SSE Streaming
+// ==============================================
+
+function startSSE() {
+  closeSSE();
+  accumulatedAnnotations = [];
+
+  eventSource = new EventSource(`${API}/enrich/${currentJobId}/stream`);
+
+  eventSource.addEventListener('status', (e) => {
+    const data = JSON.parse(e.data);
+    renderProgressStages(data.status);
+    setStatus(`Stage: ${STAGE_LABELS[data.status] || data.status}`, 'running');
+  });
+
+  eventSource.addEventListener('preliminary_annotation', (e) => {
+    const data = JSON.parse(e.data);
+    addAnnotationToView(data);
+  });
+
+  eventSource.addEventListener('annotation', (e) => {
+    const data = JSON.parse(e.data);
+    addAnnotationToView(data);
+  });
+
+  eventSource.addEventListener('annotation_update', (e) => {
+    const data = JSON.parse(e.data);
+    updateAnnotationInView(data);
+  });
+
+  eventSource.addEventListener('complete', (e) => {
+    const data = JSON.parse(e.data);
+    closeSSE();
+    resetButton();
+
+    if (data.status === 'failed') {
+      setStatus(`Failed: ${data.error || 'Unknown error'}`, 'failed');
+      renderProgressStages('failed');
+      return;
+    }
+
+    renderProgressStages('completed');
+    setStatus(`Completed: ${data.total_annotations} annotations`, 'completed');
+    // Fetch final job for full render (concepts list, metadata, triples, exports)
+    fetchFinalJob();
+  });
+
+  eventSource.addEventListener('error', (e) => {
+    const data = e.data ? JSON.parse(e.data) : null;
+    if (data && data.error) {
+      setStatus(`Error: ${data.error}`, 'failed');
+      closeSSE();
+      resetButton();
+      return;
+    }
+    // EventSource connection error — fall back to polling
+    console.warn('SSE connection error, falling back to polling');
+    closeSSE();
+    pollJob();
+  });
+}
+
+function closeSSE() {
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+}
+
+function addAnnotationToView(data) {
+  // Check for duplicate by id
+  const existingIdx = accumulatedAnnotations.findIndex(a => a.id === data.id);
+  if (existingIdx >= 0) {
+    accumulatedAnnotations[existingIdx] = data;
+  } else {
+    accumulatedAnnotations.push(data);
+  }
+  rerenderAnnotatedText();
+}
+
+function updateAnnotationInView(data) {
+  const idx = accumulatedAnnotations.findIndex(a => a.id === data.id);
+  if (idx >= 0) {
+    accumulatedAnnotations[idx] = data;
+  } else {
+    accumulatedAnnotations.push(data);
+  }
+  rerenderAnnotatedText();
+}
+
+function rerenderAnnotatedText() {
+  if (!currentJobId) return;
+  // Build annotation objects compatible with renderAnnotatedText
+  const annotations = accumulatedAnnotations.map(a => ({
+    span: a.span,
+    concepts: a.concepts,
+    state: a.state,
+  }));
+
+  // We need the canonical text — get it from the input
+  const text = document.getElementById('docInput').value.trim();
+  if (text) {
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('annotatedText').style.display = 'block';
+    renderAnnotatedText(text, annotations);
+  }
+}
+
+async function fetchFinalJob() {
+  try {
+    const r = await fetch(`${API}/enrich/${currentJobId}`);
+    if (!r.ok) return;
+    const job = await r.json();
+    currentJob = job;
+    renderResults(job);
+  } catch (e) {
+    console.error('Failed to fetch final job:', e);
+  }
+}
+
+// ==============================================
 // Pipeline Progress
 // ==============================================
 
 function renderProgressStages(currentStatus) {
   const container = document.getElementById('progressStages');
   const fill = document.getElementById('progressFill');
-  const stages = ['ingesting', 'normalizing', 'identifying', 'resolving', 'matching', 'judging'];
+  const stages = ['ingesting', 'normalizing', 'enriching', 'identifying', 'resolving', 'matching', 'judging'];
   const currentIdx = stages.indexOf(currentStatus);
   const isComplete = currentStatus === 'completed';
   const isFailed = currentStatus === 'failed';
@@ -1596,7 +1720,7 @@ function renderAnnotatedText(text, annotations) {
       pieces.push(escapeHtml(text.slice(lastEnd, ann.span.start)));
     }
 
-    const state = c.state || 'confirmed';
+    const state = ann.state || c.state || 'confirmed';
     const dataAttrs = [
       `data-iri="${escapeAttr(c.folio_iri || '')}"`,
       `data-label="${escapeAttr(c.folio_label || c.concept_text)}"`,
@@ -1985,6 +2109,8 @@ function clearAll() {
   document.getElementById('tooltip').classList.remove('visible');
   currentJobId = null;
   currentJob = null;
+  closeSSE();
+  accumulatedAnnotations = [];
   stopPolling();
   setStatus('Ready', 'idle');
   renderProgressStages('pending');

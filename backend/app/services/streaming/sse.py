@@ -16,7 +16,8 @@ async def job_event_stream(
 ) -> AsyncGenerator[dict, None]:
     """Generate SSE events as a job progresses through pipeline stages."""
     last_status = None
-    last_annotation_count = 0
+    seen_ids: set[str] = set()
+    last_states: dict[str, str] = {}
 
     while True:
         job = await job_store.load(job_id)
@@ -35,19 +36,27 @@ async def job_event_stream(
                 }),
             }
 
-        # Emit new annotations incrementally
-        current_count = len(job.result.annotations)
-        if current_count > last_annotation_count:
-            new_annotations = job.result.annotations[last_annotation_count:]
-            for ann in new_annotations:
-                yield {
-                    "event": "annotation",
-                    "data": json.dumps({
-                        "span": {"start": ann.span.start, "end": ann.span.end, "text": ann.span.text},
-                        "concepts": [c.model_dump() for c in ann.concepts],
-                    }),
-                }
-            last_annotation_count = current_count
+        # Emit new and updated annotations using ID-based tracking
+        for ann in job.result.annotations:
+            ann_id = ann.id
+            ann_state = ann.state
+            ann_data = {
+                "id": ann_id,
+                "span": {"start": ann.span.start, "end": ann.span.end, "text": ann.span.text},
+                "concepts": [c.model_dump() for c in ann.concepts],
+                "state": ann_state,
+            }
+
+            if ann_id not in seen_ids:
+                # New annotation
+                seen_ids.add(ann_id)
+                last_states[ann_id] = ann_state
+                event_type = "preliminary_annotation" if ann_state == "preliminary" else "annotation"
+                yield {"event": event_type, "data": json.dumps(ann_data)}
+            elif last_states.get(ann_id) != ann_state:
+                # State changed
+                last_states[ann_id] = ann_state
+                yield {"event": "annotation_update", "data": json.dumps(ann_data)}
 
         # Terminal states
         if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
