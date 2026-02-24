@@ -10,7 +10,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.models.document import DocumentInput
 from app.models.job import Job, JobStatus
-from app.pipeline.orchestrator import PipelineOrchestrator, build_stages
+from app.pipeline.orchestrator import PipelineOrchestrator, TaskLLMs
 from app.services.streaming.sse import job_event_stream
 from app.storage.job_store import JobStore
 
@@ -79,10 +79,10 @@ async def create_enrichment(req: EnrichRequest) -> dict:
     job = Job(input=doc)
     await _job_store.save(job)
 
-    # Build pipeline with LLM from request or settings
-    llm = _get_llm_for_request(req)
-    stages = build_stages(llm)
-    orchestrator = PipelineOrchestrator(_job_store, stages=stages)
+    # Build pipeline with per-task LLMs (task-specific overrides > request > global)
+    fallback_llm = _get_llm_for_request(req)
+    task_llms = TaskLLMs.from_settings(fallback=fallback_llm)
+    orchestrator = PipelineOrchestrator(_job_store, llm=fallback_llm, task_llms=task_llms)
 
     # Run pipeline in background
     asyncio.create_task(orchestrator.run(job))

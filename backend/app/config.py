@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     max_chunk_chars: int = 3000
     chunk_overlap_chars: int = 200
 
-    # LLM
+    # LLM — global defaults (used when per-task overrides are not set)
     llm_provider: str = "openai"
     llm_model: str = "gpt-4o-mini"
     openai_api_key: str = ""
@@ -34,6 +34,20 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     xai_api_key: str = ""
     github_models_api_key: str = ""
+
+    # Per-task LLM overrides (empty = use global llm_provider/llm_model)
+    llm_classifier_provider: str = ""
+    llm_classifier_model: str = ""
+    llm_extractor_provider: str = ""
+    llm_extractor_model: str = ""
+    llm_concept_provider: str = ""
+    llm_concept_model: str = ""
+    llm_branch_judge_provider: str = ""
+    llm_branch_judge_model: str = ""
+    llm_area_of_law_provider: str = ""
+    llm_area_of_law_model: str = ""
+    llm_synthetic_provider: str = ""
+    llm_synthetic_model: str = ""
 
     # Embedding
     embedding_provider: str = "local"  # local, ollama, openai

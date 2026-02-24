@@ -11,9 +11,15 @@ from app.services.metadata.promoter import MetadataPromoter
 
 
 class MetadataStage(PipelineStage):
-    def __init__(self, llm: LLMProvider) -> None:
-        self.classifier = DocumentClassifier(llm)
-        self.extractor = MetadataExtractor(llm)
+    def __init__(
+        self,
+        llm: LLMProvider,
+        *,
+        classifier_llm: LLMProvider | None = None,
+        extractor_llm: LLMProvider | None = None,
+    ) -> None:
+        self.classifier = DocumentClassifier(classifier_llm or llm)
+        self.extractor = MetadataExtractor(extractor_llm or llm)
         self.promoter = MetadataPromoter()
 
     @property

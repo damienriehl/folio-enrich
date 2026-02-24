@@ -21,7 +21,17 @@ class SyntheticRequest(BaseModel):
 @router.post("")
 async def generate_synthetic(req: SyntheticRequest) -> dict:
     try:
-        provider_name = settings.llm_provider.replace("-", "_")
+        # Use task-specific synthetic LLM if configured, else global default
+        task_provider = settings.llm_synthetic_provider
+        task_model = settings.llm_synthetic_model
+
+        if task_provider:
+            provider_name = task_provider.replace("-", "_")
+            model = task_model
+        else:
+            provider_name = settings.llm_provider.replace("-", "_")
+            model = settings.llm_model
+
         if provider_name == "lm_studio":
             provider_name = "lmstudio"
         provider_type = LLMProviderType(provider_name)
@@ -29,7 +39,7 @@ async def generate_synthetic(req: SyntheticRequest) -> dict:
         llm = get_provider(
             provider_type,
             api_key=api_key,
-            model=settings.llm_model,
+            model=model or None,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM provider unavailable: {e}")

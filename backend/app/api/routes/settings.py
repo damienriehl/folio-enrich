@@ -64,11 +64,29 @@ class SettingsUpdate(BaseModel):
     groq_api_key: str | None = None
     xai_api_key: str | None = None
     github_models_api_key: str | None = None
+    # Per-task LLM overrides (empty string to clear, None to leave unchanged)
+    llm_classifier_provider: str | None = None
+    llm_classifier_model: str | None = None
+    llm_extractor_provider: str | None = None
+    llm_extractor_model: str | None = None
+    llm_concept_provider: str | None = None
+    llm_concept_model: str | None = None
+    llm_branch_judge_provider: str | None = None
+    llm_branch_judge_model: str | None = None
+    llm_area_of_law_provider: str | None = None
+    llm_area_of_law_model: str | None = None
+    llm_synthetic_provider: str | None = None
+    llm_synthetic_model: str | None = None
+
+
+_TASK_LLM_FIELDS = (
+    "classifier", "extractor", "concept", "branch_judge", "area_of_law", "synthetic",
+)
 
 
 @router.get("")
 async def get_settings() -> dict:
-    return {
+    result = {
         "llm_provider": settings.llm_provider,
         "llm_model": settings.llm_model,
         "openai_api_key_set": bool(settings.openai_api_key),
@@ -84,6 +102,15 @@ async def get_settings() -> dict:
         "chunk_overlap_chars": settings.chunk_overlap_chars,
         "max_upload_size": settings.max_upload_size,
     }
+    # Per-task LLM overrides
+    task_overrides = {}
+    for task in _TASK_LLM_FIELDS:
+        provider = getattr(settings, f"llm_{task}_provider", "")
+        model = getattr(settings, f"llm_{task}_model", "")
+        if provider or model:
+            task_overrides[task] = {"provider": provider, "model": model}
+    result["task_llm_overrides"] = task_overrides
+    return result
 
 
 @router.put("")
@@ -93,7 +120,7 @@ async def update_settings(update: SettingsUpdate) -> dict:
     if update.llm_model is not None:
         settings.llm_model = update.llm_model
     # Update any provided API keys
-    for field in (
+    for fld in (
         "openai_api_key",
         "anthropic_api_key",
         "google_api_key",
@@ -104,9 +131,16 @@ async def update_settings(update: SettingsUpdate) -> dict:
         "xai_api_key",
         "github_models_api_key",
     ):
-        val = getattr(update, field, None)
+        val = getattr(update, fld, None)
         if val is not None:
-            setattr(settings, field, val)
+            setattr(settings, fld, val)
+    # Update per-task LLM overrides
+    for task in _TASK_LLM_FIELDS:
+        for suffix in ("provider", "model"):
+            attr = f"llm_{task}_{suffix}"
+            val = getattr(update, attr, None)
+            if val is not None:
+                setattr(settings, attr, val)
     return {"status": "ok", "message": "Settings updated"}
 
 

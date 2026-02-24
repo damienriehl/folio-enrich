@@ -22,6 +22,50 @@ from app.storage.job_store import JobStore
 
 logger = logging.getLogger(__name__)
 
+# Task names for per-task LLM configuration
+LLM_TASKS = ("classifier", "extractor", "concept", "branch_judge", "area_of_law", "synthetic")
+
+
+@dataclass
+class TaskLLMs:
+    """Resolved LLM providers for each pipeline task.
+
+    Each field is either a task-specific LLM or None (meaning LLM unavailable
+    for that task).  The ``from_settings`` classmethod resolves per-task env
+    vars first, falling back to *fallback* (the global default LLM).
+    """
+
+    classifier: LLMProvider | None = None
+    extractor: LLMProvider | None = None
+    concept: LLMProvider | None = None
+    branch_judge: LLMProvider | None = None
+    area_of_law: LLMProvider | None = None
+    synthetic: LLMProvider | None = None
+
+    # --- convenience helpers ------------------------------------------------
+
+    @property
+    def has_any(self) -> bool:
+        """True if at least one pipeline LLM is available."""
+        return any([self.classifier, self.extractor, self.concept,
+                     self.branch_judge, self.area_of_law])
+
+    @property
+    def metadata_llm(self) -> LLMProvider | None:
+        """Return the first available metadata LLM (classifier or extractor)."""
+        return self.classifier or self.extractor
+
+    # --- factory ------------------------------------------------------------
+
+    @classmethod
+    def from_settings(cls, fallback: LLMProvider | None = None) -> TaskLLMs:
+        """Build TaskLLMs from per-task env vars, falling back to *fallback*."""
+        result = cls()
+        for task in LLM_TASKS:
+            llm = _try_get_task_llm(task, fallback)
+            setattr(result, task, llm)
+        return result
+
 
 def _get_embedding_service():
     """Get the singleton EmbeddingService (always available after startup)."""
@@ -46,9 +90,21 @@ class PipelineConfig:
     post_parallel: list[PipelineStage] = field(default_factory=list)
 
 
-def build_pipeline_config(llm: LLMProvider | None = None) -> PipelineConfig:
-    """Build a PipelineConfig with parallel EntityRuler and LLM stages."""
+def build_pipeline_config(
+    llm: LLMProvider | None = None,
+    task_llms: TaskLLMs | None = None,
+) -> PipelineConfig:
+    """Build a PipelineConfig with parallel EntityRuler and LLM stages.
+
+    When *task_llms* is provided, each stage uses its task-specific LLM.
+    Otherwise the single *llm* is used for all stages (backward-compatible).
+    """
     embedding_service = _get_embedding_service()
+
+    concept_llm = (task_llms.concept if task_llms else llm) or llm
+    branch_judge_llm = (task_llms.branch_judge if task_llms else llm) or llm
+    classifier_llm = (task_llms.classifier if task_llms else llm) or llm
+    extractor_llm = (task_llms.extractor if task_llms else llm) or llm
 
     config = PipelineConfig(
         pre_parallel=[
@@ -58,31 +114,50 @@ def build_pipeline_config(llm: LLMProvider | None = None) -> PipelineConfig:
         entity_ruler=EntityRulerStage(embedding_service=embedding_service),
     )
 
-    if llm is not None:
-        config.llm_concept = LLMConceptStage(llm)
+    if concept_llm is not None:
+        config.llm_concept = LLMConceptStage(concept_llm)
 
     config.post_parallel = [
         ReconciliationStage(embedding_service=embedding_service),
         ResolutionStage(),
     ]
 
-    if llm is not None:
-        config.post_parallel.append(BranchJudgeStage(llm))
+    if branch_judge_llm is not None:
+        config.post_parallel.append(BranchJudgeStage(branch_judge_llm))
 
     config.post_parallel.append(StringMatchStage())
 
-    if llm is not None:
-        config.post_parallel.append(MetadataStage(llm))
+    if classifier_llm is not None or extractor_llm is not None:
+        config.post_parallel.append(
+            MetadataStage(
+                classifier_llm or extractor_llm,
+                classifier_llm=classifier_llm,
+                extractor_llm=extractor_llm,
+            )
+        )
 
     config.post_parallel.append(DependencyStage())
 
     return config
 
 
-def build_stages(llm: LLMProvider | None = None) -> list[PipelineStage]:
-    """Build the full pipeline stage list. LLM-dependent stages are included
-    only when an LLM provider is available; otherwise they are skipped gracefully."""
+def build_stages(
+    llm: LLMProvider | None = None,
+    task_llms: TaskLLMs | None = None,
+) -> list[PipelineStage]:
+    """Build the full pipeline stage list.
+
+    When *task_llms* is provided, each stage uses its task-specific LLM.
+    Otherwise the single *llm* is used for all stages (backward-compatible).
+    LLM-dependent stages are included only when an LLM provider is available;
+    otherwise they are skipped gracefully.
+    """
     embedding_service = _get_embedding_service()
+
+    concept_llm = (task_llms.concept if task_llms else llm) or llm
+    branch_judge_llm = (task_llms.branch_judge if task_llms else llm) or llm
+    classifier_llm = (task_llms.classifier if task_llms else llm) or llm
+    extractor_llm = (task_llms.extractor if task_llms else llm) or llm
 
     stages: list[PipelineStage] = [
         IngestionStage(),
@@ -90,60 +165,96 @@ def build_stages(llm: LLMProvider | None = None) -> list[PipelineStage]:
         EntityRulerStage(embedding_service=embedding_service),
     ]
 
-    if llm is not None:
-        stages.append(LLMConceptStage(llm))
+    if concept_llm is not None:
+        stages.append(LLMConceptStage(concept_llm))
 
     stages.append(ReconciliationStage(embedding_service=embedding_service))
     stages.append(ResolutionStage())
 
-    if llm is not None:
-        stages.append(BranchJudgeStage(llm))
+    if branch_judge_llm is not None:
+        stages.append(BranchJudgeStage(branch_judge_llm))
 
     stages.append(StringMatchStage())
 
-    if llm is not None:
-        stages.append(MetadataStage(llm))
+    if classifier_llm is not None or extractor_llm is not None:
+        stages.append(
+            MetadataStage(
+                classifier_llm or extractor_llm,
+                classifier_llm=classifier_llm,
+                extractor_llm=extractor_llm,
+            )
+        )
 
     stages.append(DependencyStage())
 
     return stages
 
 
+def _make_llm(provider_name: str, model: str) -> LLMProvider | None:
+    """Create an LLM provider from a provider name and model string.
+
+    Returns None if the provider is unknown or no API key is available.
+    """
+    from app.models.llm_models import LLMProviderType
+    from app.services.llm.registry import REQUIRES_API_KEY, get_provider
+    from app.api.routes.settings import _get_api_key_for_provider
+
+    normalized = provider_name.replace("-", "_")
+    if normalized == "lm_studio":
+        normalized = "lmstudio"
+
+    try:
+        provider_type = LLMProviderType(normalized)
+    except ValueError:
+        logger.warning("Unknown LLM provider %s", provider_name)
+        return None
+
+    api_key = _get_api_key_for_provider(provider_type)
+
+    if REQUIRES_API_KEY.get(provider_type, True) and not api_key:
+        logger.warning("No API key for %s", provider_type.value)
+        return None
+
+    return get_provider(
+        provider_type=provider_type,
+        api_key=api_key,
+        model=model or None,
+    )
+
+
 def _try_get_llm() -> LLMProvider | None:
-    """Try to create an LLM provider from settings. Returns None if no API key."""
+    """Try to create an LLM provider from global settings. Returns None if no API key."""
     try:
         from app.config import settings
-        from app.models.llm_models import LLMProviderType
-        from app.services.llm.registry import REQUIRES_API_KEY, get_provider
-        from app.api.routes.settings import _get_api_key_for_provider
-
-        provider_name = settings.llm_provider.replace("-", "_")
-        if provider_name == "lm_studio":
-            provider_name = "lmstudio"
-
-        try:
-            provider_type = LLMProviderType(provider_name)
-        except ValueError:
-            logger.warning("Unknown LLM provider %s — LLM stages will be skipped", provider_name)
-            return None
-
-        api_key = _get_api_key_for_provider(provider_type)
-
-        if REQUIRES_API_KEY.get(provider_type, True) and not api_key:
-            logger.warning(
-                "No API key for %s — LLM stages will be skipped",
-                provider_type.value,
-            )
-            return None
-
-        return get_provider(
-            provider_type=provider_type,
-            api_key=api_key,
-            model=settings.llm_model,
-        )
+        return _make_llm(settings.llm_provider, settings.llm_model)
     except Exception:
         logger.warning("Failed to create LLM provider — LLM stages will be skipped", exc_info=True)
         return None
+
+
+def _try_get_task_llm(task: str, fallback: LLMProvider | None) -> LLMProvider | None:
+    """Get a task-specific LLM, falling back to *fallback* (the global default).
+
+    Reads ``llm_{task}_provider`` and ``llm_{task}_model`` from settings.
+    If neither is set, returns *fallback* unchanged.
+    """
+    from app.config import settings
+
+    task_provider = getattr(settings, f"llm_{task}_provider", "")
+    task_model = getattr(settings, f"llm_{task}_model", "")
+
+    if not task_provider:
+        return fallback
+
+    try:
+        llm = _make_llm(task_provider, task_model)
+        if llm is not None:
+            logger.info("Using task-specific LLM for %s: %s/%s", task, task_provider, task_model)
+            return llm
+    except Exception:
+        logger.warning("Failed to create task-specific LLM for %s — using global default", task, exc_info=True)
+
+    return fallback
 
 
 def _log_activity(job: Job, stage: str, msg: str) -> None:
@@ -162,17 +273,19 @@ class PipelineOrchestrator:
         job_store: JobStore,
         stages: list[PipelineStage] | None = None,
         llm: LLMProvider | None = None,
+        task_llms: TaskLLMs | None = None,
     ) -> None:
         self.job_store = job_store
         self._llm = llm
+        self._task_llms = task_llms
         self._config: PipelineConfig | None = None
         if stages is not None:
             # Legacy flat mode: use stages list directly
             self.stages = stages
         else:
             # New parallel mode: build PipelineConfig
-            self._config = build_pipeline_config(llm)
-            self.stages = build_stages(llm)  # kept for backward compat
+            self._config = build_pipeline_config(llm, task_llms=task_llms)
+            self.stages = build_stages(llm, task_llms=task_llms)  # kept for backward compat
 
     async def run(self, job: Job) -> Job:
         if self._config is not None:
@@ -256,10 +369,11 @@ class PipelineOrchestrator:
             await self.job_store.save(job)
 
             # Post-completion: Area of Law assessment (runs after pipeline results are available)
-            if self._llm is not None:
+            aol_llm = (self._task_llms.area_of_law if self._task_llms else None) or self._llm
+            if aol_llm is not None:
                 try:
                     from app.services.concept.area_of_law_assessor import AreaOfLawAssessor
-                    assessor = AreaOfLawAssessor(self._llm)
+                    assessor = AreaOfLawAssessor(aol_llm)
                     areas = await assessor.assess(job)
                     job.result.metadata["areas_of_law"] = areas
                     _log_activity(job, "area_of_law",
@@ -299,10 +413,11 @@ class PipelineOrchestrator:
             await self.job_store.save(job)
 
             # Post-completion: Area of Law assessment (runs after pipeline results are available)
-            if self._llm is not None:
+            aol_llm = (self._task_llms.area_of_law if self._task_llms else None) or self._llm
+            if aol_llm is not None:
                 try:
                     from app.services.concept.area_of_law_assessor import AreaOfLawAssessor
-                    assessor = AreaOfLawAssessor(self._llm)
+                    assessor = AreaOfLawAssessor(aol_llm)
                     areas = await assessor.assess(job)
                     job.result.metadata["areas_of_law"] = areas
                     _log_activity(job, "area_of_law",
