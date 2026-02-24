@@ -510,7 +510,7 @@
   .concept-tooltip .lineage-stage-name { font-weight: 600; color: #1a1a2e; min-width: 100px; font-size: 11px; }
   .concept-tooltip .lineage-action { color: #3b64e0; min-width: 90px; font-size: 10px; font-weight: 600; }
   .concept-tooltip .lineage-detail-text { color: #6b6b80; flex: 1; font-size: 11px; }
-  .concept-tooltip .lineage-confidence { font-weight: 600; color: #555; font-size: 10px; background: #f0f0f4; padding: 0 4px; border-radius: 3px; }
+  .concept-tooltip .lineage-confidence { font-weight: 600; color: #555; font-size: 10px; background: #f0f0f4; padding: 0 4px; border-radius: 3px; min-width: 28px; text-align: right; }
 
   /* Insights panel */
   .insights-header {
@@ -568,7 +568,7 @@
     white-space: nowrap; min-width: 110px;
   }
   .insights-lineage-detail .lineage-action {
-    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    font-size: 10px; font-weight: 600;
     padding: 1px 5px; border-radius: 3px; white-space: nowrap;
   }
   .lineage-action.act-created { background: #e3f2fd; color: #1565c0; }
@@ -1514,19 +1514,17 @@ const SAMPLES = {
 // ==============================================
 
 async function init() {
-  checkHealth();
-  setInterval(checkHealth, 10000);
-  await loadProviders();
-  await loadSettings();
-  setupDragDrop();
-
-  // Restore cached results from a previous page load (survives live-reload)
+  // Restore UI state immediately (before any async calls)
+  if (debugMode) applyDebugBtnStyle(document.getElementById('debugModeBtn'), true);
   if (!restoreState()) {
     renderProgressStages('pending');
   }
 
-  // Restore debug mode button state
-  if (debugMode) applyDebugBtnStyle(document.getElementById('debugModeBtn'), true);
+  checkHealth();
+  setInterval(checkHealth, 10000);
+  setupDragDrop();
+  await loadProviders();
+  await loadSettings();
 }
 
 // ==============================================
@@ -2459,8 +2457,8 @@ function showTooltip(event, el) {
 
   tooltip.classList.add('visible');
 
-  // Auto-expand lineage if it was previously expanded by the user
-  if (annId && currentJobId && _lineageExpandedCache.has(annId)) {
+  // Auto-expand lineage if the global toggle is on
+  if (annId && currentJobId && _lineageExpanded) {
     toggleLineage(annId);
   }
 
@@ -2487,8 +2485,8 @@ function showTooltip(event, el) {
 // Track feedback already submitted this session (annId → rating)
 const _feedbackCache = {};
 
-// Track which annotations have lineage expanded (persists across tooltip re-opens)
-const _lineageExpandedCache = new Set();
+// Global toggle: show stage lineage on all tooltips (persists across sessions)
+let _lineageExpanded = localStorage.getItem('lineageExpanded') === 'true';
 
 async function submitFeedback(btn, rating) {
   const feedbackDiv = btn.closest('.tooltip-feedback');
@@ -2579,7 +2577,8 @@ async function toggleLineage(annId) {
   if (list.style.display !== 'none') {
     list.style.display = 'none';
     list.previousElementSibling.textContent = 'Show stage lineage';
-    _lineageExpandedCache.delete(annId);
+    _lineageExpanded = false;
+    localStorage.setItem('lineageExpanded', 'false');
     return;
   }
 
@@ -2599,7 +2598,7 @@ async function toggleLineage(annId) {
           list.innerHTML = data.lineage.map(e => `
             <li>
               <span class="lineage-stage-name">${escapeHtml(stageLabels[e.stage] || e.stage)}</span>
-              <span class="lineage-action">${escapeHtml(e.action)}</span>
+              <span class="lineage-action">${escapeHtml((e.action || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))}</span>
               ${e.confidence != null ? `<span class="lineage-confidence">${(e.confidence * 100).toFixed(0)}%</span>` : ''}
               ${e.detail ? `<span class="lineage-detail-text">${escapeHtml(e.detail)}</span>` : ''}
             </li>
@@ -2616,7 +2615,8 @@ async function toggleLineage(annId) {
 
   list.style.display = 'block';
   list.previousElementSibling.textContent = 'Hide stage lineage';
-  _lineageExpandedCache.add(annId);
+  _lineageExpanded = true;
+  localStorage.setItem('lineageExpanded', 'true');
 }
 
 // Hide tooltip on click outside
@@ -2747,7 +2747,7 @@ function renderInsightsPanel(data) {
                       : '';
                     return `<div class="lineage-stage">
                       <span class="lineage-stage-name">${escapeHtml(label)}</span>
-                      <span class="lineage-action ${actionClass}">${escapeHtml(e.action || '')}</span>
+                      <span class="lineage-action ${actionClass}">${escapeHtml((e.action || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))}</span>
                       ${confHtml}${detailHtml}
                     </div>`;
                   }).join('')}</div>`
