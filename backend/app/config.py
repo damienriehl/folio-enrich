@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     # Job storage
     jobs_dir: Path = Path(os.path.expanduser("~/.folio-enrich/jobs"))
 
+    # Feedback storage
+    feedback_dir: Path = Path(os.path.expanduser("~/.folio-enrich/feedback"))
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

@@ -4,7 +4,7 @@ import logging
 
 from app.models.annotation import Annotation, ConceptMatch, Span
 from app.models.job import Job, JobStatus
-from app.pipeline.stages.base import PipelineStage
+from app.pipeline.stages.base import PipelineStage, record_lineage
 from app.services.entity_ruler.ruler import EntityRulerMatch, FOLIOEntityRuler
 from app.services.entity_ruler.semantic_ruler import SemanticEntityRuler
 from app.services.folio.branch_config import get_branch_color
@@ -126,19 +126,23 @@ class EntityRulerStage(PipelineStage):
         )
         # Add semantic match annotations (reuse results from above)
         for sm in semantic_matches:
-            preliminary_annotations.append(
-                Annotation(
-                    span=Span(start=sm.start, end=sm.end, text=sm.text),
-                    concepts=[ConceptMatch(
-                        concept_text=sm.text,
-                        folio_iri=sm.iri,
-                        folio_label=sm.matched_label,
-                        confidence=sm.similarity,
-                        source="semantic_ruler",
-                    )],
-                    state="preliminary",
-                )
+            ann = Annotation(
+                span=Span(start=sm.start, end=sm.end, text=sm.text),
+                concepts=[ConceptMatch(
+                    concept_text=sm.text,
+                    folio_iri=sm.iri,
+                    folio_label=sm.matched_label,
+                    confidence=sm.similarity,
+                    source="semantic_ruler",
+                )],
+                state="preliminary",
             )
+            record_lineage(
+                ann, "semantic_ruler", "created",
+                detail=f"Semantic match to '{sm.matched_label}' (similarity={sm.similarity:.2f})",
+                confidence=sm.similarity,
+            )
+            preliminary_annotations.append(ann)
 
         # Resolve overlapping spans (prefer longer matches)
         preliminary_annotations.sort(key=lambda a: (a.span.start, -(a.span.end - a.span.start)))
@@ -172,23 +176,28 @@ class EntityRulerStage(PipelineStage):
         for match in matches:
             confidence = _match_confidence(match)
             branch = self._iri_to_branch.get(match.entity_id, "")
-            annotations.append(
-                Annotation(
-                    span=Span(
-                        start=match.start_char,
-                        end=match.end_char,
-                        text=full_text[match.start_char:match.end_char],
-                    ),
-                    concepts=[ConceptMatch(
-                        concept_text=match.text,
-                        folio_iri=match.entity_id,
-                        branches=[branch] if branch else [],
-                        branch_color=get_branch_color(branch) if branch else None,
-                        confidence=confidence,
-                        source="entity_ruler",
-                        match_type=match.match_type,
-                    )],
-                    state="preliminary",
-                )
+            is_multi = "multi-word" if len(match.text.split()) > 1 else "single-word"
+            ann = Annotation(
+                span=Span(
+                    start=match.start_char,
+                    end=match.end_char,
+                    text=full_text[match.start_char:match.end_char],
+                ),
+                concepts=[ConceptMatch(
+                    concept_text=match.text,
+                    folio_iri=match.entity_id,
+                    branches=[branch] if branch else [],
+                    branch_color=get_branch_color(branch) if branch else None,
+                    confidence=confidence,
+                    source="entity_ruler",
+                    match_type=match.match_type,
+                )],
+                state="preliminary",
             )
+            record_lineage(
+                ann, "entity_ruler", "created",
+                detail=f"Matched {match.match_type} label '{match.text}' ({is_multi})",
+                confidence=confidence,
+            )
+            annotations.append(ann)
         return annotations

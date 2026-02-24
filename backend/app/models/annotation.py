@@ -1,8 +1,27 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, model_validator
+
+
+class StageEvent(BaseModel):
+    stage: str  # "entity_ruler", "reconciliation", "resolution", etc.
+    action: str  # "created", "confirmed", "rejected", "enriched", "branch_assigned"
+    detail: str = ""
+    confidence: float | None = None
+    timestamp: str = ""
+
+
+class FeedbackItem(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    rating: str  # "up" or "down"
+    stage: str | None = None  # target a specific stage event, or None for whole annotation
+    comment: str = ""
+    created_at: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
 
 class Span(BaseModel):
@@ -46,3 +65,5 @@ class Annotation(BaseModel):
     span: Span
     concepts: list[ConceptMatch] = Field(default_factory=list)
     state: str = "preliminary"  # "preliminary", "confirmed", "rejected"
+    lineage: list[StageEvent] = Field(default_factory=list)
+    feedback: list[FeedbackItem] = Field(default_factory=list)

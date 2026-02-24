@@ -86,6 +86,15 @@ class ResolutionStage(PipelineStage):
                 if resolved and not any(b in EXCLUDED_BRANCHES for b in resolved.branches):
                     rd = self._to_resolved_dict(resolved)
                     self._resolve_virtual_branches(rd, resolved.folio_concept.branch)
+                    # Carry forward upstream lineage events
+                    events = list(concept_data.get("_lineage_events", []))
+                    events.append({
+                        "stage": "resolution",
+                        "action": "enriched",
+                        "detail": f"Resolved to FOLIO: '{resolved.folio_concept.preferred_label}'",
+                        "confidence": resolved.confidence,
+                    })
+                    rd["_lineage_events"] = events
                     resolved_concepts.append(rd)
         else:
             # No reconciled concepts — resolve from individual sources

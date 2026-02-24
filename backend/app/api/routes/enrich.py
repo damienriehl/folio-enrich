@@ -109,6 +109,17 @@ async def get_enrichment(job_id: UUID) -> Job:
     return job
 
 
+@router.get("/{job_id}/annotations/{annotation_id}/lineage")
+async def get_annotation_lineage(job_id: UUID, annotation_id: str) -> dict:
+    job = await _job_store.load(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    for ann in job.result.annotations:
+        if ann.id == annotation_id:
+            return {"annotation_id": annotation_id, "lineage": [e.model_dump() for e in ann.lineage]}
+    raise HTTPException(status_code=404, detail="Annotation not found")
+
+
 @router.get("/{job_id}/stream")
 async def stream_enrichment(job_id: UUID):
     job = await _job_store.load(job_id)

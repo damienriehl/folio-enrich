@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app.models.annotation import Annotation, ConceptMatch, Span
+from app.models.annotation import Annotation, ConceptMatch, Span, StageEvent
 from app.models.job import Job, JobStatus
-from app.pipeline.stages.base import PipelineStage
+from app.pipeline.stages.base import PipelineStage, record_lineage
 from app.services.matching.aho_corasick import AhoCorasickMatcher
 
 
@@ -100,25 +100,42 @@ class StringMatchStage(PipelineStage):
                 folio_alt_labels=match.value.get("folio_alt_labels"),
             )
 
+            # Materialize upstream _lineage_events from resolved concept dicts
+            upstream_events: list[StageEvent] = []
+            for evt in match.value.get("_lineage_events", []):
+                upstream_events.append(StageEvent(
+                    stage=evt.get("stage", ""),
+                    action=evt.get("action", ""),
+                    detail=evt.get("detail", ""),
+                    confidence=evt.get("confidence"),
+                    timestamp=evt.get("timestamp", ""),
+                ))
+
             if span_key in existing_by_span:
                 # Update existing annotation: enrich with resolved FOLIO data
                 existing = existing_by_span[span_key]
                 existing.concepts = [concept]
                 existing.state = "confirmed"
+                # Preserve existing lineage, then add upstream + this stage
+                existing.lineage.extend(upstream_events)
+                record_lineage(existing, "string_matching", "confirmed",
+                               detail="Aho-Corasick span match, enriched with FOLIO data")
                 new_annotations.append(existing)
             else:
                 # New span from Aho-Corasick
-                new_annotations.append(
-                    Annotation(
-                        span=Span(
-                            start=match.start,
-                            end=match.end,
-                            text=full_text[match.start:match.end],
-                        ),
-                        concepts=[concept],
-                        state="confirmed",
-                    )
+                ann = Annotation(
+                    span=Span(
+                        start=match.start,
+                        end=match.end,
+                        text=full_text[match.start:match.end],
+                    ),
+                    concepts=[concept],
+                    state="confirmed",
+                    lineage=upstream_events,
                 )
+                record_lineage(ann, "string_matching", "confirmed",
+                               detail="Aho-Corasick span match, enriched with FOLIO data")
+                new_annotations.append(ann)
 
         # Keep rejected annotations (for frontend strikethrough display)
         for ann in job.result.annotations:

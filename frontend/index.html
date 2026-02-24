@@ -199,29 +199,34 @@
     padding: 16px;
   }
 
-  /* White-paper document view for right panel */
-  .panel:not(.panel-left) > .panel-body {
-    background: #ffffff;
-    color: #1a1a2e;
+  /* Right panel: light mode via CSS variable overrides — cascades to all children */
+  .panel-right {
+    --bg: #ffffff;
+    --surface: #f5f6f8;
+    --surface2: #ecedf1;
+    --surface3: #e2e4ea;
+    --border: #d0d2da;
+    --text: #1a1a2e;
+    --text-dim: #6b6b80;
+    --accent: #3b64e0;
+    --accent-dim: #5a7ae8;
+    --green: #16a34a;
+    --orange: #d97706;
+    --red: #dc2626;
+    --cyan: #0891b2;
+    --purple: #7c3aed;
+    --highlight: rgba(59,100,224,0.10);
+    --highlight-confirmed: rgba(59,100,224,0.15);
+    background: var(--bg);
+    color: var(--text);
   }
 
-  /* Right-panel button overrides for white background */
-  .panel:not(.panel-left) > .panel-body button.secondary {
-    background: transparent;
-    border-color: #c0c0cc;
-    color: #4a4a60;
-  }
-  .panel:not(.panel-left) > .panel-body button.secondary:hover {
-    border-color: #3b64e0;
-    color: #1a1a2e;
-  }
+  .panel-right .panel-body { background: var(--bg); color: var(--text); }
+  .panel-right .panel-body::-webkit-scrollbar-thumb { background: #c0c0cc; }
+  .panel-right .panel-body::-webkit-scrollbar-thumb:hover { background: #9090a0; }
 
-  /* Right-panel inline text overrides */
-  .panel:not(.panel-left) > .panel-body p[style] { color: #6b6b80 !important; }
-
-  /* Right-panel scrollbar — light track for white background */
-  .panel:not(.panel-left) > .panel-body::-webkit-scrollbar-thumb { background: #c0c0cc; }
-  .panel:not(.panel-left) > .panel-body::-webkit-scrollbar-thumb:hover { background: #9090a0; }
+  /* Right-panel p style overrides (inline styles from JS) */
+  .panel-right .panel-body p[style] { color: #6b6b80 !important; }
 
   /* Forms and inputs */
   .form-group {
@@ -488,6 +493,103 @@
   .tooltip-meta { font-size: 11px; color: #6b6b80; display: flex; gap: 12px; margin-bottom: 6px; }
   .tooltip-iri a { color: #3b64e0; text-decoration: none; font-size: 11px; word-break: break-all; }
   .tooltip-iri a:hover { text-decoration: underline; }
+
+  /* Feedback UI in tooltip — scoped to .concept-tooltip to override global dark styles */
+  .concept-tooltip .tooltip-feedback { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e5ea; }
+  .concept-tooltip .tooltip-feedback-row { display: flex; align-items: center; gap: 8px; }
+  .concept-tooltip .tooltip-feedback-btn {
+    background: #ffffff; border: 1px solid #d0d0da; border-radius: 6px; padding: 4px 10px;
+    cursor: pointer; font-size: 16px; display: flex; align-items: center; gap: 4px;
+    color: #6b6b80; transition: all 0.15s; min-height: auto; line-height: 1;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;
+  }
+  .concept-tooltip .tooltip-feedback-btn:hover { border-color: #3b64e0; background: #f0f4ff; }
+  .concept-tooltip .tooltip-feedback-btn.active-up,
+  .concept-tooltip .tooltip-feedback-btn.active-up:hover { border-color: #166534; background: #dcfce7; color: #166534; }
+  .concept-tooltip .tooltip-feedback-btn.active-down,
+  .concept-tooltip .tooltip-feedback-btn.active-down:hover { border-color: #991b1b; background: #fee2e2; color: #991b1b; }
+  .concept-tooltip .tooltip-feedback-btn:disabled { opacity: 0.5; cursor: default; }
+  .concept-tooltip .tooltip-feedback-note {
+    width: 100%; margin-top: 6px; padding: 6px 8px; border: 1px solid #d0d0da;
+    border-radius: 6px; font-size: 12px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    resize: vertical; min-height: 28px; max-height: 80px;
+    background: #ffffff; color: #1a1a2e; line-height: 1.4;
+  }
+  .concept-tooltip .tooltip-feedback-note::placeholder { color: #a0a0b0; }
+  .concept-tooltip .tooltip-feedback-note:focus { outline: none; border-color: #3b64e0; box-shadow: 0 0 0 2px rgba(59, 100, 224, 0.15); }
+  .concept-tooltip .tooltip-feedback-saved { font-size: 11px; color: #166534; margin-left: auto; }
+
+  /* Lineage trail in tooltip */
+  .concept-tooltip .tooltip-lineage { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e5ea; }
+  .concept-tooltip .tooltip-lineage-toggle {
+    font-size: 11px; color: #3b64e0; cursor: pointer; background: none; border: none;
+    padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  .concept-tooltip .tooltip-lineage-toggle:hover { text-decoration: underline; }
+  .concept-tooltip .tooltip-lineage-list { margin-top: 6px; padding: 0; list-style: none; font-size: 11px; color: #6b6b80; }
+  .concept-tooltip .tooltip-lineage-list li { padding: 3px 0; border-bottom: 1px solid #f0f0f4; display: flex; gap: 6px; }
+  .concept-tooltip .tooltip-lineage-list li:last-child { border-bottom: none; }
+  .concept-tooltip .lineage-stage { font-weight: 600; color: #1a1a2e; min-width: 90px; }
+  .concept-tooltip .lineage-action { color: #3b64e0; min-width: 60px; }
+
+  /* Insights panel */
+  .insights-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px; flex-wrap: wrap; gap: 8px;
+  }
+  .insights-header h3 { font-size: 14px; font-weight: 600; color: var(--text); margin: 0; }
+  .insights-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .insights-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  .insights-stat {
+    padding: 14px 12px; border-radius: 8px; text-align: center;
+    background: var(--surface); border: 1px solid var(--border);
+  }
+  .insights-stat-value { font-size: 22px; font-weight: 700; color: var(--accent); }
+  .insights-stat-label { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+  .insights-stat.stat-up .insights-stat-value { color: var(--green); }
+  .insights-stat.stat-down .insights-stat-value { color: var(--red); }
+
+  .insights-section { margin-bottom: 20px; }
+  .insights-section-title {
+    font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  }
+
+  .insights-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .insights-table th {
+    text-align: left; padding: 8px 10px; color: var(--text-dim); font-weight: 600;
+    border-bottom: 1px solid var(--border); font-size: 11px;
+  }
+  .insights-table td {
+    padding: 10px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: top;
+  }
+  .insights-table tr:last-child td { border-bottom: none; }
+  .insights-table tr:hover td { background: var(--highlight); }
+
+  .insights-rating-up { color: var(--green); font-weight: 600; }
+  .insights-rating-down { color: var(--red); font-weight: 600; }
+  .insights-comment {
+    color: var(--text); background: var(--surface); padding: 4px 8px;
+    border-radius: 4px; font-style: italic; font-size: 12px; margin-top: 4px;
+    border-left: 2px solid var(--accent);
+  }
+  .insights-lineage-detail {
+    font-size: 10px; color: var(--text-dim); margin-top: 6px;
+    font-family: 'SF Mono', 'Fira Code', Consolas, monospace; line-height: 1.5;
+  }
+  .insights-empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 40px 16px; }
+
+  .insights-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--surface3); }
+  .insights-bar-up { background: var(--green); }
+  .insights-bar-down { background: var(--red); }
+
+  .insights-stage-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .insights-stage-name { font-size: 12px; color: var(--text); min-width: 130px; font-weight: 500; }
+  .insights-stage-counts { font-size: 11px; color: var(--text-dim); min-width: 80px; text-align: right; }
+
+  .insights-concept-label { font-weight: 500; color: var(--text); }
+  .insights-concept-sub { font-size: 11px; color: var(--text-dim); }
 
   /* Pipeline progress */
   .pipeline-progress {
@@ -1167,13 +1269,14 @@
   </div>
 
   <!-- Right panel: Results -->
-  <div class="panel">
+  <div class="panel panel-right">
     <div class="tabs">
       <div class="tab active" data-tab="annotated" onclick="switchTab(this, 'annotated')">Annotated Text</div>
       <div class="tab" data-tab="concepts" onclick="switchTab(this, 'concepts')">Concepts</div>
       <div class="tab" data-tab="triples" onclick="switchTab(this, 'triples')">Triples</div>
       <div class="tab" data-tab="metadata" onclick="switchTab(this, 'metadata')">Metadata</div>
       <div class="tab" data-tab="export" onclick="switchTab(this, 'export')">Export</div>
+      <div class="tab" data-tab="insights" onclick="switchTab(this, 'insights'); loadInsights()">Insights</div>
     </div>
     <div class="panel-body" id="resultBody">
       <div class="tab-content active" id="tab-annotated">
@@ -1195,6 +1298,9 @@
       <div class="tab-content" id="tab-export">
         <p style="color:#6b6b80;font-size:12px;margin-bottom:12px">Download annotations in any of the 12 supported formats:</p>
         <div class="export-grid" id="exportButtons"></div>
+      </div>
+      <div class="tab-content" id="tab-insights">
+        <div id="insightsPanel"></div>
       </div>
     </div>
   </div>
@@ -1269,6 +1375,59 @@ let knownModels = {};     // provider name → [{id, name, context_window}]
 let pricingData = {};     // model id → {input_cost_per_1k, output_cost_per_1k, ...}
 let selectedDocType = null;
 let showUncertain = true;
+
+// ==============================================
+// Session Cache — persist pipeline results across reloads
+// ==============================================
+
+function cacheState() {
+  if (!currentJob || !currentJobId) return;
+  try {
+    sessionStorage.setItem('folio_enrich_cache', JSON.stringify({
+      jobId: currentJobId,
+      job: currentJob,
+      annotations: accumulatedAnnotations,
+      normalizedText: normalizedText,
+      activity: activityEntries,
+      docInput: document.getElementById('docInput')?.value || '',
+      filename: uploadedFilename,
+    }));
+  } catch (e) { /* quota exceeded — ignore */ }
+}
+
+function restoreState() {
+  try {
+    const raw = sessionStorage.getItem('folio_enrich_cache');
+    if (!raw) return false;
+    const cache = JSON.parse(raw);
+    if (!cache.jobId || !cache.job) return false;
+
+    currentJobId = cache.jobId;
+    currentJob = cache.job;
+    accumulatedAnnotations = cache.annotations || [];
+    normalizedText = cache.normalizedText || null;
+    activityEntries = cache.activity || [];
+    uploadedFilename = cache.filename || null;
+
+    if (cache.docInput) {
+      document.getElementById('docInput').value = cache.docInput;
+    }
+
+    renderResults(currentJob);
+    renderProgressStages('completed');
+    renderActivityLog();
+    const annCount = (currentJob.result?.annotations || []).length;
+    setStatus(`Completed: ${annCount} annotations (cached)`, 'completed');
+    return true;
+  } catch (e) {
+    console.warn('Failed to restore cached state:', e);
+    return false;
+  }
+}
+
+function clearCache() {
+  sessionStorage.removeItem('folio_enrich_cache');
+}
 
 const PIPELINE_STAGES = [
   'pending', 'ingesting', 'normalizing', 'enriching', 'identifying',
@@ -1381,7 +1540,11 @@ async function init() {
   await loadProviders();
   await loadSettings();
   setupDragDrop();
-  renderProgressStages('pending');
+
+  // Restore cached results from a previous page load (survives live-reload)
+  if (!restoreState()) {
+    renderProgressStages('pending');
+  }
 }
 
 // ==============================================
@@ -1992,6 +2155,7 @@ function pollJob() {
       if (job.status === 'completed') {
         stopPolling();
         try { renderResults(job); } catch (re) { console.error('Render error:', re); }
+        cacheState();
         resetButton();
         const annCount = (job.result?.annotations || []).length;
         setStatus(`Completed: ${annCount} annotations`, 'completed');
@@ -2170,6 +2334,7 @@ async function fetchFinalJob() {
     const job = await r.json();
     currentJob = job;
     renderResults(job);
+    cacheState();
   } catch (e) {
     console.error('Failed to fetch final job:', e);
   }
@@ -2251,6 +2416,7 @@ function renderAnnotatedText(text, annotations) {
 
     const state = ann.state || c.state || 'confirmed';
     const dataAttrs = [
+      `data-ann-id="${escapeAttr(ann.id || '')}"`,
       `data-iri="${escapeAttr(c.folio_iri || '')}"`,
       `data-label="${escapeAttr(c.folio_label || c.concept_text)}"`,
       `data-def="${escapeAttr(c.folio_definition || '')}"`,
@@ -2296,11 +2462,15 @@ function showTooltip(event, el) {
   const iri = el.dataset.iri;
   const conf = parseFloat(el.dataset.confidence);
   const source = el.dataset.source;
+  const annId = el.dataset.annId;
 
   const branchColor = BRANCH_COLORS[branch] || '#6b6b80';
 
   const confPct = conf > 1 ? conf : conf * 100;
   const confTier = confPct >= 80 ? 'conf-high' : confPct >= 50 ? 'conf-mid' : 'conf-low';
+
+  // Check if this annotation already has feedback from this session
+  const existingRating = _feedbackCache[annId] || null;
 
   tooltip.innerHTML = `
     <div class="tooltip-label">${escapeHtml(label)}</div>
@@ -2312,6 +2482,20 @@ function showTooltip(event, el) {
       <span>State: ${escapeHtml(el.dataset.state || 'confirmed')}</span>
     </div>
     ${iri ? `<div class="tooltip-iri" style="margin-top:4px"><a href="${escapeAttr(iri)}/html" target="_blank" rel="noopener">${escapeHtml(iri)}/html</a></div>` : ''}
+    <div class="tooltip-feedback" data-ann-id="${escapeAttr(annId)}">
+      <div class="tooltip-feedback-row">
+        <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" data-rating="up" onclick="submitFeedback(this, 'up')">&#x1F44D;</button>
+        <button class="tooltip-feedback-btn${existingRating === 'down' ? ' active-down' : ''}" data-rating="down" onclick="submitFeedback(this, 'down')">&#x1F44E;</button>
+        <span class="tooltip-feedback-saved" id="feedbackStatus-${escapeAttr(annId)}">${existingRating ? 'Saved' : ''}</span>
+      </div>
+      <textarea class="tooltip-feedback-note" id="feedbackNote-${escapeAttr(annId)}" placeholder="Add a note (optional)..." rows="1"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitNote('${escapeAttr(annId)}')}"
+        onblur="submitNote('${escapeAttr(annId)}')"></textarea>
+    </div>
+    ${annId && currentJobId ? `<div class="tooltip-lineage">
+      <button class="tooltip-lineage-toggle" onclick="toggleLineage('${escapeAttr(annId)}')">Show stage lineage</button>
+      <ul class="tooltip-lineage-list" id="lineage-${escapeAttr(annId)}" style="display:none"></ul>
+    </div>` : ''}
   `;
 
   tooltip.classList.add('visible');
@@ -2336,12 +2520,339 @@ function showTooltip(event, el) {
   });
 }
 
+// Track feedback already submitted this session (annId → rating)
+const _feedbackCache = {};
+
+async function submitFeedback(btn, rating) {
+  const feedbackDiv = btn.closest('.tooltip-feedback');
+  const annId = feedbackDiv.dataset.annId;
+  if (!annId || !currentJobId) return;
+
+  const noteEl = document.getElementById(`feedbackNote-${annId}`);
+  const comment = noteEl ? noteEl.value.trim() : '';
+  const statusEl = document.getElementById(`feedbackStatus-${annId}`);
+
+  // Optimistic UI: show selection immediately
+  feedbackDiv.querySelectorAll('.tooltip-feedback-btn').forEach(b => {
+    b.classList.remove('active-up', 'active-down');
+  });
+  btn.classList.add(rating === 'up' ? 'active-up' : 'active-down');
+  _feedbackCache[annId] = rating;
+  if (statusEl) statusEl.textContent = 'Saving...';
+
+  try {
+    const resp = await fetch(`${API}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_id: currentJobId,
+        annotation_id: annId,
+        rating: rating,
+        comment: comment,
+      }),
+    });
+
+    if (resp.ok) {
+      if (statusEl) statusEl.textContent = 'Saved';
+    } else {
+      // Revert on error
+      btn.classList.remove('active-up', 'active-down');
+      delete _feedbackCache[annId];
+      if (statusEl) statusEl.textContent = 'Error saving';
+    }
+  } catch (e) {
+    btn.classList.remove('active-up', 'active-down');
+    delete _feedbackCache[annId];
+    if (statusEl) statusEl.textContent = 'Error saving';
+  }
+}
+
+// Track last-submitted note per annotation to avoid duplicate submissions
+const _noteCache = {};
+
+async function submitNote(annId) {
+  if (!annId || !currentJobId) return;
+  const noteEl = document.getElementById(`feedbackNote-${annId}`);
+  if (!noteEl) return;
+  const comment = noteEl.value.trim();
+  if (!comment || comment === _noteCache[annId]) return;
+
+  const rating = _feedbackCache[annId];
+  if (!rating) return; // No rating yet — note will be sent with the next thumb click
+
+  const statusEl = document.getElementById(`feedbackStatus-${annId}`);
+  if (statusEl) statusEl.textContent = 'Saving...';
+
+  try {
+    const resp = await fetch(`${API}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_id: currentJobId,
+        annotation_id: annId,
+        rating: rating,
+        comment: comment,
+      }),
+    });
+    if (resp.ok) {
+      _noteCache[annId] = comment;
+      if (statusEl) statusEl.textContent = 'Saved';
+    } else {
+      if (statusEl) statusEl.textContent = 'Error';
+    }
+  } catch (e) {
+    if (statusEl) statusEl.textContent = 'Error';
+  }
+}
+
+async function toggleLineage(annId) {
+  const list = document.getElementById(`lineage-${annId}`);
+  if (!list) return;
+
+  if (list.style.display !== 'none') {
+    list.style.display = 'none';
+    list.previousElementSibling.textContent = 'Show stage lineage';
+    return;
+  }
+
+  // Fetch lineage from API
+  if (!list.dataset.loaded) {
+    try {
+      const resp = await fetch(`${API}/enrich/${currentJobId}/annotations/${annId}/lineage`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.lineage && data.lineage.length > 0) {
+          list.innerHTML = data.lineage.map(e => `
+            <li>
+              <span class="lineage-stage">${escapeHtml(e.stage)}</span>
+              <span class="lineage-action">${escapeHtml(e.action)}</span>
+              <span>${escapeHtml(e.detail || '')}${e.confidence != null ? ` (${(e.confidence * 100).toFixed(0)}%)` : ''}</span>
+            </li>
+          `).join('');
+        } else {
+          list.innerHTML = '<li style="color:#a0a0b0">No lineage recorded</li>';
+        }
+        list.dataset.loaded = 'true';
+      }
+    } catch (e) {
+      list.innerHTML = '<li style="color:#991b1b">Failed to load lineage</li>';
+    }
+  }
+
+  list.style.display = 'block';
+  list.previousElementSibling.textContent = 'Hide stage lineage';
+}
+
 // Hide tooltip on click outside
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.annotation-span') && !e.target.closest('.concept-tooltip')) {
     document.getElementById('tooltip').classList.remove('visible');
   }
 });
+
+// --- Insights panel ---
+
+let _insightsScope = 'job'; // 'job' or 'all'
+
+async function loadInsights() {
+  const panel = document.getElementById('insightsPanel');
+  if (!panel) return;
+
+  const url = _insightsScope === 'job' && currentJobId
+    ? `${API}/feedback/insights/${currentJobId}`
+    : `${API}/feedback/insights`;
+
+  panel.innerHTML = '<div class="insights-empty">Loading...</div>';
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('Failed to load');
+    const data = await resp.json();
+    renderInsightsPanel(data);
+  } catch (e) {
+    panel.innerHTML = '<div class="insights-empty">Failed to load insights</div>';
+  }
+}
+
+function renderInsightsPanel(data) {
+  const panel = document.getElementById('insightsPanel');
+
+  if (data.total_feedback === 0) {
+    panel.innerHTML = `
+      <div class="insights-header">
+        <h3>Feedback &amp; Insights</h3>
+        <div class="insights-actions">
+          ${renderScopeToggle()}
+        </div>
+      </div>
+      <div class="insights-empty">
+        No feedback yet. Click an annotation and use the thumbs up/down buttons to rate it.
+      </div>
+    `;
+    return;
+  }
+
+  // Stats summary
+  const totalPct = data.total_feedback > 0
+    ? ((data.thumbs_up / data.total_feedback) * 100).toFixed(0) : 0;
+
+  // Stage breakdown
+  let stageHtml = '';
+  const stages = Object.entries(data.by_stage || {});
+  if (stages.length > 0) {
+    stageHtml = stages.map(([stage, counts]) => {
+      const total = (counts.up || 0) + (counts.down || 0);
+      const upPct = total > 0 ? ((counts.up || 0) / total) * 100 : 0;
+      return `
+        <div class="insights-stage-row">
+          <span class="insights-stage-name">${escapeHtml(stage)}</span>
+          <span class="insights-stage-counts">
+            <span class="insights-rating-up">${counts.up || 0}</span> /
+            <span class="insights-rating-down">${counts.down || 0}</span>
+          </span>
+          <div class="insights-bar" style="flex:1">
+            <div class="insights-bar-up" style="width:${upPct}%"></div>
+            <div class="insights-bar-down" style="width:${100 - upPct}%"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Most downvoted concepts
+  let downvotedHtml = '';
+  if (data.most_downvoted_concepts && data.most_downvoted_concepts.length > 0) {
+    downvotedHtml = `
+      <div class="insights-section">
+        <div class="insights-section-title">Most downvoted concepts</div>
+        <table class="insights-table">
+          <thead><tr><th>Concept</th><th>Downvotes</th></tr></thead>
+          <tbody>
+            ${data.most_downvoted_concepts.map(c => `
+              <tr>
+                <td>${escapeHtml(c.folio_label || '')}</td>
+                <td><span class="insights-rating-down">${c.downvotes}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // Recent feedback entries
+  let recentHtml = '';
+  if (data.recent_feedback && data.recent_feedback.length > 0) {
+    recentHtml = `
+      <div class="insights-section">
+        <div class="insights-section-title">Recent feedback</div>
+        <table class="insights-table">
+          <thead><tr><th>Annotation</th><th>Rating</th><th>Details</th></tr></thead>
+          <tbody>
+            ${data.recent_feedback.map(fb => {
+              const lineageSummary = (fb.lineage && fb.lineage.length > 0)
+                ? fb.lineage.map(e => `${e.stage}: ${e.action}`).join(' \u2192 ')
+                : '';
+              return `
+                <tr>
+                  <td>
+                    <span class="insights-concept-label">${escapeHtml(fb.annotation_text || '')}</span>
+                    ${fb.folio_label && fb.folio_label !== fb.annotation_text ? `<br><span class="insights-concept-sub">${escapeHtml(fb.folio_label)}</span>` : ''}
+                  </td>
+                  <td style="text-align:center">
+                    <span class="${fb.rating === 'up' ? 'insights-rating-up' : 'insights-rating-down'}">
+                      ${fb.rating === 'up' ? '&#x1F44D;' : '&#x1F44E;'}
+                    </span>
+                  </td>
+                  <td>
+                    ${fb.comment ? `<div class="insights-comment">${escapeHtml(fb.comment)}</div>` : ''}
+                    ${fb.stage ? `<div style="font-size:11px;color:var(--text-dim);margin-top:4px">Stage: ${escapeHtml(fb.stage)}</div>` : ''}
+                    ${lineageSummary ? `<div class="insights-lineage-detail">${escapeHtml(lineageSummary)}</div>` : ''}
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  panel.innerHTML = `
+    <div class="insights-header">
+      <h3>Feedback &amp; Insights</h3>
+      <div class="insights-actions">
+        ${renderScopeToggle()}
+        <button class="small secondary" onclick="exportFeedback('json')">Export JSON</button>
+        <button class="small secondary" onclick="exportFeedback('csv')">Export CSV</button>
+        <button class="small secondary" style="color:#f87171;border-color:#f87171" onclick="clearAllFeedback()">Clear All</button>
+      </div>
+    </div>
+    <div class="insights-stats">
+      <div class="insights-stat">
+        <div class="insights-stat-value">${data.total_feedback}</div>
+        <div class="insights-stat-label">Total</div>
+      </div>
+      <div class="insights-stat stat-up">
+        <div class="insights-stat-value">${data.thumbs_up}</div>
+        <div class="insights-stat-label">Thumbs Up</div>
+      </div>
+      <div class="insights-stat stat-down">
+        <div class="insights-stat-value">${data.thumbs_down}</div>
+        <div class="insights-stat-label">Thumbs Down</div>
+      </div>
+      <div class="insights-stat">
+        <div class="insights-stat-value">${totalPct}%</div>
+        <div class="insights-stat-label">Positive</div>
+      </div>
+    </div>
+    ${stages.length > 0 ? `
+      <div class="insights-section">
+        <div class="insights-section-title">By pipeline stage</div>
+        ${stageHtml}
+      </div>
+    ` : ''}
+    ${downvotedHtml}
+    ${recentHtml}
+  `;
+}
+
+function renderScopeToggle() {
+  const jobActive = _insightsScope === 'job';
+  return `
+    <button class="small ${jobActive ? 'primary' : 'secondary'}" onclick="_insightsScope='job'; loadInsights()">This Job</button>
+    <button class="small ${!jobActive ? 'primary' : 'secondary'}" onclick="_insightsScope='all'; loadInsights()">All Jobs</button>
+  `;
+}
+
+async function exportFeedback(format) {
+  try {
+    const resp = await fetch(`${API}/feedback/export?format=${format}`);
+    if (!resp.ok) throw new Error('Export failed');
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `feedback.${format}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Failed to export feedback');
+  }
+}
+
+async function clearAllFeedback() {
+  if (!confirm('Clear all feedback? This cannot be undone.')) return;
+  try {
+    const resp = await fetch(`${API}/feedback`, { method: 'DELETE' });
+    if (resp.ok) {
+      Object.keys(_feedbackCache).forEach(k => delete _feedbackCache[k]);
+      loadInsights();
+    }
+  } catch (e) {
+    alert('Failed to clear feedback');
+  }
+}
 
 function renderConceptsList(annotations) {
   const container = document.getElementById('conceptsList');
@@ -2662,6 +3173,7 @@ function loadSample(name) {
 }
 
 function clearAll() {
+  clearCache();
   document.getElementById('docInput').value = '';
   document.getElementById('docInput').placeholder = 'Paste your legal document text here...';
   document.getElementById('annotatedText').innerHTML = '';

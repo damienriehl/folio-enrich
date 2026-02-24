@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from app.models.annotation import ConceptMatch
 from app.models.job import Job, JobStatus
-from app.pipeline.stages.base import PipelineStage
+from app.pipeline.stages.base import PipelineStage, record_lineage
 from app.services.reconciliation.reconciler import Reconciler
 
 
@@ -35,8 +35,17 @@ class ReconciliationStage(PipelineStage):
             results = self.reconciler.reconcile(ruler_concepts, llm_concepts)
 
         # Store reconciled concepts for resolution stage (all start as "preliminary")
-        reconciled = [
-            {
+        # Propagate _lineage_event from LLM concepts into reconciled dicts
+        llm_lineage_by_text: dict[str, dict] = {}
+        for chunk_concepts in llm_raw.values():
+            for c in chunk_concepts:
+                evt = c.get("_lineage_event")
+                if evt:
+                    llm_lineage_by_text[c.get("concept_text", "").lower()] = evt
+
+        reconciled = []
+        for r in results:
+            rd: dict = {
                 "concept_text": r.concept.concept_text,
                 "branches": r.concept.branches,
                 "confidence": r.concept.confidence,
@@ -45,14 +54,25 @@ class ReconciliationStage(PipelineStage):
                 "category": r.category,
                 "state": "preliminary",
             }
-            for r in results
-        ]
+            # Carry forward LLM lineage events
+            lineage_events: list[dict] = []
+            llm_evt = llm_lineage_by_text.get(r.concept.concept_text.lower())
+            if llm_evt:
+                lineage_events.append(llm_evt)
+            rd["_lineage_events"] = lineage_events
+            reconciled.append(rd)
         job.result.metadata["reconciled_concepts"] = reconciled
 
         # Update preliminary annotation states based on reconciliation results
         reconciled_by_text = {}
         for r in results:
             reconciled_by_text[r.concept.concept_text.lower()] = r.category
+
+        _CATEGORY_DETAIL = {
+            "both_agree": "Both EntityRuler and LLM agree",
+            "conflict_resolved": "Conflict resolved via embedding similarity",
+            "ruler_only": "EntityRuler only (confidence >= threshold)",
+        }
 
         for ann in job.result.annotations:
             if ann.state != "preliminary":
@@ -61,10 +81,17 @@ class ReconciliationStage(PipelineStage):
             category = reconciled_by_text.get(concept_text)
             if category in ("both_agree", "conflict_resolved"):
                 ann.state = "confirmed"
+                record_lineage(ann, "reconciliation", "confirmed",
+                               detail=_CATEGORY_DETAIL.get(category, ""))
             elif category is None:
                 # Not in reconciled set — low confidence, filtered out
                 ann.state = "rejected"
-            # "ruler_only" stays as "preliminary" (confirmed later by resolution)
+                record_lineage(ann, "reconciliation", "rejected",
+                               detail="Filtered out (not in reconciled set)")
+            else:
+                # "ruler_only" stays as "preliminary" (confirmed later by resolution)
+                record_lineage(ann, "reconciliation", "kept",
+                               detail=_CATEGORY_DETAIL.get(category, f"Category: {category}"))
 
         confirmed = sum(1 for a in job.result.annotations if a.state == "confirmed")
         ruler_only = sum(1 for r in results if r.category == "ruler_only")

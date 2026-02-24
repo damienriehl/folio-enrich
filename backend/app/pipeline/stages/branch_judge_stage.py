@@ -64,6 +64,22 @@ class BranchJudgeStage(PipelineStage):
                     )
                     # Judge validates → confirmed; no branch found → rejected
                     concept["state"] = "confirmed" if branch else "rejected"
+                    # Record lineage event
+                    events = concept.setdefault("_lineage_events", [])
+                    if branch:
+                        events.append({
+                            "stage": "branch_judge",
+                            "action": "branch_assigned",
+                            "detail": f"LLM judge assigned branch '{branch}'",
+                            "confidence": result.get("confidence"),
+                        })
+                    else:
+                        events.append({
+                            "stage": "branch_judge",
+                            "action": "rejected",
+                            "detail": "LLM judge could not assign a branch",
+                            "confidence": result.get("confidence"),
+                        })
 
         log = job.result.metadata.setdefault("activity_log", [])
         log.append({"ts": datetime.now(timezone.utc).isoformat(), "stage": self.name, "msg": f"Judged {len(ambiguous)} ambiguous concepts for branch assignment"})

@@ -23,9 +23,20 @@ class LLMConceptStage(PipelineStage):
         results = await self.identifier.identify_concepts_batch(chunks)
 
         # Store raw LLM concepts in metadata for later reconciliation
-        job.result.metadata["llm_concepts"] = {
-            str(k): [c.model_dump() for c in v] for k, v in results.items()
-        }
+        llm_concepts: dict[str, list[dict]] = {}
+        for k, v in results.items():
+            chunk_list = []
+            for c in v:
+                d = c.model_dump()
+                d["_lineage_event"] = {
+                    "stage": "llm_concept",
+                    "action": "identified",
+                    "detail": f"LLM extracted from chunk {k}",
+                    "confidence": c.confidence,
+                }
+                chunk_list.append(d)
+            llm_concepts[str(k)] = chunk_list
+        job.result.metadata["llm_concepts"] = llm_concepts
 
         from datetime import datetime, timezone
         total = sum(len(v) for v in results.values())
