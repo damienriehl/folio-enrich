@@ -44,3 +44,14 @@ class TestSemanticEntityRuler:
         ruler = SemanticEntityRuler(svc)
         matches = ruler.find_semantic_matches("any text", set())
         assert matches == []
+
+    def test_skips_pure_stopword_candidates(self, indexed_embedding_service):
+        """Candidates like 'by and' where all tokens are stopwords should be skipped."""
+        from app.services.entity_ruler.semantic_ruler import _SEMANTIC_STOPWORDS
+        ruler = SemanticEntityRuler(indexed_embedding_service, threshold=0.50)
+        text = "by and through its"
+        matches = ruler.find_semantic_matches(text, set())
+        for m in matches:
+            tokens = m.text.lower().split()
+            assert not all(t in _SEMANTIC_STOPWORDS for t in tokens), \
+                f"Pure-stopword match should not occur: '{m.text}'"

@@ -3,7 +3,25 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from app.services.entity_ruler.pattern_builder import _STOPWORDS
+
 logger = logging.getLogger(__name__)
+
+# Extended stopwords for semantic matching — superset of pattern_builder._STOPWORDS.
+# Includes common function words that are legitimate exact-match patterns (e.g. "will",
+# "shall") but should never anchor a semantic embedding search.
+_SEMANTIC_STOPWORDS = _STOPWORDS | frozenset({
+    # Pronouns / determiners
+    "this", "that", "they", "them", "what", "when", "where", "which",
+    "whom", "each", "some", "such", "both", "same", "said", "here",
+    # Auxiliary / common verbs
+    "have", "been", "were", "will", "does", "done", "made", "shall",
+    "being",
+    # Prepositions / conjunctions / adverbs
+    "with", "from", "into", "than", "then", "also", "just", "even",
+    "more", "most", "only", "over", "very", "well", "much", "back",
+    "like", "upon", "thus", "once",
+})
 
 
 @dataclass
@@ -51,6 +69,11 @@ class SemanticEntityRuler:
                     s <= start < e or s < end <= e
                     for s, e in known_spans
                 ):
+                    continue
+
+                # Skip candidates where every token is a common stopword
+                tokens = phrase.lower().split()
+                if all(t in _SEMANTIC_STOPWORDS for t in tokens):
                     continue
 
                 candidates.append((phrase, start, end))
