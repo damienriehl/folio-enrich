@@ -508,7 +508,7 @@
   .concept-tooltip .tooltip-lineage-list li { padding: 3px 0; border-bottom: 1px solid #f0f0f4; display: flex; gap: 6px; }
   .concept-tooltip .tooltip-lineage-list li:last-child { border-bottom: none; }
   .concept-tooltip .lineage-stage-name { font-weight: 600; color: #1a1a2e; min-width: 100px; font-size: 11px; }
-  .concept-tooltip .lineage-action { color: #3b64e0; min-width: 60px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+  .concept-tooltip .lineage-action { color: #3b64e0; min-width: 90px; font-size: 10px; font-weight: 600; }
   .concept-tooltip .lineage-detail-text { color: #6b6b80; flex: 1; font-size: 11px; }
   .concept-tooltip .lineage-confidence { font-weight: 600; color: #555; font-size: 10px; background: #f0f0f4; padding: 0 4px; border-radius: 3px; }
 
@@ -1162,7 +1162,7 @@
       <div class="form-row" style="margin-bottom:8px">
         <button class="primary" id="enrichBtn" onclick="submitEnrichment()">Enrich Document</button>
         <button class="secondary" onclick="clearAll()">Clear</button>
-        <button id="debugModeBtn" onclick="toggleDebugMode()" style="margin-left:auto;background:var(--surface2);border:none;color:var(--text-dim)" title="Truncate input to ~500 words for faster pipeline testing">Debug Mode</button>
+        <button id="debugModeBtn" onclick="toggleDebugMode()" style="margin-left:auto;background:var(--surface2);border:none;color:var(--text-dim)" title="Truncate input to ~500 words for faster pipeline testing"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:transparent"></span>Debug Mode</button>
       </div>
 
       <!-- File upload -->
@@ -1353,7 +1353,7 @@ let knownModels = {};     // provider name → [{id, name, context_window}]
 let pricingData = {};     // model id → {input_cost_per_1k, output_cost_per_1k, ...}
 let selectedDocType = null;
 let showUncertain = true;
-let debugMode = false;
+let debugMode = localStorage.getItem('debugMode') === 'true';
 
 // ==============================================
 // Session Cache — persist pipeline results across reloads
@@ -1524,6 +1524,9 @@ async function init() {
   if (!restoreState()) {
     renderProgressStages('pending');
   }
+
+  // Restore debug mode button state
+  if (debugMode) applyDebugBtnStyle(document.getElementById('debugModeBtn'), true);
 }
 
 // ==============================================
@@ -2018,19 +2021,18 @@ function applyDebugTruncation() {
   if (text) ta.value = truncateToWords(text, DEBUG_MAX_WORDS);
 }
 
+function applyDebugBtnStyle(btn, on) {
+  btn.style.background = on ? 'rgba(232,165,76,0.15)' : 'var(--surface2)';
+  btn.style.color = on ? 'var(--orange)' : 'var(--text-dim)';
+  btn.innerHTML = '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:' + (on ? 'var(--orange)' : 'transparent') + '"></span>Debug Mode';
+}
+
 function toggleDebugMode() {
   debugMode = !debugMode;
+  localStorage.setItem('debugMode', debugMode);
   const btn = document.getElementById('debugModeBtn');
-  if (debugMode) {
-    btn.style.background = 'rgba(232,165,76,0.15)';
-    btn.style.color = 'var(--orange)';
-    btn.textContent = 'Debug Mode ON';
-    applyDebugTruncation();
-  } else {
-    btn.style.background = 'var(--surface2)';
-    btn.style.color = 'var(--text-dim)';
-    btn.textContent = 'Debug Mode';
-  }
+  applyDebugBtnStyle(btn, debugMode);
+  if (debugMode) applyDebugTruncation();
 }
 
 async function submitEnrichment() {
@@ -2457,16 +2459,9 @@ function showTooltip(event, el) {
 
   tooltip.classList.add('visible');
 
-  // Auto-fetch lineage if it was previously expanded
+  // Auto-expand lineage if it was previously expanded by the user
   if (annId && currentJobId && _lineageExpandedCache.has(annId)) {
     toggleLineage(annId);
-    // toggleLineage will see display:block and hide it, so call it to show → we need to
-    // set display:none first so toggleLineage shows it and fetches data
-    const lineageList = document.getElementById(`lineage-${annId}`);
-    if (lineageList && !lineageList.dataset.loaded) {
-      lineageList.style.display = 'none';
-      toggleLineage(annId);
-    }
   }
 
   // Position tooltip
