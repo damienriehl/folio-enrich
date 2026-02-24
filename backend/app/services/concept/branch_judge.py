@@ -8,7 +8,7 @@ from app.services.llm.prompts.templates import BRANCH_LIST
 
 logger = logging.getLogger(__name__)
 
-BRANCH_JUDGE_PROMPT = f"""You are a legal ontology expert. Given a concept that appears in a sentence, determine which FOLIO ontology branch it belongs to.
+BRANCH_JUDGE_PROMPT = f"""You are a legal ontology expert. Given a concept that appears in a sentence, determine which FOLIO ontology branch it **best** belongs to.
 
 FOLIO branches:
 {BRANCH_LIST}

@@ -48,8 +48,8 @@ class XMLExporter(ExporterBase):
                     ET.SubElement(c_elem, "iri").text = concept.folio_iri
                 if concept.folio_label:
                     ET.SubElement(c_elem, "label").text = concept.folio_label
-                if concept.branch:
-                    ET.SubElement(c_elem, "branch").text = concept.branch
+                if concept.branches:
+                    ET.SubElement(c_elem, "branch").text = concept.branches[0]
                 ET.SubElement(c_elem, "confidence").text = str(concept.confidence)
                 ET.SubElement(c_elem, "source").text = concept.source
 

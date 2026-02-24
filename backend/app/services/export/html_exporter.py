@@ -31,9 +31,10 @@ class HTMLExporter(ExporterBase):
             if not ann.concepts:
                 continue
             concept = ann.concepts[0]
+            branch_str = concept.branches[0] if concept.branches else ""
             tooltip = html.escape(
                 f"{concept.folio_label or concept.concept_text}"
-                f" ({concept.branch or 'unknown branch'})"
+                f" ({branch_str or 'unknown branch'})"
                 f" - {concept.folio_definition or 'No definition'}"
             )
             iri = html.escape(concept.folio_iri or "#")
@@ -58,7 +59,7 @@ class HTMLExporter(ExporterBase):
                 f'<span class="folio-annotation" '
                 f'style="border-bottom-color: {border_color}; background-color: {branch_color}18;" '
                 f'data-iri="{iri}" '
-                f'data-branch="{html.escape(concept.branch or "")}" '
+                f'data-branch="{html.escape(branch_str)}" '
                 f'data-confidence="{concept.confidence:.2f}">'
                 f'<a href="{iri_link}" title="{tooltip}" class="folio-link">'
             )

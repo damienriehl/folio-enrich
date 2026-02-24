@@ -6,7 +6,7 @@ CONCEPT_IDENTIFICATION_PROMPT = f"""You are a legal concept annotator. Given a c
 
 For each concept found, provide:
 1. **concept_text**: The exact text span as it appears in the document
-2. **branch_hint**: Which FOLIO ontology branch this concept most likely belongs to
+2. **branch_hints**: A list of FOLIO ontology branches (1-3, most likely first) this concept belongs to
 3. **confidence**: Your confidence (0.0-1.0) that this is a legal concept
 
 FOLIO ontology branches:
@@ -21,7 +21,7 @@ Rules:
 - Do NOT identify "area of law" categories (e.g., "litigation", "corporate law", "real estate law") — these are document-level classifications, not text-level concepts
 
 Respond with JSON:
-{{"concepts": [{{"concept_text": "...", "branch_hint": "...", "confidence": 0.95}}]}}
+{{"concepts": [{{"concept_text": "...", "branch_hints": ["...", "..."], "confidence": 0.95}}]}}
 
 TEXT:
 {{text}}"""

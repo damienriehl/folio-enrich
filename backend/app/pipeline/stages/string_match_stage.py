@@ -56,7 +56,7 @@ class StringMatchStage(PipelineStage):
                 folio_iri=match.value.get("folio_iri"),
                 folio_label=match.value.get("folio_label"),
                 folio_definition=match.value.get("folio_definition"),
-                branch=match.value.get("branch"),
+                branches=match.value.get("branches", []),
                 confidence=match.value.get("confidence", 0.0),
                 source=match.value.get("source", "matched"),
                 state="confirmed",

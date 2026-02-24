@@ -67,7 +67,7 @@ class ExcelExporter(ExporterBase):
                     concept.concept_text,
                     concept.folio_iri or "",
                     concept.folio_label or "",
-                    concept.branch or "",
+                    concept.branches[0] if concept.branches else "",
                     branch_color,
                     round(concept.confidence, 4),
                     concept.source,

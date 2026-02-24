@@ -27,7 +27,9 @@ class AreaOfLawAssessor:
         resolved = metadata.get("resolved_concepts", [])
         counter: Counter[str] = Counter()
         for c in resolved:
-            key = f"{c.get('folio_label', c.get('concept_text', ''))} [{c.get('branch', '')}]"
+            branches = c.get('branches', [])
+            branch_str = branches[0] if branches else ''
+            key = f"{c.get('folio_label', c.get('concept_text', ''))} [{branch_str}]"
             counter[key] += 1
 
         top_concepts = counter.most_common(30)

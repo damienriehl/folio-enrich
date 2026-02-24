@@ -6,7 +6,11 @@ from datetime import datetime, timezone
 from app.models.annotation import ConceptMatch
 from app.models.job import Job, JobStatus
 from app.pipeline.stages.base import PipelineStage
-from app.services.folio.branch_config import EXCLUDED_BRANCHES
+from app.services.folio.branch_config import (
+    EXCLUDED_BRANCHES,
+    VIRTUAL_BRANCHES,
+    VIRTUAL_BRANCH_TARGETS,
+)
 from app.services.folio.resolver import ConceptResolver
 
 logger = logging.getLogger(__name__)
@@ -28,7 +32,7 @@ class ResolutionStage(PipelineStage):
             "folio_iri": resolved.folio_concept.iri,
             "folio_label": resolved.folio_concept.preferred_label,
             "folio_definition": resolved.folio_concept.definition,
-            "branch": resolved.branch,
+            "branches": resolved.branches,
             "branch_color": resolved.branch_color,
             "confidence": resolved.confidence,
             "source": resolved.source,
@@ -36,6 +40,24 @@ class ResolutionStage(PipelineStage):
             "hierarchy_path": resolved.hierarchy_path,
             "iri_hash": resolved.iri_hash,
         }
+
+    @staticmethod
+    def _resolve_virtual_branches(resolved_dict: dict, folio_branch: str) -> None:
+        """Replace virtual branches with actual FOLIO branches after resolution."""
+        branches = resolved_dict.get("branches", [])
+        new_branches = []
+        for b in branches:
+            if b in VIRTUAL_BRANCHES:
+                targets = VIRTUAL_BRANCH_TARGETS.get(b, [])
+                if folio_branch and any(folio_branch == t for t in targets):
+                    new_branches.append(folio_branch)
+                elif targets:
+                    new_branches.append(targets[0])
+                else:
+                    new_branches.append(b)
+            else:
+                new_branches.append(b)
+        resolved_dict["branches"] = new_branches
 
     async def execute(self, job: Job) -> Job:
         job.status = JobStatus.RESOLVING
@@ -48,26 +70,30 @@ class ResolutionStage(PipelineStage):
             for concept_data in reconciled:
                 resolved = self.resolver.resolve(
                     concept_text=concept_data.get("concept_text", ""),
-                    branch=concept_data.get("branch", ""),
+                    branches=concept_data.get("branches", []),
                     confidence=concept_data.get("confidence", 0.0),
                     source=concept_data.get("source", "reconciled"),
                     folio_iri=concept_data.get("folio_iri"),
                 )
-                if resolved and resolved.branch not in EXCLUDED_BRANCHES:
-                    resolved_concepts.append(self._to_resolved_dict(resolved))
+                if resolved and not any(b in EXCLUDED_BRANCHES for b in resolved.branches):
+                    rd = self._to_resolved_dict(resolved)
+                    self._resolve_virtual_branches(rd, resolved.folio_concept.branch)
+                    resolved_concepts.append(rd)
         else:
             # No reconciled concepts — resolve from individual sources
             ruler_raw = job.result.metadata.get("ruler_concepts", [])
             for concept_data in ruler_raw:
                 resolved = self.resolver.resolve(
                     concept_text=concept_data.get("concept_text", ""),
-                    branch=concept_data.get("branch", ""),
+                    branches=concept_data.get("branches", []),
                     confidence=concept_data.get("confidence", 1.0),
                     source="entity_ruler",
                     folio_iri=concept_data.get("folio_iri"),
                 )
-                if resolved and resolved.branch not in EXCLUDED_BRANCHES:
-                    resolved_concepts.append(self._to_resolved_dict(resolved))
+                if resolved and not any(b in EXCLUDED_BRANCHES for b in resolved.branches):
+                    rd = self._to_resolved_dict(resolved)
+                    self._resolve_virtual_branches(rd, resolved.folio_concept.branch)
+                    resolved_concepts.append(rd)
 
             # Then LLM concepts
             llm_concepts = job.result.metadata.get("llm_concepts", {})
@@ -80,13 +106,15 @@ class ResolutionStage(PipelineStage):
                     seen_texts.add(ct)
                     resolved = self.resolver.resolve(
                         concept_text=concept_data.get("concept_text", ""),
-                        branch=concept_data.get("branch", ""),
+                        branches=concept_data.get("branches", []),
                         confidence=concept_data.get("confidence", 0.0),
                         source="llm",
                         folio_iri=concept_data.get("folio_iri"),
                     )
-                    if resolved and resolved.branch not in EXCLUDED_BRANCHES:
-                        resolved_concepts.append(self._to_resolved_dict(resolved))
+                    if resolved and not any(b in EXCLUDED_BRANCHES for b in resolved.branches):
+                        rd = self._to_resolved_dict(resolved)
+                        self._resolve_virtual_branches(rd, resolved.folio_concept.branch)
+                        resolved_concepts.append(rd)
 
         job.result.metadata["resolved_concepts"] = resolved_concepts
 

@@ -34,7 +34,7 @@ def _make_job() -> Job:
                             folio_iri="https://folio.openlegalstandard.org/R123",
                             folio_label="Court",
                             folio_definition="A tribunal.",
-                            branch="Legal Entities",
+                            branches=["Legal Entity"],
                             confidence=0.95,
                             source="llm",
                         )

@@ -27,7 +27,7 @@ def _make_test_job() -> Job:
                             folio_iri="https://folio.openlegalstandard.org/R123",
                             folio_label="Court",
                             folio_definition="A tribunal for the administration of justice.",
-                            branch="Legal Entities",
+                            branches=["Legal Entity"],
                             confidence=0.95,
                             source="llm",
                         )
@@ -40,7 +40,7 @@ def _make_test_job() -> Job:
                             concept_text="motion",
                             folio_iri="https://folio.openlegalstandard.org/R456",
                             folio_label="Motion",
-                            branch="Legal Processes",
+                            branches=["Event"],
                             confidence=0.88,
                             source="llm",
                         )

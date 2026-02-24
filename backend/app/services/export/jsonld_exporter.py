@@ -35,7 +35,7 @@ class JSONLDExporter(ExporterBase):
                         "@id": concept.folio_iri or "",
                         "skos:prefLabel": concept.folio_label or concept.concept_text,
                         "skos:definition": concept.folio_definition or "",
-                        "folio:branch": concept.branch or "",
+                        "folio:branch": concept.branches[0] if concept.branches else "",
                     },
                     "oa:motivatedBy": "oa:tagging",
                     "schema:confidence": concept.confidence,

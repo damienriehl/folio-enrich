@@ -19,9 +19,12 @@ Extract these fields (leave empty string if not found):
 - jurisdiction: Jurisdiction
 - governing_law: Governing law clause
 - claim_types: Types of claims
+- author: The author's name
+- recipient: The recipient's name
+- addresses: Addresses of each person
 
 Respond with JSON:
-{{"court": "", "judge": "", "case_number": "", "parties": [], "date_filed": "", "jurisdiction": "", "governing_law": "", "claim_types": []}}
+{{"court": "", "judge": "", "case_number": "", "parties": [], "date_filed": "", "jurisdiction": "", "governing_law": "", "claim_types": [], "author": "", "recipient": "", "addresses": []}}
 
 DOCUMENT TEXT:
 {text}"""
@@ -49,6 +52,9 @@ class MetadataExtractor:
                         "jurisdiction": {"type": "string"},
                         "governing_law": {"type": "string"},
                         "claim_types": {"type": "array", "items": {"type": "string"}},
+                        "author": {"type": "string"},
+                        "recipient": {"type": "string"},
+                        "addresses": {"type": "array", "items": {"type": "string"}},
                     },
                 },
             )

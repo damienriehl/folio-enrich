@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Span(BaseModel):
@@ -16,7 +16,7 @@ class ConceptMatch(BaseModel):
     folio_iri: str | None = None
     folio_label: str | None = None
     folio_definition: str | None = None
-    branch: str | None = None
+    branches: list[str] = Field(default_factory=list)
     branch_color: str | None = None
     confidence: float = 0.0
     source: str = "llm"  # "llm", "entity_ruler", "semantic_ruler", "reconciled"
@@ -26,6 +26,14 @@ class ConceptMatch(BaseModel):
     iri_hash: str | None = None
     children_count: int | None = None
     translations: dict[str, str] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_branch(cls, data):
+        if isinstance(data, dict) and "branch" in data and "branches" not in data:
+            b = data.pop("branch")
+            data["branches"] = [b] if b else []
+        return data
 
 
 class Annotation(BaseModel):

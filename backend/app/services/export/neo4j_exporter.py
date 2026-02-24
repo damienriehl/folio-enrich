@@ -46,7 +46,7 @@ class Neo4jExporter(ExporterBase):
                         iri,
                         concept.folio_label or concept.concept_text,
                         concept.folio_iri or "",
-                        concept.branch or "",
+                        concept.branches[0] if concept.branches else "",
                         "Concept",
                     ])
                 # Relationship

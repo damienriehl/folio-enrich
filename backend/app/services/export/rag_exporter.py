@@ -31,7 +31,8 @@ class RAGExporter(ExporterBase):
                             {
                                 "folio_iri": c.folio_iri,
                                 "folio_label": c.folio_label,
-                                "branch": c.branch,
+                                "branch": c.branches[0] if c.branches else "",
+                                "branches": c.branches,
                                 "confidence": c.confidence,
                             }
                             for c in ann.concepts

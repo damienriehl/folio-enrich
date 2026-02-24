@@ -13,13 +13,14 @@ BRANCH_CONFIG: dict[str, dict[str, str]] = {
     "CURRENCY": {"name": "Currency", "color": "#7a5a00"},
     "DATA_FORMAT": {"name": "Data Format", "color": "#4a5568"},
     "DOCUMENT_ARTIFACT": {"name": "Document / Artifact", "color": "#9c4a10"},
-    "ENGAGEMENT_TERMS": {"name": "Engagement Attributes", "color": "#10613a"},
+    "DOCUMENT_METADATA": {"name": "Document Metadata", "color": "#8b5e3c"},
+    "ENGAGEMENT_TERMS": {"name": "Engagement Terms", "color": "#10613a"},
     "EVENT": {"name": "Event", "color": "#b91c1c"},
     "FINANCIAL_CONCEPTS": {"name": "Financial Concepts and Metrics", "color": "#6e4b00"},
     "FOLIO_TYPE": {"name": "FOLIO Type", "color": "#6b5c00"},
     "FORUMS_VENUES": {"name": "Forums and Venues", "color": "#7b2d8e"},
     "GOVERNMENTAL_BODY": {"name": "Governmental Body", "color": "#1a6091"},
-    "INDUSTRY": {"name": "Industry and Market", "color": "#065550"},
+    "INDUSTRY": {"name": "Industry", "color": "#065550"},
     "LANGUAGE": {"name": "Language", "color": "#7a3b10"},
     "LEGAL_AUTHORITIES": {"name": "Legal Authorities", "color": "#8b1a1a"},
     "LEGAL_ENTITY": {"name": "Legal Entity", "color": "#085e40"},
@@ -36,9 +37,16 @@ BRANCH_CONFIG: dict[str, dict[str, str]] = {
 
 EXCLUDED_BRANCHES: frozenset[str] = frozenset({
     "Standards Compatibility",
+    "FOLIO Type",
     "ZZZ - SANDBOX: UNDER CONSTRUCTION",
     "Area of Law",
 })
+
+VIRTUAL_BRANCHES: frozenset[str] = frozenset({"Document Metadata"})
+
+VIRTUAL_BRANCH_TARGETS: dict[str, list[str]] = {
+    "Document Metadata": ["Actor / Player", "Document / Artifact"],
+}
 
 # Lookup by display name -> branch key
 _NAME_TO_KEY = {v["name"]: k for k, v in BRANCH_CONFIG.items()}
@@ -56,3 +64,11 @@ def get_branch_display_name(key: str) -> str:
     """Get the display name for a branch key (e.g. ACTOR_PLAYER -> 'Actor / Player')."""
     cfg = BRANCH_CONFIG.get(key)
     return cfg["name"] if cfg else key
+
+
+def get_llm_branch_names() -> list[str]:
+    """Branch names visible to LLM prompts (excludes EXCLUDED_BRANCHES)."""
+    return sorted(
+        cfg["name"] for cfg in BRANCH_CONFIG.values()
+        if cfg["name"] not in EXCLUDED_BRANCHES
+    )

@@ -240,7 +240,7 @@ class TestStringMatchMerge:
                 "folio_iri": "https://lmss.sali.org/R1234",
                 "folio_label": "Breach of Contract",
                 "folio_definition": "A violation of a contractual obligation.",
-                "branch": "Area of Law",
+                "branches": ["Objectives"],
                 "confidence": 0.95,
                 "source": "reconciled",
             }
@@ -280,7 +280,7 @@ class TestStringMatchMerge:
                 "concept_text": "contract",
                 "folio_iri": "https://lmss.sali.org/R5678",
                 "folio_label": "Contract",
-                "branch": "Document / Artifact",
+                "branches": ["Document / Artifact"],
                 "confidence": 0.8,
                 "source": "reconciled",
             }

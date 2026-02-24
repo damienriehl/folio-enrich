@@ -15,7 +15,7 @@ class FakeFolioService(FolioService):
                 preferred_label="Breach of Contract",
                 alternative_labels=["contract breach"],
                 definition="Failure to perform contractual obligations",
-                branch="Legal Concepts",
+                branch="Objectives",
                 parent_iris=[],
             ),
             "damages": FOLIOConcept(
@@ -23,7 +23,7 @@ class FakeFolioService(FolioService):
                 preferred_label="Damages",
                 alternative_labels=["monetary damages"],
                 definition="Monetary compensation for loss or injury",
-                branch="Legal Concepts",
+                branch="Objectives",
                 parent_iris=[],
             ),
             "court": FOLIOConcept(
@@ -31,7 +31,7 @@ class FakeFolioService(FolioService):
                 preferred_label="Court",
                 alternative_labels=["tribunal"],
                 definition="A tribunal for the administration of justice",
-                branch="Legal Entities",
+                branch="Legal Entity",
                 parent_iris=[],
             ),
         }
@@ -58,14 +58,14 @@ class FakeFolioService(FolioService):
 class TestConceptResolver:
     def test_resolve_known_concept(self):
         resolver = ConceptResolver(FakeFolioService())
-        result = resolver.resolve("breach of contract", "Legal Concepts", 0.9)
+        result = resolver.resolve("breach of contract", branches=["Objectives"], confidence=0.9)
         assert result is not None
         assert result.folio_concept.iri == "https://folio.openlegalstandard.org/R001"
         assert result.folio_concept.preferred_label == "Breach of Contract"
 
     def test_resolve_unknown_concept(self):
         resolver = ConceptResolver(FakeFolioService())
-        result = resolver.resolve("quantum computing", "Technology")
+        result = resolver.resolve("quantum computing", branches=["Service"])
         assert result is None
 
     def test_resolve_caches_results(self):
@@ -78,9 +78,9 @@ class TestConceptResolver:
     def test_resolve_batch(self):
         resolver = ConceptResolver(FakeFolioService())
         results = resolver.resolve_batch([
-            {"concept_text": "breach of contract", "branch": "Legal Concepts", "confidence": 0.9},
-            {"concept_text": "damages", "branch": "", "confidence": 0.8},
-            {"concept_text": "unknown concept xyz", "branch": "", "confidence": 0.5},
+            {"concept_text": "breach of contract", "branches": ["Objectives"], "confidence": 0.9},
+            {"concept_text": "damages", "branches": [], "confidence": 0.8},
+            {"concept_text": "unknown concept xyz", "branches": [], "confidence": 0.5},
         ])
         assert len(results) == 3
         assert results[0] is not None

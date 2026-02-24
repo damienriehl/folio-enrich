@@ -5,7 +5,7 @@ from app.services.entity_ruler.ruler import FOLIOEntityRuler
 from app.services.folio.folio_service import FOLIOConcept, LabelInfo
 
 
-def _make_concept(iri, label, branch="Legal Concepts"):
+def _make_concept(iri, label, branch="Objectives"):
     return FOLIOConcept(
         iri=iri, preferred_label=label,
         alternative_labels=[], definition="", branch=branch, parent_iris=[],
@@ -23,11 +23,11 @@ def _make_labels() -> dict[str, LabelInfo]:
             label_type="preferred", matched_label="Damages",
         ),
         "motion to dismiss": LabelInfo(
-            concept=_make_concept("iri3", "Motion to Dismiss", "Legal Processes"),
+            concept=_make_concept("iri3", "Motion to Dismiss", "Event"),
             label_type="preferred", matched_label="Motion to Dismiss",
         ),
         "court": LabelInfo(
-            concept=_make_concept("iri4", "Court", "Legal Entities"),
+            concept=_make_concept("iri4", "Court", "Legal Entity"),
             label_type="preferred", matched_label="Court",
         ),
     }

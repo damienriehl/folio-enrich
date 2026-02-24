@@ -32,7 +32,10 @@ class LLMConceptIdentifier:
                                 "type": "object",
                                 "properties": {
                                     "concept_text": {"type": "string"},
-                                    "branch_hint": {"type": "string"},
+                                    "branch_hints": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                    },
                                     "confidence": {"type": "number"},
                                 },
                             },
@@ -49,7 +52,7 @@ class LLMConceptIdentifier:
             concepts.append(
                 ConceptMatch(
                     concept_text=item.get("concept_text", ""),
-                    branch=item.get("branch_hint"),
+                    branches=item.get("branch_hints", []),
                     confidence=item.get("confidence", 0.0),
                     source="llm",
                 )

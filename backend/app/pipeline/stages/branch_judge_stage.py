@@ -21,7 +21,7 @@ class BranchJudgeStage(PipelineStage):
 
         # Find concepts that need branch disambiguation
         resolved = job.result.metadata.get("resolved_concepts", [])
-        ambiguous = [c for c in resolved if not c.get("branch")]
+        ambiguous = [c for c in resolved if not c.get("branches")]
 
         if not ambiguous or job.result.canonical_text is None:
             return job
@@ -57,7 +57,7 @@ class BranchJudgeStage(PipelineStage):
             for concept, result in zip(ambiguous, results):
                 if isinstance(result, dict):
                     branch = result.get("branch", "")
-                    concept["branch"] = branch
+                    concept["branches"] = [branch] if branch else []
                     concept["confidence"] = max(
                         concept.get("confidence", 0),
                         result.get("confidence", 0),

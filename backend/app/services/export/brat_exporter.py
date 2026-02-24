@@ -22,8 +22,8 @@ class BratExporter(ExporterBase):
 
         for ann in job.result.annotations:
             label = "FOLIO_CONCEPT"
-            if ann.concepts and ann.concepts[0].branch:
-                label = ann.concepts[0].branch.replace(" ", "_")
+            if ann.concepts and ann.concepts[0].branches:
+                label = ann.concepts[0].branches[0].replace(" ", "_")
 
             # T line: entity annotation
             lines.append(f"T{t_idx}\t{label} {ann.span.start} {ann.span.end}\t{ann.span.text}")

@@ -45,6 +45,9 @@ class FakeExtractorLLM(LLMProvider):
             "jurisdiction": "Federal",
             "governing_law": "",
             "claim_types": ["Breach of Contract"],
+            "author": "John Doe",
+            "recipient": "Jane Smith",
+            "addresses": ["123 Main St, New York, NY 10001"],
         }
 
     async def test_connection(self) -> bool:
@@ -71,6 +74,9 @@ class TestMetadataExtractor:
         assert result["court"] == "Southern District of New York"
         assert result["judge"] == "Judge Smith"
         assert len(result["parties"]) == 2
+        assert result["author"] == "John Doe"
+        assert result["recipient"] == "Jane Smith"
+        assert result["addresses"] == ["123 Main St, New York, NY 10001"]
 
 
 class TestMetadataPromoter:

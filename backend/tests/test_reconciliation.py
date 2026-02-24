@@ -4,8 +4,8 @@ from app.models.annotation import ConceptMatch
 from app.services.reconciliation.reconciler import Reconciler
 
 
-def _concept(text: str, source: str = "llm", confidence: float = 0.9, branch: str = "") -> ConceptMatch:
-    return ConceptMatch(concept_text=text, source=source, confidence=confidence, branch=branch)
+def _concept(text: str, source: str = "llm", confidence: float = 0.9, branches: list[str] | None = None) -> ConceptMatch:
+    return ConceptMatch(concept_text=text, source=source, confidence=confidence, branches=branches or [])
 
 
 class TestReconciler:

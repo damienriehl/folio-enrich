@@ -30,7 +30,7 @@ class ParquetExporter(ExporterBase):
                     "concept_text": concept.concept_text,
                     "folio_iri": concept.folio_iri or "",
                     "folio_label": concept.folio_label or "",
-                    "branch": concept.branch or "",
+                    "branch": concept.branches[0] if concept.branches else "",
                     "confidence": concept.confidence,
                     "source": concept.source,
                     "document_type": job.result.metadata.get("document_type", ""),
@@ -39,7 +39,7 @@ class ParquetExporter(ExporterBase):
         if not rows:
             rows = [{"job_id": str(job.id), "span_start": 0, "span_end": 0,
                      "span_text": "", "concept_text": "", "folio_iri": "",
-                     "folio_label": "", "branch": "", "confidence": 0.0,
+                     "folio_label": "", "branch": "", "confidence": 0.0,  # noqa: E501
                      "source": "", "document_type": ""}]
 
         table = pa.Table.from_pylist(rows)

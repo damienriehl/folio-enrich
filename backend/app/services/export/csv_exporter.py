@@ -39,7 +39,7 @@ class CSVExporter(ExporterBase):
                     concept.concept_text,
                     concept.folio_iri or "",
                     concept.folio_label or "",
-                    concept.branch or "",
+                    concept.branches[0] if concept.branches else "",
                     concept.branch_color or "",
                     f"{concept.confidence:.4f}",
                     concept.source,

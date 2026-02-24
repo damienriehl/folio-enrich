@@ -5,16 +5,19 @@ import re
 from app.services.folio.branch_config import (
     BRANCH_CONFIG,
     EXCLUDED_BRANCHES,
+    VIRTUAL_BRANCHES,
+    VIRTUAL_BRANCH_TARGETS,
     get_branch_color,
     get_branch_display_name,
+    get_llm_branch_names,
 )
 
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 class TestBranchConfig:
-    def test_has_26_branches(self):
-        assert len(BRANCH_CONFIG) == 26
+    def test_has_27_branches(self):
+        assert len(BRANCH_CONFIG) == 27
 
     def test_all_branches_have_valid_hex_colors(self):
         for key, cfg in BRANCH_CONFIG.items():
@@ -33,6 +36,13 @@ class TestBranchConfig:
         # "Standards Compatibility" should be in config but excluded
         assert "Standards Compatibility" in all_names
         assert "Standards Compatibility" in EXCLUDED_BRANCHES
+
+    def test_excluded_branches_has_4_entries(self):
+        assert len(EXCLUDED_BRANCHES) == 4
+        assert "Standards Compatibility" in EXCLUDED_BRANCHES
+        assert "FOLIO Type" in EXCLUDED_BRANCHES
+        assert "ZZZ - SANDBOX: UNDER CONSTRUCTION" in EXCLUDED_BRANCHES
+        assert "Area of Law" in EXCLUDED_BRANCHES
 
     def test_get_branch_color_known(self):
         color = get_branch_color("Area of Law")
@@ -59,3 +69,26 @@ class TestBranchConfig:
 
     def test_excluded_branches_are_frozenset(self):
         assert isinstance(EXCLUDED_BRANCHES, frozenset)
+
+    def test_owl_names_correct(self):
+        """Engagement Terms and Industry should match OWL names."""
+        assert BRANCH_CONFIG["ENGAGEMENT_TERMS"]["name"] == "Engagement Terms"
+        assert BRANCH_CONFIG["INDUSTRY"]["name"] == "Industry"
+
+    def test_document_metadata_exists(self):
+        assert "DOCUMENT_METADATA" in BRANCH_CONFIG
+        assert BRANCH_CONFIG["DOCUMENT_METADATA"]["name"] == "Document Metadata"
+
+    def test_virtual_branches(self):
+        assert "Document Metadata" in VIRTUAL_BRANCHES
+        assert "Document Metadata" in VIRTUAL_BRANCH_TARGETS
+        assert VIRTUAL_BRANCH_TARGETS["Document Metadata"] == ["Actor / Player", "Document / Artifact"]
+
+    def test_get_llm_branch_names(self):
+        names = get_llm_branch_names()
+        assert isinstance(names, list)
+        assert names == sorted(names)  # sorted
+        for excluded in EXCLUDED_BRANCHES:
+            assert excluded not in names
+        assert "Actor / Player" in names
+        assert "Document Metadata" in names

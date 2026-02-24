@@ -16,7 +16,7 @@ class FakeBranchLLM(LLMProvider):
         return ""
 
     async def structured(self, prompt: str, schema: dict, **kwargs: Any) -> dict:
-        return {"branch": "Legal Processes", "confidence": 0.92, "reasoning": "test"}
+        return {"branch": "Event", "confidence": 0.92, "reasoning": "test"}
 
     async def test_connection(self) -> bool:
         return True
@@ -32,9 +32,9 @@ class TestBranchJudge:
         result = await judge.judge(
             "motion to dismiss",
             "The defendant filed a motion to dismiss.",
-            ["Legal Processes", "Legal Concepts"],
+            ["Event", "Objectives"],
         )
-        assert result["branch"] == "Legal Processes"
+        assert result["branch"] == "Event"
         assert result["confidence"] == 0.92
 
     @pytest.mark.asyncio
@@ -44,13 +44,13 @@ class TestBranchJudge:
             {
                 "concept_text": "motion",
                 "sentence": "The motion was filed.",
-                "candidate_branches": ["Legal Processes"],
+                "candidate_branches": ["Event"],
             },
             {
                 "concept_text": "court",
                 "sentence": "The court ruled.",
-                "candidate_branches": ["Legal Entities"],
+                "candidate_branches": ["Legal Entity"],
             },
         ])
         assert len(results) == 2
-        assert all(r["branch"] == "Legal Processes" for r in results)
+        assert all(r["branch"] == "Event" for r in results)

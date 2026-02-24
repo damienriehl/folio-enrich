@@ -38,7 +38,7 @@ class ReconciliationStage(PipelineStage):
         reconciled = [
             {
                 "concept_text": r.concept.concept_text,
-                "branch": r.concept.branch or "",
+                "branches": r.concept.branches,
                 "confidence": r.concept.confidence,
                 "source": r.concept.source,
                 "folio_iri": r.concept.folio_iri,

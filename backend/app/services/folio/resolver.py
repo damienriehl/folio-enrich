@@ -13,7 +13,7 @@ class ResolvedConcept:
     concept_text: str
     folio_concept: FOLIOConcept
     confidence: float
-    branch: str
+    branches: list[str]
     source: str
     branch_color: str = ""
     hierarchy_path: list[str] = field(default_factory=list)
@@ -30,7 +30,7 @@ class ConceptResolver:
     def resolve(
         self,
         concept_text: str,
-        branch: str = "",
+        branches: list[str] | None = None,
         confidence: float = 0.0,
         source: str = "llm",
         folio_iri: str | None = None,
@@ -40,6 +40,7 @@ class ConceptResolver:
         If folio_iri is provided, look up the concept directly by IRI (fast path).
         Otherwise, search by label text (slow path with potential mismatches).
         """
+        branch = branches[0] if branches else ""
         cache_key = (concept_text.lower(), branch.lower())
         if cache_key in self._cache:
             return self._cache[cache_key]
@@ -73,11 +74,13 @@ class ConceptResolver:
         except Exception:
             pass
 
+        resolved_branches = [best_concept.branch] if best_concept.branch else (branches or [])
+
         resolved = ResolvedConcept(
             concept_text=concept_text,
             folio_concept=best_concept,
             confidence=max(confidence, score),
-            branch=best_concept.branch or branch,
+            branches=resolved_branches,
             source=source,
             branch_color=branch_color,
             hierarchy_path=hierarchy_path,
@@ -146,10 +149,10 @@ class ConceptResolver:
         return [
             self.resolve(
                 c.get("concept_text", ""),
-                c.get("branch", ""),
-                c.get("confidence", 0.0),
-                c.get("source", "llm"),
-                c.get("folio_iri"),
+                branches=c.get("branches", []),
+                confidence=c.get("confidence", 0.0),
+                source=c.get("source", "llm"),
+                folio_iri=c.get("folio_iri"),
             )
             for c in concepts
         ]

@@ -13,8 +13,8 @@ class FakeLLMProvider(LLMProvider):
     """Returns pre-configured concept identification results."""
 
     _DEFAULTS = [
-        {"concept_text": "breach of contract", "branch_hint": "Legal Concepts", "confidence": 0.95},
-        {"concept_text": "damages", "branch_hint": "Legal Concepts", "confidence": 0.88},
+        {"concept_text": "breach of contract", "branch_hints": ["Objectives"], "confidence": 0.95},
+        {"concept_text": "damages", "branch_hints": ["Objectives"], "confidence": 0.88},
     ]
 
     def __init__(self, concepts: list[dict] | None = None):
@@ -63,7 +63,7 @@ class TestLLMConceptIdentifier:
         concepts = await identifier.identify_concepts(chunk)
         assert len(concepts) == 2
         assert concepts[0].concept_text == "breach of contract"
-        assert concepts[0].branch == "Legal Concepts"
+        assert concepts[0].branches == ["Objectives"]
         assert concepts[0].confidence == 0.95
         assert concepts[0].source == "llm"
 
