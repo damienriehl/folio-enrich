@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FOLIO Enrich</title>
+<script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+<script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
 <style>
   :root {
     --bg: #0f1117;
@@ -162,10 +165,13 @@
   /* Main layout */
   main {
     display: grid;
-    grid-template-columns: minmax(350px, 1fr) minmax(400px, 1.5fr);
+    grid-template-columns: minmax(300px, 0.8fr) minmax(350px, 1.2fr) minmax(280px, 1fr);
     gap: 0;
     height: calc(100vh - 48px);
   }
+
+  main.detail-hidden { grid-template-columns: minmax(350px, 1fr) minmax(400px, 1.5fr); }
+  main.detail-hidden .panel-detail { display: none; }
 
   .panel {
     display: flex;
@@ -227,6 +233,206 @@
 
   /* Right-panel p style overrides (inline styles from JS) */
   .panel-right .panel-body p[style] { color: #6b6b80 !important; }
+
+  /* Detail panel: light-mode like panel-right */
+  .panel-detail {
+    --bg: #ffffff;
+    --surface: #f5f6f8;
+    --surface2: #ecedf1;
+    --surface3: #e2e4ea;
+    --border: #d0d2da;
+    --text: #1a1a2e;
+    --text-dim: #6b6b80;
+    --accent: #3b64e0;
+    --accent-dim: #5a7ae8;
+    --green: #16a34a;
+    --orange: #d97706;
+    --red: #dc2626;
+    --cyan: #0891b2;
+    --purple: #7c3aed;
+    --highlight: rgba(59,100,224,0.10);
+    background: var(--bg);
+    color: var(--text);
+    border-left: 1px solid var(--border);
+  }
+  .panel-detail .panel-body { background: var(--bg); color: var(--text); }
+  .panel-detail .panel-body::-webkit-scrollbar-thumb { background: #c0c0cc; }
+  .panel-detail .panel-body::-webkit-scrollbar-thumb:hover { background: #9090a0; }
+  .panel-detail .panel-header { background: var(--surface); border-bottom: 1px solid var(--border); }
+
+  .detail-section { margin-bottom: 16px; }
+  .detail-section-title {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.6px; color: #6b6b80; margin-bottom: 8px;
+    padding-bottom: 4px; border-bottom: 1px solid #e2e4ea;
+  }
+
+  /* Ancestry tree — modeled on folio-mapper SelectionTree */
+  .ancestry-tree { font-size: 13px; line-height: 1; }
+
+  /* Branch header row */
+  .ancestry-branch-header {
+    display: flex; align-items: center; gap: 6px;
+    border-left: 4px solid; border-radius: 6px;
+    padding: 6px 10px; margin-bottom: 2px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .ancestry-branch-header .ancestry-toggle {
+    flex-shrink: 0; background: none; border: none; padding: 0;
+    cursor: pointer; font-size: 10px; line-height: 1; opacity: 0.6;
+    font-family: inherit;
+  }
+  .ancestry-branch-header .ancestry-toggle:hover { opacity: 1; }
+  .ancestry-branch-count {
+    font-weight: 400; opacity: 0.6; margin-left: 2px;
+  }
+
+  /* Tree children area */
+  .ancestry-children {
+    margin-left: 16px; border-left: 1px solid #e8e9f0; padding-left: 4px;
+  }
+
+  /* Individual node row */
+  .ancestry-node {
+    display: flex; align-items: center; gap: 5px;
+    padding: 4px 6px; border-radius: 4px; color: #1a1a2e;
+    transition: background 0.12s; font-size: 13px;
+  }
+  .ancestry-node.clickable { cursor: pointer; }
+  .ancestry-node.clickable:hover { background: #f0f0f5; }
+  .ancestry-node.current { font-weight: 600; }
+
+  .ancestry-node .ancestry-toggle {
+    flex-shrink: 0; background: none; border: none; padding: 0;
+    cursor: pointer; font-size: 10px; color: #9090a0; line-height: 1;
+    width: 14px; text-align: center; font-family: inherit;
+  }
+  .ancestry-node .ancestry-toggle:hover { color: #3b64e0; }
+  /* Spacer when no toggle present (leaf nodes) */
+  .ancestry-toggle-spacer { width: 14px; flex-shrink: 0; }
+
+  .ancestry-bullet-char { flex-shrink: 0; font-size: 10px; line-height: 1; }
+
+  .ancestry-conf-badge {
+    display: inline-block; font-size: 11px; font-weight: 600;
+    padding: 1px 8px; border-radius: 10px; margin-left: auto; flex-shrink: 0;
+  }
+
+  /* Detail info */
+  .detail-name-row {
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+  .detail-name { font-size: 16px; font-weight: 700; color: #1a1a2e; }
+  .detail-iri {
+    font-size: 11px; color: #6b6b80; word-break: break-all;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .detail-iri a { color: #3b64e0; text-decoration: none; }
+  .detail-iri a:hover { text-decoration: underline; }
+  .detail-iri-copy {
+    background: #ecedf1; border: 1px solid #d0d2da; border-radius: 4px;
+    padding: 1px 6px; font-size: 10px; cursor: pointer; color: #6b6b80;
+    transition: all 0.15s;
+  }
+  .detail-iri-copy:hover { background: #d0d2da; color: #1a1a2e; }
+  .detail-definition { font-size: 13px; color: #1a1a2e; line-height: 1.5; margin-bottom: 8px; }
+  .detail-synonyms { font-size: 12px; color: #555; margin-bottom: 8px; line-height: 1.4; }
+  .detail-synonyms strong { color: #333; }
+  .detail-translations { font-size: 12px; color: #555; margin-bottom: 8px; }
+  .detail-examples { font-size: 12px; color: #555; margin-bottom: 8px; }
+  .detail-examples li { margin-bottom: 2px; }
+
+  /* DAG */
+  .dag-container { position: relative; overflow-x: auto; padding: 8px 0; }
+  .dag-svg { display: block; }
+  .dag-pill {
+    cursor: pointer; transition: opacity 0.15s;
+  }
+  .dag-pill:hover { opacity: 0.8; }
+  .dag-label { font-size: 11px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+  .dag-edge { fill: none; stroke: #b0b0c0; stroke-width: 1.5; }
+
+  /* Concept pills */
+  .concept-pill-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .concept-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 500;
+    cursor: pointer; border: 1px solid #d0d2da; background: #f5f6f8;
+    color: #1a1a2e; transition: all 0.15s;
+  }
+  .concept-pill:hover { border-color: #3b64e0; background: rgba(59,100,224,0.08); color: #3b64e0; }
+  .concept-pill-dot {
+    width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  }
+  .concept-pill-more {
+    font-size: 11px; color: #6b6b80; cursor: pointer; padding: 3px 8px;
+  }
+  .concept-pill-more:hover { color: #3b64e0; }
+
+  /* Notes textarea */
+  .detail-notes-textarea {
+    width: 100%; min-height: 60px; max-height: 120px;
+    background: #f5f6f8; color: #1a1a2e; border: 1px solid #d0d2da;
+    border-radius: 8px; padding: 8px 10px; font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    resize: vertical; line-height: 1.4;
+  }
+  .detail-notes-textarea:focus { outline: none; border-color: #3b64e0; }
+  .detail-notes-label { font-size: 10px; color: #6b6b80; margin-bottom: 4px; }
+
+  /* Graph button */
+  .detail-graph-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 10px; border-radius: 8px;
+    background: #3b64e0; color: #fff; border: none;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .detail-graph-btn:hover { background: #2b4fbf; }
+
+  /* Graph modal */
+  .graph-modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 3000; display: none; flex-direction: column;
+  }
+  .graph-modal-overlay.visible { display: flex; }
+  .graph-modal-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 20px; background: #1a1d27; color: #e4e6f0;
+    border-bottom: 1px solid #2e3348; flex-shrink: 0;
+  }
+  .graph-modal-header h3 { font-size: 14px; font-weight: 600; flex: 1; margin: 0; }
+  .graph-modal-header .graph-stats { font-size: 11px; color: #8b8fa3; }
+  .graph-modal-header button {
+    background: #242836; color: #e4e6f0; border: 1px solid #2e3348;
+    border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer;
+  }
+  .graph-modal-header button:hover { border-color: #6c8cff; color: #fff; }
+  #cytoscapeContainer { flex: 1; background: #0f1117; }
+  .graph-modal-legend {
+    display: flex; gap: 16px; padding: 8px 20px;
+    background: #1a1d27; border-top: 1px solid #2e3348;
+    font-size: 11px; color: #8b8fa3; flex-shrink: 0;
+  }
+  .graph-legend-item { display: flex; align-items: center; gap: 6px; }
+  .graph-legend-line {
+    width: 20px; height: 2px; display: inline-block;
+  }
+
+  /* Detail panel empty / loading states */
+  .detail-empty { color: #6b6b80; font-size: 13px; text-align: center; padding: 40px 16px; }
+  .detail-loading { color: #6b6b80; font-size: 13px; text-align: center; padding: 40px 16px; }
+
+  /* Header detail toggle button */
+  .header-btn.detail-toggle { position: relative; }
+  .header-btn.detail-toggle .badge-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #3b64e0; display: none;
+    position: absolute; top: 2px; right: 2px;
+  }
+  .header-btn.detail-toggle.has-content .badge-dot { display: block; }
 
   /* Forms and inputs */
   .form-group {
@@ -451,24 +657,33 @@
   .concept-tooltip {
     position: fixed;
     background: #ffffff;
-    border: 1px solid #d0d0da;
-    border-radius: 10px;
-    padding: 16px;
-    max-width: 400px;
-    min-width: 250px;
-    max-height: calc(100vh - 40px);
-    overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    border: 1px solid #c0c2cc;
+    border-radius: 8px;
+    padding: 7px 10px 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.10);
     z-index: 1000;
     display: none;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     color: #1a1a2e;
+    white-space: nowrap;
   }
 
   .concept-tooltip.visible { display: block; }
 
-  .tooltip-label { font-size: 15px; font-weight: 600; color: #3b64e0; margin-bottom: 2px; }
-  .tooltip-branch { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding: 2px 6px; border-radius: 3px; display: inline-block; }
+  .tooltip-branch {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px;
+    line-height: 1; margin-bottom: 2px;
+  }
+  .tooltip-main-row {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tooltip-label { font-size: 14px; font-weight: 600; color: #1a1a2e; margin-bottom: 2px; }
+  .tooltip-conf-num {
+    font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  }
+  .tooltip-conf-num.conf-high { color: #166534; }
+  .tooltip-conf-num.conf-mid { color: #92400e; }
+  .tooltip-conf-num.conf-low { color: #991b1b; }
   .tooltip-definition { font-size: 13px; color: #1a1a2e; line-height: 1.5; margin-bottom: 8px; }
   .tooltip-synonyms { font-size: 12px; color: #555; margin-bottom: 8px; line-height: 1.4; }
   .tooltip-synonyms strong { color: #333; }
@@ -476,22 +691,20 @@
   .tooltip-iri a { color: #3b64e0; text-decoration: none; font-size: 11px; word-break: break-all; }
   .tooltip-iri a:hover { text-decoration: underline; }
 
-  /* Feedback UI in tooltip — scoped to .concept-tooltip to override global dark styles */
+  /* Feedback UI in tooltip — compact inline thumbs */
   .concept-tooltip .tooltip-feedback {
-    margin-top: 12px; padding: 10px 12px; border-top: none;
-    background: #f7f8fb; border-radius: 8px;
+    margin: 0; padding: 0; border: none; background: none;
   }
-  .concept-tooltip .tooltip-feedback-row { display: flex; align-items: center; gap: 6px; }
+  .concept-tooltip .tooltip-feedback-row { display: flex; align-items: center; gap: 2px; }
   .concept-tooltip .tooltip-feedback-btn {
-    background: #ffffff; border: 1px solid #e2e3ea; border-radius: 20px; padding: 5px 14px;
-    cursor: pointer; font-size: 15px; display: inline-flex; align-items: center; justify-content: center;
-    color: #9090a0; transition: all 0.2s ease; line-height: 1;
+    background: none; border: 1px solid transparent; border-radius: 4px; padding: 2px 5px;
+    cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; justify-content: center;
+    color: #b0b0c0; transition: all 0.15s ease; line-height: 1;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06); min-height: auto;
+    min-height: auto;
   }
   .concept-tooltip .tooltip-feedback-btn:hover {
-    border-color: #c0c0d0; background: #fff;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1); transform: translateY(-1px);
+    border-color: #d0d2da; background: #f5f6f8; color: #6b6b80;
   }
   .concept-tooltip .tooltip-feedback-btn.active-up,
   .concept-tooltip .tooltip-feedback-btn.active-up:hover {
@@ -1265,10 +1478,11 @@
       <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
       <span>Show Uncertain</span>
     </label>
+    <button class="header-btn detail-toggle" id="detailToggleBtn" onclick="toggleDetailPanel()" title="Toggle concept detail panel">Detail</button>
   </div>
 </header>
 
-<main>
+<main class="detail-hidden" id="mainLayout">
   <!-- Left panel: Input -->
   <div class="panel panel-left">
     <div class="panel-header">
@@ -1409,6 +1623,29 @@
       </div>
     </div>
   </div>
+
+  <!-- Detail panel: Concept details -->
+  <div class="panel panel-detail" id="panelDetail">
+    <div class="panel-header">
+      <h2>Concept Detail</h2>
+      <button class="small secondary" onclick="closeDetailPanel()" title="Close detail panel" style="padding:2px 8px;font-size:14px;line-height:1">&times;</button>
+    </div>
+    <div class="panel-body" id="detailBody">
+      <div id="detailEmpty" class="detail-empty">Click an annotation to view concept details</div>
+      <div id="detailLoading" class="detail-loading" style="display:none"><span class="spinner"></span> Loading concept...</div>
+      <div id="detailContent" style="display:none">
+        <div id="detailAncestry" class="detail-section"></div>
+        <div id="detailInfo" class="detail-section"></div>
+        <div id="detailAlternatives" class="detail-section"></div>
+        <div id="detailLineage" class="detail-section"></div>
+        <div id="detailDag" class="detail-section"></div>
+        <div id="detailSiblings" class="detail-section"></div>
+        <div id="detailRelated" class="detail-section"></div>
+        <div id="detailNotes" class="detail-section"></div>
+        <div id="detailGraphBtn" class="detail-section"></div>
+      </div>
+    </div>
+  </div>
 </main>
 
 <!-- Tooltip -->
@@ -1461,6 +1698,24 @@
       <button class="secondary" onclick="closeSynthetic()">Cancel</button>
       <button class="primary" id="generateBtn" onclick="generateSynthetic()">Generate &amp; Annotate</button>
     </div>
+  </div>
+</div>
+
+<!-- Entity Graph Modal -->
+<div class="graph-modal-overlay" id="graphModal">
+  <div class="graph-modal-header">
+    <h3 id="graphModalTitle">Entity Graph</h3>
+    <span class="graph-stats" id="graphStats"></span>
+    <button onclick="fitGraph()">Fit</button>
+    <button onclick="toggleGraphDirection()" id="graphDirBtn">Toggle H/V</button>
+    <button onclick="closeGraphModal()">&times; Close</button>
+  </div>
+  <div id="cytoscapeContainer"></div>
+  <div class="graph-modal-legend">
+    <div class="graph-legend-item"><span class="graph-legend-line" style="background:#3b64e0"></span> subClassOf</div>
+    <div class="graph-legend-item"><span class="graph-legend-line" style="background:#7c3aed;border-top:2px dashed #7c3aed;height:0"></span> seeAlso</div>
+    <div class="graph-legend-item"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;border:3px solid #3b64e0;background:#1a1d27"></span> Focus</div>
+    <div class="graph-legend-item"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;border:3px solid #e05555;background:#1a1d27"></span> Branch Root</div>
   </div>
 </div>
 
@@ -1648,6 +1903,13 @@ async function init() {
   // Restore UI state immediately (before any async calls)
   if (showThinking) applyShowThinkingStyle(document.getElementById('showThinkingBtn'), true);
   if (debugMode) applyDebugBtnStyle(document.getElementById('debugModeBtn'), true);
+
+  // Restore detail panel visibility from localStorage
+  const detailVisible = localStorage.getItem('detailPanelVisible');
+  if (detailVisible === 'true') {
+    document.getElementById('mainLayout').classList.remove('detail-hidden');
+  }
+
   if (!restoreState()) {
     renderProgressStages('pending');
   }
@@ -2573,88 +2835,56 @@ function showTooltip(event, el) {
   const tooltip = document.getElementById('tooltip');
   const label = el.dataset.label;
   const branch = el.dataset.branch;
-  const def = el.dataset.def;
-  const iri = el.dataset.iri;
   const conf = parseFloat(el.dataset.confidence);
-  const source = el.dataset.source;
   const annId = el.dataset.annId;
 
   const branchColor = BRANCH_COLORS[branch] || '#6b6b80';
-
   const confPct = conf > 1 ? conf : conf * 100;
   const confTier = confPct >= 80 ? 'conf-high' : confPct >= 50 ? 'conf-mid' : 'conf-low';
 
   // Check if this annotation already has feedback from this session
   const existingRating = _feedbackCache[annId] || null;
 
-  // Build alternatives section from stored annotation data
-  const annData = _annotationDataById[annId];
-  const alts = (annData && annData.concepts) ? annData.concepts.slice(1) : [];
-  let altsHtml = '';
-  if (alts.length > 0) {
-    const altCards = alts.map((alt, idx) => {
-      const altBranch = (alt.branches && alt.branches.length > 0) ? alt.branches[0] : '';
-      const altColor = BRANCH_COLORS[altBranch] || '#6b6b80';
-      const altConf = alt.confidence > 1 ? alt.confidence : alt.confidence * 100;
-      const altTier = altConf >= 80 ? 'conf-high' : altConf >= 50 ? 'conf-mid' : 'conf-low';
-      return `<div class="tooltip-alt-card">
-        <div class="tooltip-alt-card-header">
-          <span class="tooltip-alt-card-label">${escapeHtml(alt.folio_label || alt.concept_text)}</span>
-          <span class="tooltip-alt-card-branch" style="background:${altColor}20;color:${altColor}">${escapeHtml(altBranch || 'Unknown')}</span>
-        </div>
-        <div class="tooltip-alt-card-conf ${altTier}">${altConf.toFixed(0)}% confidence</div>
-        ${alt.folio_definition ? `<div class="tooltip-alt-card-def">${escapeHtml(alt.folio_definition)}</div>` : ''}
-        <button class="tooltip-alt-promote-btn" onclick="promoteConcept('${escapeAttr(annId)}', ${idx + 1})">Promote to primary</button>
-      </div>`;
-    }).join('');
-    altsHtml = `<div class="tooltip-alternatives">
-      <button class="tooltip-alternatives-toggle" onclick="toggleAlternatives('${escapeAttr(annId)}')"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="transition:transform .2s;flex-shrink:0"><path d="M3 1.5L7 5L3 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Show ${alts.length} alternative${alts.length > 1 ? 's' : ''}</span></button>
-      <div class="tooltip-alternatives-list" id="alts-${escapeAttr(annId)}" style="display:none">${altCards}</div>
-    </div>`;
-  }
-
+  // Compact tooltip: branch · label · score + thumbs
   tooltip.innerHTML = `
+    <div class="tooltip-branch" style="color:${branchColor}">${escapeHtml(branch || 'Unknown')}</div>
     <div class="tooltip-label">${escapeHtml(label)}</div>
-    <div class="tooltip-branch" style="background:${branchColor}20;color:${branchColor}">${escapeHtml(branch || 'Unknown Branch')}</div>
-    <div class="tooltip-confidence ${confTier}">${confPct.toFixed(0)}% confidence</div>
-    ${def ? `<div class="tooltip-definition">${escapeHtml(def)}</div>` : ''}
-    ${(() => { const pc = annData && annData.concepts && annData.concepts[0]; const syns = pc && pc.folio_alt_labels; return syns && syns.length ? `<div class="tooltip-synonyms"><strong>Synonyms:</strong> ${escapeHtml(syns.join(', '))}</div>` : ''; })()}
-    <div class="tooltip-meta">
-      <span>Source: ${escapeHtml(source || 'unknown')}</span>
-      <span>State: ${escapeHtml(el.dataset.state || 'confirmed')}</span>
-    </div>
-    ${iri ? `<div class="tooltip-iri" style="margin-top:4px"><a href="${escapeAttr(iri)}/html" target="_blank" rel="noopener">${escapeHtml(iri)}/html</a></div>` : ''}
-    <div class="tooltip-feedback" data-ann-id="${escapeAttr(annId)}">
-      <div class="tooltip-feedback-row">
-        <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" data-rating="up" onclick="submitFeedback(this, 'up')">&#x1F44D;</button>
-        <button class="tooltip-feedback-btn${existingRating === 'down' ? ' active-down' : ''}" data-rating="down" onclick="submitFeedback(this, 'down')">&#x1F44E;</button>
-        <span class="tooltip-feedback-saved" id="feedbackStatus-${escapeAttr(annId)}">${existingRating ? 'Saved' : ''}</span>
+    <div class="tooltip-main-row">
+      <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}</span>
+      <div class="tooltip-feedback" data-ann-id="${escapeAttr(annId)}">
+        <div class="tooltip-feedback-row">
+          <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" data-rating="up" onclick="submitFeedback(this, 'up')">&#x1F44D;</button>
+          <button class="tooltip-feedback-btn${existingRating === 'down' ? ' active-down' : ''}" data-rating="down" onclick="submitFeedback(this, 'down')">&#x1F44E;</button>
+        </div>
       </div>
-      <textarea class="tooltip-feedback-note" id="feedbackNote-${escapeAttr(annId)}" placeholder="Add a note (optional)..." rows="1"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitNote('${escapeAttr(annId)}')}"
-        onblur="submitNote('${escapeAttr(annId)}')">${escapeHtml(_noteCache[annId] || '')}</textarea>
     </div>
-    ${altsHtml}
-    ${annId && currentJobId ? `<div class="tooltip-lineage">
-      <button class="tooltip-lineage-toggle" onclick="toggleLineage('${escapeAttr(annId)}')"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="transition:transform .2s;flex-shrink:0"><path d="M3 1.5L7 5L3 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Show stage lineage</span></button>
-      <ul class="tooltip-lineage-list" id="lineage-${escapeAttr(annId)}" style="display:none"></ul>
-    </div>` : ''}
   `;
 
   tooltip.classList.add('visible');
 
-  // Auto-expand alternatives if the global toggle is on
-  if (annId && _alternativesExpanded && alts.length > 0) {
-    toggleAlternatives(annId);
+  // Also load the detail panel
+  const annData = annId ? _annotationDataById[annId] : null;
+  // Derive iri_hash: prefer explicit field, fall back to extracting from folio_iri or data-iri attr
+  let iriHash = null;
+  if (annData && annData.concepts && annData.concepts[0]) {
+    const c0 = annData.concepts[0];
+    iriHash = c0.iri_hash || (c0.folio_iri ? c0.folio_iri.split('/').pop() : null);
+  }
+  if (!iriHash) {
+    // Fallback: extract from the data-iri attribute on the span element
+    const spanIri = el.dataset.iri;
+    if (spanIri) iriHash = spanIri.split('/').pop() || null;
+  }
+  if (iriHash) {
+    loadConceptDetail(iriHash, annId);
+  } else {
+    console.warn('showTooltip: no iri_hash found for annotation', annId, 'annData:', annData, 'data-iri:', el.dataset.iri);
   }
 
-  // Auto-expand lineage if the global toggle is on
-  if (annId && currentJobId && _lineageExpanded) {
-    toggleLineage(annId);
-  }
-
-  // Position tooltip
+  // Position tooltip — constrain to the annotated text panel so it doesn't cover the detail pane
   const rect = el.getBoundingClientRect();
+  const panelRight = el.closest('.panel-right');
+  const panelRect = panelRight ? panelRight.getBoundingClientRect() : { left: 0, right: window.innerWidth, top: 0, bottom: window.innerHeight };
   tooltip.style.left = '-9999px';
   tooltip.style.top = '-9999px';
 
@@ -2664,11 +2894,12 @@ function showTooltip(event, el) {
     let top = rect.bottom + 8;
     let left = rect.left;
 
-    if (left + tw > window.innerWidth) left = window.innerWidth - tw - 10;
-    if (left < 10) left = 10;
-    // Try below; if it doesn't fit, try above; finally clamp to viewport
-    if (top + th > window.innerHeight) top = rect.top - th - 8;
-    if (top < 10) top = 10;
+    // Keep within the panel bounds horizontally
+    if (left + tw > panelRect.right - 8) left = panelRect.right - tw - 8;
+    if (left < panelRect.left + 8) left = panelRect.left + 8;
+    // Vertical: try below, then above, then clamp
+    if (top + th > window.innerHeight - 8) top = rect.top - th - 8;
+    if (top < 8) top = 8;
 
     tooltip.style.top = top + 'px';
     tooltip.style.left = left + 'px';
@@ -2957,6 +3188,676 @@ document.addEventListener('click', (e) => {
     document.getElementById('tooltip').classList.remove('visible');
   }
 });
+
+// ==============================================
+// Detail Panel — Right panel for concept details
+// ==============================================
+
+const _conceptDetailCache = {};  // iri_hash → detail object
+let _currentDetailIriHash = null;
+let _currentDetailAnnId = null;
+let _graphCy = null;  // Cytoscape instance
+let _graphDirection = 'TB';  // 'TB' or 'LR'
+
+function toggleDetailPanel() {
+  const main = document.getElementById('mainLayout');
+  main.classList.toggle('detail-hidden');
+  localStorage.setItem('detailPanelVisible', main.classList.contains('detail-hidden') ? 'false' : 'true');
+}
+
+function closeDetailPanel() {
+  const main = document.getElementById('mainLayout');
+  main.classList.add('detail-hidden');
+  localStorage.setItem('detailPanelVisible', 'false');
+}
+
+function showDetailPanel() {
+  const main = document.getElementById('mainLayout');
+  main.classList.remove('detail-hidden');
+  localStorage.setItem('detailPanelVisible', 'true');
+}
+
+function resetDetailPanel() {
+  document.getElementById('detailEmpty').style.display = 'block';
+  document.getElementById('detailLoading').style.display = 'none';
+  document.getElementById('detailContent').style.display = 'none';
+  _currentDetailIriHash = null;
+  _currentDetailAnnId = null;
+}
+
+async function loadConceptDetail(iriHash, annId) {
+  if (!iriHash) return;
+
+  // Show the detail panel
+  showDetailPanel();
+
+  const empty = document.getElementById('detailEmpty');
+  const loading = document.getElementById('detailLoading');
+  const content = document.getElementById('detailContent');
+
+  empty.style.display = 'none';
+  loading.style.display = 'block';
+  content.style.display = 'none';
+
+  _currentDetailIriHash = iriHash;
+  _currentDetailAnnId = annId || null;
+
+  try {
+    let detail = _conceptDetailCache[iriHash];
+    if (!detail) {
+      const resp = await fetch(`${API}/concepts/${iriHash}`);
+      if (!resp.ok) throw new Error('Failed to load concept');
+      detail = await resp.json();
+      _conceptDetailCache[iriHash] = detail;
+    }
+
+    // If user clicked a different concept while loading, skip rendering
+    if (_currentDetailIriHash !== iriHash) return;
+
+    loading.style.display = 'none';
+    content.style.display = 'block';
+
+    renderAncestryTree(detail);
+    renderDetailInfo(detail);
+    renderDetailAlternatives(annId);
+    renderDetailLineage(annId);
+    renderDetailDag(detail);
+    renderDetailSiblings(detail);
+    renderDetailRelated(detail);
+    renderDetailNotes(iriHash, annId);
+    renderDetailGraphButton(iriHash, detail.label);
+
+    // Mark toggle button as having content
+    document.getElementById('detailToggleBtn').classList.add('has-content');
+  } catch (e) {
+    console.error('loadConceptDetail error:', e, 'iriHash:', iriHash);
+    if (_currentDetailIriHash === iriHash) {
+      loading.style.display = 'none';
+      empty.style.display = 'block';
+      empty.textContent = 'Failed to load concept details';
+    }
+  }
+}
+
+// Collapse state for ancestry tree nodes (path key → collapsed boolean)
+const _ancestryCollapsed = {};
+
+function toggleAncestryNode(pathKey, event) {
+  if (event) event.stopPropagation();
+  _ancestryCollapsed[pathKey] = !_ancestryCollapsed[pathKey];
+  // Re-render with current detail data
+  if (_currentDetailIriHash && _conceptDetailCache[_currentDetailIriHash]) {
+    renderAncestryTree(_conceptDetailCache[_currentDetailIriHash]);
+  }
+}
+
+function renderAncestryTree(detail) {
+  const container = document.getElementById('detailAncestry');
+  const path = detail.hierarchy_path || [];
+  if (path.length === 0) { container.innerHTML = ''; return; }
+
+  const branchColor = detail.branch_color || BRANCH_COLORS[detail.branch] || '#6b6b80';
+
+  // Confidence badge for the current concept (from annotation data if available)
+  let confPct = null;
+  if (_currentDetailAnnId) {
+    const annData = _annotationDataById[_currentDetailAnnId];
+    if (annData && annData.concepts && annData.concepts[0]) {
+      const c = annData.concepts[0].confidence;
+      confPct = c > 1 ? c : c * 100;
+    }
+  }
+
+  // path[0] = branch root, path[1..n-1] = intermediates, path[n] = current
+  const root = path[0];
+  const descendants = path.slice(1); // everything below the root
+  const rootKey = `anc::${root.iri_hash}`;
+  const isRootCollapsed = !!_ancestryCollapsed[rootKey];
+
+  let html = '<div class="detail-section-title">Hierarchy</div><div class="ancestry-tree">';
+
+  // --- Branch header (matches folio-mapper SelectionTree branch header) ---
+  html += `<div class="ancestry-branch-header" style="border-left-color:${branchColor};background:${branchColor}15;color:${branchColor}">`;
+  html += `<button class="ancestry-toggle" style="color:${branchColor}" onclick="toggleAncestryNode('${escapeAttr(rootKey)}', event)">${isRootCollapsed ? '\u25B6' : '\u25BC'}</button>`;
+  html += `<span>${escapeHtml(root.label).toUpperCase()}</span>`;
+  html += '</div>';
+
+  // --- Descendant nodes (recursive nesting) ---
+  if (!isRootCollapsed && descendants.length > 0) {
+    html += renderAncestryNodes(descendants, 0, detail, branchColor, confPct, rootKey);
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function renderAncestryNodes(nodes, startIdx, detail, branchColor, confPct, parentKey) {
+  if (startIdx >= nodes.length) return '';
+
+  const entry = nodes[startIdx];
+  const isCurrent = entry.iri_hash === detail.iri_hash;
+  const hasChildren = startIdx < nodes.length - 1 && !isCurrent;
+  const nodeKey = `${parentKey}::${entry.iri_hash}`;
+  const isCollapsed = !!_ancestryCollapsed[nodeKey];
+
+  let html = '<div class="ancestry-children">';
+
+  if (isCurrent) {
+    // Leaf / current node: bullet + bold label + confidence badge
+    const confBg = confPct != null ? (confPct >= 80 ? '#dcfce7' : confPct >= 50 ? '#fef3c7' : '#fee2e2') : '';
+    const confFg = confPct != null ? (confPct >= 80 ? '#166534' : confPct >= 50 ? '#92400e' : '#991b1b') : '';
+    html += `<div class="ancestry-node current">`;
+    html += `<span class="ancestry-toggle-spacer"></span>`;
+    html += `<span class="ancestry-bullet-char" style="color:${branchColor}">\u25CF</span>`;
+    html += `<span>${escapeHtml(entry.label)}</span>`;
+    if (confPct != null) {
+      html += `<span class="ancestry-conf-badge" style="background:${confBg};color:${confFg}">${confPct.toFixed(0)}</span>`;
+    }
+    html += '</div>';
+  } else if (hasChildren) {
+    // Intermediate node: collapsible chevron + label (no bullet)
+    html += `<div class="ancestry-node clickable" onclick="loadConceptDetail('${escapeAttr(entry.iri_hash)}')">`;
+    html += `<button class="ancestry-toggle" onclick="toggleAncestryNode('${escapeAttr(nodeKey)}', event)">${isCollapsed ? '\u25B6' : '\u25BC'}</button>`;
+    html += `<span>${escapeHtml(entry.label)}</span>`;
+    html += '</div>';
+
+    if (!isCollapsed) {
+      html += renderAncestryNodes(nodes, startIdx + 1, detail, branchColor, confPct, nodeKey);
+    }
+  } else {
+    // Leaf ancestor (last before current, but not current) — clickable, no bullet
+    html += `<div class="ancestry-node clickable" onclick="loadConceptDetail('${escapeAttr(entry.iri_hash)}')">`;
+    html += `<span class="ancestry-toggle-spacer"></span>`;
+    html += `<span>${escapeHtml(entry.label)}</span>`;
+    html += '</div>';
+  }
+
+  // If this node has children and isn't collapsed, render the NEXT node in the chain
+  // (but only for non-intermediate case — intermediate already handles recursion above)
+  if (!hasChildren && !isCurrent && startIdx + 1 < nodes.length) {
+    html += renderAncestryNodes(nodes, startIdx + 1, detail, branchColor, confPct, parentKey);
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function renderDetailInfo(detail) {
+  const container = document.getElementById('detailInfo');
+  const iriHash = detail.iri ? detail.iri.split('/').pop() : '';
+
+  // Name + IRI on the same row
+  let html = `<div class="detail-name-row">
+    <span class="detail-name">${escapeHtml(detail.label)}</span>
+    ${detail.iri ? `<div class="detail-iri">
+      <span>IRI:</span>
+      <a href="${escapeAttr(detail.iri)}/html" target="_blank" rel="noopener">${escapeHtml(iriHash)}</a>
+      <button class="detail-iri-copy" onclick="navigator.clipboard.writeText('${escapeAttr(detail.iri)}');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+    </div>` : ''}
+  </div>`;
+
+  if (detail.definition) {
+    html += `<div class="detail-definition">${escapeHtml(detail.definition)}</div>`;
+  }
+  if (detail.synonyms && detail.synonyms.length) {
+    html += `<div class="detail-synonyms"><strong>Synonyms:</strong> ${escapeHtml(detail.synonyms.join(', '))}</div>`;
+  }
+  if (detail.translations && Object.keys(detail.translations).length) {
+    const trans = Object.entries(detail.translations).map(([k, v]) => `${k}: ${v}`).join(', ');
+    html += `<div class="detail-translations"><strong>Translations:</strong> ${escapeHtml(trans)}</div>`;
+  }
+  if (detail.examples && detail.examples.length) {
+    html += `<div class="detail-examples"><strong>Examples:</strong><ul>${detail.examples.map(e => `<li>${escapeHtml(e)}</li>`).join('')}</ul></div>`;
+  }
+  container.innerHTML = html;
+}
+
+function renderDetailAlternatives(annId) {
+  const container = document.getElementById('detailAlternatives');
+  if (!annId) { container.innerHTML = ''; return; }
+
+  const annData = _annotationDataById[annId];
+  const alts = (annData && annData.concepts) ? annData.concepts.slice(1) : [];
+  if (alts.length === 0) { container.innerHTML = ''; return; }
+
+  let html = `<div class="detail-section-title">Alternatives (${alts.length})</div>`;
+  html += '<div style="display:flex;flex-direction:column;gap:6px">';
+  alts.forEach((alt, idx) => {
+    const altBranch = (alt.branches && alt.branches.length > 0) ? alt.branches[0] : '';
+    const altColor = BRANCH_COLORS[altBranch] || '#6b6b80';
+    const altConf = alt.confidence > 1 ? alt.confidence : alt.confidence * 100;
+    const altTier = altConf >= 80 ? 'conf-high' : altConf >= 50 ? 'conf-mid' : 'conf-low';
+    html += `<div class="tooltip-alt-card">
+      <div class="tooltip-alt-card-header">
+        <span class="tooltip-alt-card-label">${escapeHtml(alt.folio_label || alt.concept_text)}</span>
+        <span class="tooltip-alt-card-branch" style="background:${altColor}20;color:${altColor}">${escapeHtml(altBranch || 'Unknown')}</span>
+      </div>
+      <div class="tooltip-alt-card-conf ${altTier}">${altConf.toFixed(0)}% confidence</div>
+      ${alt.folio_definition ? `<div class="tooltip-alt-card-def">${escapeHtml(alt.folio_definition)}</div>` : ''}
+      <button class="tooltip-alt-promote-btn" onclick="promoteConcept('${escapeAttr(annId)}', ${idx + 1})">Promote to primary</button>
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+async function renderDetailLineage(annId) {
+  const container = document.getElementById('detailLineage');
+  if (!annId || !currentJobId) { container.innerHTML = ''; return; }
+
+  container.innerHTML = '<div class="detail-section-title">Pipeline Lineage</div><div style="color:#6b6b80;font-size:12px"><span class="spinner"></span> Loading...</div>';
+
+  try {
+    const resp = await fetch(`${API}/enrich/${currentJobId}/annotations/${annId}/lineage`);
+    if (!resp.ok) throw new Error('Failed');
+    const data = await resp.json();
+
+    const annData = _annotationDataById[annId];
+    const sentenceText = data.sentence_text || (annData && annData.span && annData.span.sentence_text);
+    const spanText = (annData && annData.span) ? annData.span.text || '' : '';
+    const candidateLabel = (annData && annData.concepts && annData.concepts.length > 0)
+      ? (annData.concepts[0].folio_label || annData.concepts[0].concept_text || '') : '';
+
+    let html = '<div class="detail-section-title">Pipeline Lineage</div>';
+
+    // Context block
+    if (sentenceText || candidateLabel) {
+      let lines = '';
+      if (spanText && sentenceText) {
+        const idx = sentenceText.indexOf(spanText);
+        const sentHtml = idx >= 0
+          ? escapeHtml(sentenceText.slice(0, idx)) + `<span class="ctx-highlight">${escapeHtml(spanText)}</span>` + escapeHtml(sentenceText.slice(idx + spanText.length))
+          : escapeHtml(sentenceText);
+        lines += `<div class="ctx-line"><span class="ctx-line-label">Source:</span> ${sentHtml}</div>`;
+      } else if (spanText) {
+        lines += `<div class="ctx-line"><span class="ctx-line-label">Source:</span> ${escapeHtml(spanText)}</div>`;
+      }
+      if (candidateLabel) {
+        lines += `<div class="ctx-line"><span class="ctx-line-label">Match:</span> <span class="ctx-match-value">${escapeHtml(candidateLabel)}</span></div>`;
+      }
+      html += `<div class="lineage-context-block">${lines}</div>`;
+    }
+
+    if (data.lineage && data.lineage.length > 0) {
+      const stageLabels = {
+        entity_ruler: 'Entity Ruler', semantic_ruler: 'Semantic Ruler',
+        llm_concept: 'LLM Analysis', reconciliation: 'Reconciliation',
+        resolution: 'Resolution', branch_judge: 'Branch Judge',
+        string_matching: 'String Matching',
+      };
+      html += '<ul style="list-style:none;padding:0;font-size:11px;color:#6b6b80">';
+      data.lineage.forEach(e => {
+        html += `<li style="padding:3px 0;border-bottom:1px solid #f0f0f4;display:flex;gap:6px">
+          <span class="lineage-stage-name" style="font-weight:600;color:#1a1a2e;min-width:100px;font-size:11px">${escapeHtml(stageLabels[e.stage] || e.stage)}</span>
+          <span class="lineage-action" style="color:#3b64e0;min-width:90px;font-size:10px;font-weight:600">${escapeHtml((e.action || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))}</span>
+          ${e.confidence != null ? `<span style="font-weight:600;color:#555;font-size:10px;background:#f0f0f4;padding:0 4px;border-radius:3px">${(e.confidence * 100).toFixed(0)}%</span>` : ''}
+          ${e.detail ? `<span style="flex:1;font-size:11px">${escapeHtml(e.detail)}</span>` : ''}
+          ${e.reasoning ? `<span class="lineage-reasoning">${escapeHtml(e.reasoning)}</span>` : ''}
+        </li>`;
+      });
+      html += '</ul>';
+    } else {
+      html += '<div style="color:#a0a0b0;font-size:12px">No lineage recorded</div>';
+    }
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = '<div class="detail-section-title">Pipeline Lineage</div><div style="color:#991b1b;font-size:12px">Failed to load lineage</div>';
+  }
+}
+
+function renderDetailDag(detail) {
+  const container = document.getElementById('detailDag');
+  const parents = detail.all_parents || [];
+  const children = detail.children || [];
+  if (parents.length === 0 && children.length === 0) { container.innerHTML = ''; return; }
+
+  const branchColor = detail.branch_color || BRANCH_COLORS[detail.branch] || '#3b64e0';
+
+  // Build a simple SVG DAG: parents → concept → children
+  const allNodes = [];
+  const PILL_H = 26, PILL_PAD = 10, GAP_Y = 50, GAP_X = 12, FONT_SIZE = 11;
+
+  // Helper: measure text width roughly
+  function textW(t) { return t.length * FONT_SIZE * 0.58 + PILL_PAD * 2; }
+
+  // Layout rows: parents | focus | children
+  const rows = [];
+  if (parents.length) rows.push(parents.map(p => ({ ...p, type: 'parent' })));
+  rows.push([{ label: detail.label, iri_hash: detail.iri_hash, type: 'focus' }]);
+  if (children.length) rows.push(children.slice(0, 8).map(c => ({ ...c, type: 'child' })));
+
+  let svgH = 0;
+  let maxRowW = 0;
+  const rowLayouts = [];
+
+  rows.forEach(row => {
+    let rowW = 0;
+    const items = row.map(n => {
+      const w = Math.max(textW(n.label), 60);
+      const item = { ...n, x: rowW, w, h: PILL_H };
+      rowW += w + GAP_X;
+      return item;
+    });
+    rowW -= GAP_X;
+    if (rowW > maxRowW) maxRowW = rowW;
+    rowLayouts.push({ items, totalW: rowW, y: svgH });
+    svgH += PILL_H + GAP_Y;
+  });
+  svgH -= GAP_Y;
+  svgH += 10; // padding
+
+  const svgW = maxRowW + 20;
+
+  // Center each row
+  rowLayouts.forEach(rl => {
+    const offset = (svgW - rl.totalW) / 2;
+    rl.items.forEach(item => { item.x += offset; });
+  });
+
+  let svg = `<svg class="dag-svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Draw edges
+  for (let r = 0; r < rowLayouts.length - 1; r++) {
+    const topRow = rowLayouts[r];
+    const botRow = rowLayouts[r + 1];
+    topRow.items.forEach(top => {
+      botRow.items.forEach(bot => {
+        const x1 = top.x + top.w / 2, y1 = topRow.y + PILL_H;
+        const x2 = bot.x + bot.w / 2, y2 = botRow.y;
+        const cy1 = y1 + (y2 - y1) * 0.4, cy2 = y1 + (y2 - y1) * 0.6;
+        svg += `<path class="dag-edge" d="M${x1},${y1} C${x1},${cy1} ${x2},${cy2} ${x2},${y2}" />`;
+      });
+    });
+  }
+
+  // Draw pills
+  rowLayouts.forEach(rl => {
+    rl.items.forEach(item => {
+      const isFocus = item.type === 'focus';
+      const fill = isFocus ? branchColor : '#f5f6f8';
+      const textColor = isFocus ? '#fff' : '#1a1a2e';
+      const stroke = isFocus ? branchColor : '#d0d2da';
+      const onclick = isFocus ? '' : ` onclick="loadConceptDetail('${escapeAttr(item.iri_hash)}')" style="cursor:pointer"`;
+      svg += `<g class="dag-pill"${onclick}>
+        <rect x="${item.x}" y="${rl.y}" width="${item.w}" height="${PILL_H}" rx="13" fill="${fill}" stroke="${stroke}" stroke-width="1"/>
+        <text class="dag-label" x="${item.x + item.w / 2}" y="${rl.y + PILL_H / 2 + 4}" text-anchor="middle" fill="${textColor}">${escapeHtml(item.label.length > 20 ? item.label.slice(0, 18) + '...' : item.label)}</text>
+      </g>`;
+    });
+  });
+
+  svg += '</svg>';
+
+  container.innerHTML = `<div class="detail-section-title">Ontology Context</div><div class="dag-container">${svg}</div>`;
+}
+
+function renderDetailSiblings(detail) {
+  const container = document.getElementById('detailSiblings');
+  const siblings = detail.siblings || [];
+  if (siblings.length === 0) { container.innerHTML = ''; return; }
+
+  const branchColor = detail.branch_color || BRANCH_COLORS[detail.branch] || '#6b6b80';
+  const show = 8;
+  const visible = siblings.slice(0, show);
+  const extra = siblings.length - show;
+
+  let html = `<div class="detail-section-title">Siblings (${siblings.length})</div><div class="concept-pill-list" id="siblingsList">`;
+  visible.forEach(s => {
+    html += `<span class="concept-pill" onclick="loadConceptDetail('${escapeAttr(s.iri_hash)}')">
+      <span class="concept-pill-dot" style="background:${branchColor}"></span>
+      ${escapeHtml(s.label)}
+    </span>`;
+  });
+  if (extra > 0) {
+    html += `<span class="concept-pill-more" onclick="expandSiblings()" id="siblingsMore">+${extra} more</span>`;
+  }
+  html += '</div>';
+  container.innerHTML = html;
+
+  // Store full list for expansion
+  container._allSiblings = siblings;
+  container._branchColor = branchColor;
+}
+
+function expandSiblings() {
+  const container = document.getElementById('detailSiblings');
+  const siblings = container._allSiblings || [];
+  const branchColor = container._branchColor || '#6b6b80';
+  const list = document.getElementById('siblingsList');
+  if (!list) return;
+
+  let html = '';
+  siblings.forEach(s => {
+    html += `<span class="concept-pill" onclick="loadConceptDetail('${escapeAttr(s.iri_hash)}')">
+      <span class="concept-pill-dot" style="background:${branchColor}"></span>
+      ${escapeHtml(s.label)}
+    </span>`;
+  });
+  list.innerHTML = html;
+}
+
+function renderDetailRelated(detail) {
+  const container = document.getElementById('detailRelated');
+  const related = detail.related || [];
+  if (related.length === 0) { container.innerHTML = ''; return; }
+
+  let html = `<div class="detail-section-title">Related (${related.length})</div><div class="concept-pill-list">`;
+  related.forEach(r => {
+    html += `<span class="concept-pill" onclick="loadConceptDetail('${escapeAttr(r.iri_hash)}')">
+      <span class="concept-pill-dot" style="background:#7c3aed"></span>
+      ${escapeHtml(r.label)}
+    </span>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function renderDetailNotes(iriHash, annId) {
+  const container = document.getElementById('detailNotes');
+  const storageKey = `folio_note_${iriHash}`;
+  const existingNote = localStorage.getItem(storageKey) || '';
+  const feedbackNote = annId ? (_noteCache[annId] || '') : '';
+
+  let html = '<div class="detail-section-title">Notes</div>';
+  html += '<div class="detail-notes-label">Concept notes (persisted locally)</div>';
+  html += `<textarea class="detail-notes-textarea" id="detailConceptNote" placeholder="Add notes about this concept..."
+    onblur="saveDetailNote('${escapeAttr(iriHash)}')">${escapeHtml(existingNote)}</textarea>`;
+
+  if (annId) {
+    html += '<div class="detail-notes-label" style="margin-top:8px">Annotation feedback note</div>';
+    html += `<textarea class="detail-notes-textarea" id="detailFeedbackNote" placeholder="Annotation feedback note..."
+      onblur="submitNote('${escapeAttr(annId)}')"
+      style="min-height:40px">${escapeHtml(feedbackNote)}</textarea>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function saveDetailNote(iriHash) {
+  const el = document.getElementById('detailConceptNote');
+  if (!el) return;
+  const val = el.value.trim();
+  const storageKey = `folio_note_${iriHash}`;
+  if (val) {
+    localStorage.setItem(storageKey, val);
+  } else {
+    localStorage.removeItem(storageKey);
+  }
+}
+
+function renderDetailGraphButton(iriHash, label) {
+  const container = document.getElementById('detailGraphBtn');
+  container.innerHTML = `<button class="detail-graph-btn" onclick="openGraphModal('${escapeAttr(iriHash)}')">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="4" cy="4" r="2.5" stroke="white" stroke-width="1.5"/><circle cx="12" cy="4" r="2.5" stroke="white" stroke-width="1.5"/><circle cx="8" cy="12" r="2.5" stroke="white" stroke-width="1.5"/><line x1="5.5" y1="5.5" x2="7" y2="10" stroke="white" stroke-width="1.2"/><line x1="10.5" y1="5.5" x2="9" y2="10" stroke="white" stroke-width="1.2"/></svg>
+    View Entity Graph: ${escapeHtml(label.length > 30 ? label.slice(0, 28) + '...' : label)}
+  </button>`;
+}
+
+// ==============================================
+// Entity Graph — Cytoscape.js
+// ==============================================
+
+async function openGraphModal(iriHash) {
+  const modal = document.getElementById('graphModal');
+  modal.classList.add('visible');
+  document.getElementById('graphModalTitle').textContent = 'Loading graph...';
+  document.getElementById('graphStats').textContent = '';
+
+  try {
+    const data = await loadGraphData(iriHash);
+    document.getElementById('graphModalTitle').textContent = `Entity Graph: ${data.focus_label}`;
+    document.getElementById('graphStats').textContent = `${data.nodes.length} nodes, ${data.edges.length} edges`;
+    renderCytoscapeGraph(document.getElementById('cytoscapeContainer'), data);
+  } catch (e) {
+    document.getElementById('graphModalTitle').textContent = 'Failed to load graph';
+  }
+}
+
+function closeGraphModal() {
+  const modal = document.getElementById('graphModal');
+  modal.classList.remove('visible');
+  if (_graphCy) {
+    _graphCy.destroy();
+    _graphCy = null;
+  }
+}
+
+async function loadGraphData(iriHash) {
+  const resp = await fetch(`${API}/concepts/${iriHash}/graph?ancestors_depth=3&descendants_depth=2`);
+  if (!resp.ok) throw new Error('Failed to load graph');
+  return await resp.json();
+}
+
+function renderCytoscapeGraph(container, data) {
+  if (_graphCy) {
+    _graphCy.destroy();
+    _graphCy = null;
+  }
+
+  const elements = [];
+
+  // Nodes
+  data.nodes.forEach(n => {
+    elements.push({
+      data: {
+        id: n.id,
+        label: n.label,
+        branch: n.branch,
+        branchColor: n.branch_color || '#6b6b80',
+        isFocus: n.is_focus,
+        isBranchRoot: n.is_branch_root,
+        definition: n.definition || '',
+      },
+    });
+  });
+
+  // Edges
+  data.edges.forEach(e => {
+    elements.push({
+      data: {
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        edgeType: e.edge_type,
+      },
+    });
+  });
+
+  _graphCy = cytoscape({
+    container: container,
+    elements: elements,
+    style: [
+      {
+        selector: 'node',
+        style: {
+          'label': 'data(label)',
+          'background-color': 'data(branchColor)',
+          'color': '#e4e6f0',
+          'text-valign': 'center',
+          'text-halign': 'center',
+          'font-size': '10px',
+          'width': function(el) { return Math.max(el.data('label').length * 6.5 + 20, 60); },
+          'height': 28,
+          'shape': 'roundrectangle',
+          'text-wrap': 'ellipsis',
+          'text-max-width': function(el) { return Math.max(el.data('label').length * 6.5, 40); },
+          'border-width': 0,
+          'border-color': '#3b64e0',
+          'font-family': '-apple-system, BlinkMacSystemFont, sans-serif',
+        },
+      },
+      {
+        selector: 'node[?isFocus]',
+        style: {
+          'border-width': 3,
+          'border-color': '#3b64e0',
+          'font-weight': 'bold',
+          'font-size': '11px',
+        },
+      },
+      {
+        selector: 'node[?isBranchRoot]',
+        style: {
+          'border-width': 3,
+          'border-color': '#e05555',
+        },
+      },
+      {
+        selector: 'edge',
+        style: {
+          'width': 1.5,
+          'line-color': '#3b64e0',
+          'target-arrow-color': '#3b64e0',
+          'target-arrow-shape': 'triangle',
+          'curve-style': 'bezier',
+          'arrow-scale': 0.8,
+        },
+      },
+      {
+        selector: 'edge[edgeType = "seeAlso"]',
+        style: {
+          'line-style': 'dashed',
+          'line-color': '#7c3aed',
+          'target-arrow-color': '#7c3aed',
+        },
+      },
+    ],
+    layout: {
+      name: 'dagre',
+      rankDir: _graphDirection,
+      nodeSep: 30,
+      rankSep: 60,
+      padding: 30,
+    },
+    userZoomingEnabled: true,
+    userPanningEnabled: true,
+    boxSelectionEnabled: false,
+  });
+
+  // Click node → load concept detail
+  _graphCy.on('tap', 'node', function(evt) {
+    const nodeId = evt.target.id();
+    loadConceptDetail(nodeId);
+  });
+}
+
+function fitGraph() {
+  if (_graphCy) _graphCy.fit(undefined, 30);
+}
+
+function toggleGraphDirection() {
+  _graphDirection = _graphDirection === 'TB' ? 'LR' : 'TB';
+  if (_graphCy) {
+    _graphCy.layout({
+      name: 'dagre',
+      rankDir: _graphDirection,
+      nodeSep: 30,
+      rankSep: 60,
+      padding: 30,
+      animate: true,
+      animationDuration: 300,
+    }).run();
+  }
+}
 
 // --- Insights panel ---
 
@@ -3560,6 +4461,10 @@ function clearAll() {
   setStatus('Ready', 'idle');
   renderProgressStages('pending');
 
+  // Reset detail panel
+  resetDetailPanel();
+  document.getElementById('detailToggleBtn').classList.remove('has-content');
+
   // Reset to first tab
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -3594,6 +4499,16 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) overlay.classList.remove('visible');
   });
+});
+
+// Close graph modal on Escape
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const graphModal = document.getElementById('graphModal');
+    if (graphModal.classList.contains('visible')) {
+      closeGraphModal();
+    }
+  }
 });
 
 // ==============================================
