@@ -11,6 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.models.document import DocumentInput
 from app.models.job import Job, JobStatus
 from app.pipeline.orchestrator import PipelineOrchestrator, TaskLLMs
+from app.services.ingestion.registry import detect_format
 from app.services.streaming.sse import job_event_stream
 from app.storage.job_store import JobStore
 
@@ -23,7 +24,7 @@ _job_store = JobStore()
 
 class EnrichRequest(BaseModel):
     content: str
-    format: str = "plain_text"
+    format: str | None = None
     filename: str | None = None
     # Optional per-request LLM configuration
     llm_provider: str | None = None
@@ -75,7 +76,8 @@ async def create_enrichment(req: EnrichRequest) -> dict:
             detail=f"Too many concurrent jobs ({active}/{app_settings.max_concurrent_jobs}). Try again later.",
         )
 
-    doc = DocumentInput(content=req.content, format=req.format, filename=req.filename)
+    fmt = req.format or detect_format(req.filename, req.content).value
+    doc = DocumentInput(content=req.content, format=fmt, filename=req.filename)
     job = Job(input=doc)
     await _job_store.save(job)
 

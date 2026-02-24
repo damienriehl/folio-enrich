@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from app.models.document import DocumentFormat, DocumentInput, TextElement
 from app.services.ingestion.base import IngestorBase
 from app.services.ingestion.html_ingestor import HTMLIngestor
@@ -52,8 +54,28 @@ def detect_format(filename: str | None, content: str) -> DocumentFormat:
 
     # Heuristic detection for content without filename
     stripped = content.strip()
-    if stripped.startswith("<!") or stripped.startswith("<html"):
+
+    # Base64-encoded PDF (starts with %PDF -> JVBER in base64)
+    if stripped.startswith("JVBER"):
+        return DocumentFormat.PDF
+
+    # Base64-encoded ZIP/DOCX (starts with PK\x03\x04 -> UEsDB in base64)
+    if stripped.startswith("UEsDB"):
+        return DocumentFormat.WORD
+
+    # RTF
+    if stripped.startswith("{\\rtf"):
+        return DocumentFormat.RTF
+
+    # Email (RFC 2822 headers)
+    if re.match(r"^(From|Subject|Date|To|Message-ID):\s", stripped, re.IGNORECASE):
+        return DocumentFormat.EMAIL
+
+    # HTML
+    if stripped.startswith("<!") or stripped.lower().startswith("<html"):
         return DocumentFormat.HTML
+
+    # Markdown
     if stripped.startswith("# ") or "\n## " in stripped:
         return DocumentFormat.MARKDOWN
 

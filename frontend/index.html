@@ -1046,17 +1046,8 @@
         </div>
       </div>
 
-      <!-- Format & Upload -->
+      <!-- Upload & Enrich -->
       <div class="form-row" style="margin-bottom:8px">
-        <select id="formatSelect" style="width:auto">
-          <option value="plain_text">Plain Text</option>
-          <option value="markdown">Markdown</option>
-          <option value="html">HTML</option>
-          <option value="pdf">PDF</option>
-          <option value="word">Word (DOCX)</option>
-          <option value="rtf">RTF</option>
-          <option value="email">Email (EML/MSG)</option>
-        </select>
         <button class="primary" id="enrichBtn" onclick="submitEnrichment()">Enrich Document</button>
         <button class="secondary" onclick="clearAll()">Clear</button>
       </div>
@@ -1234,6 +1225,7 @@ const API = 'http://localhost:8731';
 let currentJobId = null;
 let currentJob = null;
 let pollInterval = null;
+let uploadedFilename = null;
 let pollTimeout = null;
 let eventSource = null;
 let accumulatedAnnotations = [];
@@ -1866,10 +1858,8 @@ function handleFileUpload(event) {
 }
 
 async function processFile(file) {
+  uploadedFilename = file.name;
   const ext = file.name.split('.').pop().toLowerCase();
-  const formatMap = { pdf: 'pdf', docx: 'word', doc: 'word', html: 'html', htm: 'html', md: 'markdown', txt: 'plain_text', rtf: 'rtf', eml: 'email', msg: 'email' };
-  const format = formatMap[ext] || 'plain_text';
-  document.getElementById('formatSelect').value = format;
 
   if (['pdf', 'docx', 'doc', 'rtf', 'msg'].includes(ext)) {
     // Read as base64
@@ -1895,7 +1885,6 @@ async function submitEnrichment() {
   const content = document.getElementById('docInput').value.trim();
   if (!content) return;
 
-  const format = document.getElementById('formatSelect').value;
   const provider = document.getElementById('providerSelect').value;
   const model = document.getElementById('modelSelect').value;
   const apiKey = document.getElementById('apiKeyInput').value;
@@ -1919,7 +1908,8 @@ async function submitEnrichment() {
       body: JSON.stringify(settingsBody),
     }).catch(() => {});
 
-    const body = { content, format };
+    const body = { content };
+    if (uploadedFilename) body.filename = uploadedFilename;
     if (provider) body.llm_provider = provider;
     if (model) body.llm_model = model;
     if (apiKey) body.api_key = apiKey;
@@ -2566,7 +2556,7 @@ async function generateSynthetic() {
 
     const data = await r.json();
     document.getElementById('docInput').value = data.document;
-    document.getElementById('formatSelect').value = 'plain_text';
+    uploadedFilename = null;
     closeSynthetic();
 
     // Auto-enrich
@@ -2607,7 +2597,7 @@ function toggleUncertain() {
 
 function loadSample(name) {
   document.getElementById('docInput').value = SAMPLES[name] || '';
-  document.getElementById('formatSelect').value = 'plain_text';
+  uploadedFilename = null;
 }
 
 function clearAll() {
@@ -2623,6 +2613,7 @@ function clearAll() {
   document.getElementById('tooltip').classList.remove('visible');
   currentJobId = null;
   currentJob = null;
+  uploadedFilename = null;
   closeSSE();
   accumulatedAnnotations = [];
   activityEntries = [];
