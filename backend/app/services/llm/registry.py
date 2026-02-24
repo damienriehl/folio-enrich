@@ -22,7 +22,7 @@ DEFAULT_BASE_URLS: dict[LLMProviderType, str] = {
 DEFAULT_MODELS: dict[LLMProviderType, str] = {
     LLMProviderType.openai: "gpt-4o",                  # mid: between mini and o3
     LLMProviderType.anthropic: "claude-sonnet-4-6",     # mid: between Haiku and Opus
-    LLMProviderType.google: "gemini-2.5-flash",         # mid: between flash-lite and pro
+    LLMProviderType.google: "gemini-3-flash-preview",    # Gemini 3 Flash
     LLMProviderType.mistral: "mistral-medium-latest",   # mid: between small and large
     LLMProviderType.cohere: "command-a-03-2025",        # mid: current-gen flagship
     LLMProviderType.meta_llama: "llama-4-scout",        # mid: lighter Llama 4

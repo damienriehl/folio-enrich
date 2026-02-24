@@ -6,9 +6,9 @@ from pydantic import BaseModel
 
 
 class LLMProviderType(str, Enum):
+    google = "google"
     openai = "openai"
     anthropic = "anthropic"
-    google = "google"
     mistral = "mistral"
     cohere = "cohere"
     meta_llama = "meta_llama"

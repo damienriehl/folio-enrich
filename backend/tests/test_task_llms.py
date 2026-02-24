@@ -239,4 +239,4 @@ class TestConfigPerTaskSettings:
         assert s.llm_concept_provider == "google"
         assert s.llm_concept_model == "gemini-2.5-flash"
         # Global unchanged
-        assert s.llm_provider == "openai"
+        assert s.llm_provider == "google"
