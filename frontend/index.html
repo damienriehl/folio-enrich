@@ -1113,6 +1113,48 @@
     font-size: 11px; color: #6b6b80;
     padding-left: 54px; margin-top: 2px;
   }
+
+  /* Alternatives badge on annotation spans */
+  .annotation-alt-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; color: #fff;
+    background: #3b64e0; border-radius: 50%;
+    width: 14px; height: 14px; line-height: 14px;
+    margin-left: 2px; vertical-align: super;
+    pointer-events: none;
+  }
+
+  /* Alternatives section in tooltip */
+  .tooltip-alternatives { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e5ea; }
+  .tooltip-alternatives-toggle {
+    background: none; border: none; color: #3b64e0; cursor: pointer;
+    font-size: 12px; padding: 0; font-family: inherit;
+  }
+  .tooltip-alternatives-toggle:hover { text-decoration: underline; }
+  .tooltip-alternatives-list { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+  .tooltip-alt-card {
+    border: 1px solid #e0e0e8; border-radius: 6px; padding: 8px 10px;
+    font-size: 12px; background: #fafafc; transition: background 0.15s;
+  }
+  .tooltip-alt-card:hover { background: #f0f0f6; }
+  .tooltip-alt-card-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .tooltip-alt-card-label { font-weight: 600; color: #1a1a2e; }
+  .tooltip-alt-card-branch {
+    font-size: 10px; padding: 1px 6px; border-radius: 8px;
+    white-space: nowrap;
+  }
+  .tooltip-alt-card-conf { font-size: 11px; margin-top: 2px; }
+  .tooltip-alt-card-def { font-size: 11px; color: #6b6b80; margin-top: 3px; line-height: 1.3; }
+  .tooltip-alt-promote-btn {
+    margin-top: 6px; padding: 3px 10px; font-size: 11px;
+    border: 1px solid #3b64e0; border-radius: 4px;
+    background: transparent; color: #3b64e0; cursor: pointer;
+    font-family: inherit; transition: background 0.15s, color 0.15s;
+  }
+  .tooltip-alt-promote-btn:hover { background: #3b64e0; color: #fff; }
+
+  /* Concepts list alternatives indicator */
+  .concept-alt-indicator { font-size: 10px; color: #3b64e0; margin-left: 6px; }
 </style>
 </head>
 <body>
@@ -1401,6 +1443,9 @@ function restoreState() {
     normalizedText = cache.normalizedText || null;
     activityEntries = cache.activity || [];
     uploadedFilename = cache.filename || null;
+
+    // Restore feedback caches from inline annotation feedback
+    _seedFeedbackCaches(accumulatedAnnotations);
 
     if (cache.docInput) {
       document.getElementById('docInput').value = cache.docInput;
@@ -2298,6 +2343,7 @@ function rerenderAnnotatedText() {
   if (!currentJobId) return;
   // Build annotation objects compatible with renderAnnotatedText
   const annotations = accumulatedAnnotations.map(a => ({
+    id: a.id,
     span: a.span,
     concepts: a.concepts,
     state: a.state,
@@ -2319,6 +2365,8 @@ async function fetchFinalJob() {
     const job = await r.json();
     currentJob = job;
     renderResults(job);
+    // Seed feedback caches from inline annotation feedback
+    _seedFeedbackCaches(job.result?.annotations || []);
     cacheState();
   } catch (e) {
     console.error('Failed to fetch final job:', e);
@@ -2390,6 +2438,9 @@ function renderAnnotatedText(text, annotations) {
     if (!ann.concepts || ann.concepts.length === 0) continue;
     if (ann.span.start < lastEnd) continue; // skip overlapping
 
+    // Store full annotation data for tooltip access to backup concepts
+    if (ann.id) _annotationDataById[ann.id] = ann;
+
     const c = ann.concepts[0];
     const branch = (c.branches && c.branches.length > 0) ? c.branches[0] : (c.branch || '');
     const branchColor = BRANCH_COLORS[branch] || '#3b64e0';
@@ -2400,6 +2451,8 @@ function renderAnnotatedText(text, annotations) {
     }
 
     const state = ann.state || c.state || 'confirmed';
+    // Count backup alternatives (concepts beyond index 0)
+    const altCount = ann.concepts.length - 1;
     const dataAttrs = [
       `data-ann-id="${escapeAttr(ann.id || '')}"`,
       `data-iri="${escapeAttr(c.folio_iri || '')}"`,
@@ -2409,6 +2462,7 @@ function renderAnnotatedText(text, annotations) {
       `data-confidence="${c.confidence}"`,
       `data-source="${escapeAttr(c.source || '')}"`,
       `data-state="${escapeAttr(state)}"`,
+      `data-alt-count="${altCount}"`,
     ].join(' ');
 
     // Confidence-based visual modulation (skip for rejected annotations)
@@ -2422,7 +2476,8 @@ function renderAnnotatedText(text, annotations) {
       }
     }
 
-    pieces.push(`<span class="annotation-span" ${dataAttrs}${confStyle ? ` style="${confStyle}"` : ''}>${escapeHtml(text.slice(ann.span.start, ann.span.end))}</span>`);
+    const badge = altCount > 0 ? `<sup class="annotation-alt-badge">${altCount}</sup>` : '';
+    pieces.push(`<span class="annotation-span" ${dataAttrs}${confStyle ? ` style="${confStyle}"` : ''}>${escapeHtml(text.slice(ann.span.start, ann.span.end))}${badge}</span>`);
     lastEnd = Math.max(lastEnd, ann.span.end);
   }
 
@@ -2457,6 +2512,32 @@ function showTooltip(event, el) {
   // Check if this annotation already has feedback from this session
   const existingRating = _feedbackCache[annId] || null;
 
+  // Build alternatives section from stored annotation data
+  const annData = _annotationDataById[annId];
+  const alts = (annData && annData.concepts) ? annData.concepts.slice(1) : [];
+  let altsHtml = '';
+  if (alts.length > 0) {
+    const altCards = alts.map((alt, idx) => {
+      const altBranch = (alt.branches && alt.branches.length > 0) ? alt.branches[0] : '';
+      const altColor = BRANCH_COLORS[altBranch] || '#6b6b80';
+      const altConf = alt.confidence > 1 ? alt.confidence : alt.confidence * 100;
+      const altTier = altConf >= 80 ? 'conf-high' : altConf >= 50 ? 'conf-mid' : 'conf-low';
+      return `<div class="tooltip-alt-card">
+        <div class="tooltip-alt-card-header">
+          <span class="tooltip-alt-card-label">${escapeHtml(alt.folio_label || alt.concept_text)}</span>
+          <span class="tooltip-alt-card-branch" style="background:${altColor}20;color:${altColor}">${escapeHtml(altBranch || 'Unknown')}</span>
+        </div>
+        <div class="tooltip-alt-card-conf ${altTier}">${altConf.toFixed(0)}% confidence</div>
+        ${alt.folio_definition ? `<div class="tooltip-alt-card-def">${escapeHtml(alt.folio_definition)}</div>` : ''}
+        <button class="tooltip-alt-promote-btn" onclick="promoteConcept('${escapeAttr(annId)}', ${idx + 1})">Promote to primary</button>
+      </div>`;
+    }).join('');
+    altsHtml = `<div class="tooltip-alternatives">
+      <button class="tooltip-alternatives-toggle" onclick="toggleAlternatives('${escapeAttr(annId)}')">Show ${alts.length} alternative${alts.length > 1 ? 's' : ''}</button>
+      <div class="tooltip-alternatives-list" id="alts-${escapeAttr(annId)}" style="display:none">${altCards}</div>
+    </div>`;
+  }
+
   tooltip.innerHTML = `
     <div class="tooltip-label">${escapeHtml(label)}</div>
     <div class="tooltip-branch" style="background:${branchColor}20;color:${branchColor}">${escapeHtml(branch || 'Unknown Branch')}</div>
@@ -2475,8 +2556,9 @@ function showTooltip(event, el) {
       </div>
       <textarea class="tooltip-feedback-note" id="feedbackNote-${escapeAttr(annId)}" placeholder="Add a note (optional)..." rows="1"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitNote('${escapeAttr(annId)}')}"
-        onblur="submitNote('${escapeAttr(annId)}')"></textarea>
+        onblur="submitNote('${escapeAttr(annId)}')">${escapeHtml(_noteCache[annId] || '')}</textarea>
     </div>
+    ${altsHtml}
     ${annId && currentJobId ? `<div class="tooltip-lineage">
       <button class="tooltip-lineage-toggle" onclick="toggleLineage('${escapeAttr(annId)}')">Show stage lineage</button>
       <ul class="tooltip-lineage-list" id="lineage-${escapeAttr(annId)}" style="display:none"></ul>
@@ -2509,6 +2591,9 @@ function showTooltip(event, el) {
     tooltip.style.left = left + 'px';
   });
 }
+
+// Full annotation data by ID (for tooltip access to backup concepts)
+const _annotationDataById = {};
 
 // Track feedback already submitted this session (annId → rating)
 const _feedbackCache = {};
@@ -2562,6 +2647,17 @@ async function submitFeedback(btn, rating) {
 
 // Track last-submitted note per annotation to avoid duplicate submissions
 const _noteCache = {};
+
+// Seed _feedbackCache and _noteCache from inline annotation feedback data
+function _seedFeedbackCaches(annotations) {
+  (annotations || []).forEach(a => {
+    if (a.feedback && a.feedback.length > 0) {
+      const fb = a.feedback[0]; // one-per-annotation policy
+      _feedbackCache[a.id] = fb.rating;
+      if (fb.comment) _noteCache[a.id] = fb.comment;
+    }
+  });
+}
 
 async function submitNote(annId) {
   if (!annId || !currentJobId) return;
@@ -2646,6 +2742,88 @@ async function toggleLineage(annId) {
   list.previousElementSibling.textContent = 'Hide stage lineage';
   _lineageExpanded = true;
   localStorage.setItem('lineageExpanded', 'true');
+}
+
+function toggleAlternatives(annId) {
+  const list = document.getElementById(`alts-${annId}`);
+  if (!list) return;
+  const btn = list.previousElementSibling;
+  if (list.style.display !== 'none') {
+    list.style.display = 'none';
+    const count = list.children.length;
+    btn.textContent = `Show ${count} alternative${count > 1 ? 's' : ''}`;
+  } else {
+    list.style.display = 'flex';
+    btn.textContent = 'Hide alternatives';
+  }
+}
+
+async function promoteConcept(annId, conceptIndex) {
+  if (!annId || !currentJobId) return;
+  const annData = _annotationDataById[annId];
+  if (!annData) return;
+  const oldPrimaryIri = annData.concepts[0] ? annData.concepts[0].folio_iri : null;
+
+  try {
+    const resp = await fetch(`${API}/enrich/${currentJobId}/annotations/${annId}/promote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ concept_index: conceptIndex }),
+    });
+    if (!resp.ok) return;
+    const result = await resp.json();
+
+    // Refresh job data to pick up the promotion
+    const jobResp = await fetch(`${API}/enrich/${currentJobId}`);
+    if (!jobResp.ok) return;
+    const job = await jobResp.json();
+
+    // Update accumulated annotations and re-render
+    accumulatedAnnotations = job.result.annotations || [];
+    normalizedText = job.result.canonical_text ? job.result.canonical_text.full_text : normalizedText;
+    document.getElementById('tooltip').classList.remove('visible');
+    rerenderAnnotatedText();
+    renderConceptsList(accumulatedAnnotations);
+
+    // Check if other annotations share the old primary IRI and offer cascade
+    if (oldPrimaryIri && result.promoted_iri) {
+      const othersWithSameIri = accumulatedAnnotations.filter(a =>
+        a.id !== annId &&
+        a.concepts && a.concepts.length > 0 &&
+        a.concepts[0].folio_iri === oldPrimaryIri &&
+        a.concepts.some(c => c.folio_iri === result.promoted_iri)
+      );
+      if (othersWithSameIri.length > 0 && confirm(
+        `${othersWithSameIri.length} other annotation${othersWithSameIri.length > 1 ? 's' : ''} also use "${oldPrimaryIri.split('/').pop()}". Promote "${result.promoted_iri.split('/').pop()}" on all of them?`
+      )) {
+        await cascadePromote(oldPrimaryIri, result.promoted_iri);
+      }
+    }
+  } catch (e) {
+    console.error('Promotion failed:', e);
+  }
+}
+
+async function cascadePromote(oldIri, newIri) {
+  if (!currentJobId) return;
+  try {
+    const resp = await fetch(`${API}/enrich/${currentJobId}/cascade-promote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ old_iri: oldIri, new_iri: newIri }),
+    });
+    if (!resp.ok) return;
+
+    // Refresh job data
+    const jobResp = await fetch(`${API}/enrich/${currentJobId}`);
+    if (!jobResp.ok) return;
+    const job = await jobResp.json();
+    accumulatedAnnotations = job.result.annotations || [];
+    rerenderAnnotatedText();
+    renderConceptsList(accumulatedAnnotations);
+  } catch (e) {
+    console.error('Cascade promotion failed:', e);
+  }
 }
 
 // Hide tooltip on click outside
@@ -2892,16 +3070,18 @@ function renderConceptsList(annotations) {
     return;
   }
 
-  // Deduplicate and group by branch
+  // Deduplicate and group by branch — only count primary concepts (index 0)
   const conceptMap = new Map();
   for (const ann of annotations) {
-    for (const c of ann.concepts) {
-      const key = c.folio_iri || c.concept_text;
-      if (conceptMap.has(key)) {
-        conceptMap.get(key).count++;
-      } else {
-        conceptMap.set(key, { ...c, count: 1 });
-      }
+    if (!ann.concepts || ann.concepts.length === 0) continue;
+    const c = ann.concepts[0]; // primary only
+    const key = c.folio_iri || c.concept_text;
+    if (conceptMap.has(key)) {
+      const entry = conceptMap.get(key);
+      entry.count++;
+      entry.altCount = Math.max(entry.altCount, ann.concepts.length - 1);
+    } else {
+      conceptMap.set(key, { ...c, count: 1, altCount: ann.concepts.length - 1 });
     }
   }
 
@@ -2931,9 +3111,10 @@ function renderConceptsList(annotations) {
     for (const c of concepts) {
       const confPct = c.confidence > 1 ? c.confidence : c.confidence * 100;
       const confTier = confPct >= 80 ? 'conf-high' : confPct >= 50 ? 'conf-mid' : 'conf-low';
+      const altIndicator = c.altCount > 0 ? `<span class="concept-alt-indicator">${c.altCount} alt${c.altCount > 1 ? 's' : ''}</span>` : '';
       html += `<div class="concept-item">
         <div class="concept-header">
-          <span class="concept-name" style="color:${branchColor}">${escapeHtml(c.folio_label || c.concept_text)}</span>
+          <span class="concept-name" style="color:${branchColor}">${escapeHtml(c.folio_label || c.concept_text)}${altIndicator}</span>
           <span class="confidence-pct ${confTier}">${confPct.toFixed(0)}%</span>
         </div>
         <div class="concept-meta">${c.count} occurrence${c.count > 1 ? 's' : ''} &middot; ${escapeHtml(c.source || 'unknown')}</div>
@@ -3223,6 +3404,9 @@ function clearAll() {
   closeSSE();
   accumulatedAnnotations = [];
   activityEntries = [];
+  // Clear feedback caches
+  Object.keys(_feedbackCache).forEach(k => delete _feedbackCache[k]);
+  Object.keys(_noteCache).forEach(k => delete _noteCache[k]);
   document.getElementById('activityLog').innerHTML = '';
   stopPolling();
   setStatus('Ready', 'idle');
