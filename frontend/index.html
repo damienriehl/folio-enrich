@@ -636,7 +636,7 @@
   .pipeline-progress {
     padding: 8px 16px;
     background: var(--surface);
-    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
 
@@ -1217,6 +1217,21 @@
     <div class="panel-header">
       <h2>Document Input</h2>
     </div>
+
+    <!-- Pipeline progress -->
+    <div class="pipeline-progress" id="pipelineProgress">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <div class="progress-stages" id="progressStages"></div>
+      <div class="activity-log-wrapper">
+        <button class="btn-copy-log" onclick="copyActivityLog()" title="Copy log to clipboard">Copy</button>
+        <div class="activity-log" id="activityLog"></div>
+      </div>
+      <div class="status-text">
+        <span id="statusText">Ready</span>
+        <span id="statusBadge" style="font-size:10px;color:var(--text-dim)">idle</span>
+      </div>
+    </div>
+
     <div class="panel-body">
       <!-- Hidden LLM state holders (managed via Settings modal) -->
       <div style="display:none">
@@ -1296,20 +1311,6 @@
         <div class="sample-grid" style="margin-top:4px">
           <button class="secondary sample-btn" onclick="openSynthetic()">Generate...</button>
         </div>
-      </div>
-    </div>
-
-    <!-- Pipeline progress -->
-    <div class="pipeline-progress" id="pipelineProgress">
-      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
-      <div class="progress-stages" id="progressStages"></div>
-      <div class="activity-log-wrapper">
-        <button class="btn-copy-log" onclick="copyActivityLog()" title="Copy log to clipboard">Copy</button>
-        <div class="activity-log" id="activityLog"></div>
-      </div>
-      <div class="status-text">
-        <span id="statusText">Ready</span>
-        <span id="statusBadge" style="font-size:10px;color:var(--text-dim)">idle</span>
       </div>
     </div>
   </div>
