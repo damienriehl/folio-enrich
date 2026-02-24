@@ -1121,16 +1121,16 @@
       <span class="chip-label">Embedding</span>
       <span class="chip-detail" id="chipEmbeddingDetail">...</span>
     </div>
+    <div class="status-chip" id="chipSpacy" data-tooltip="spaCy NLP status">
+      <span class="chip-dot gray"></span>
+      <span class="chip-label">spaCy</span>
+      <span class="chip-detail" id="chipSpacyDetail">...</span>
+    </div>
     <div class="status-chip clickable" id="chipLLM" data-tooltip="Click to configure LLM provider" onclick="openSettings()">
       <span class="chip-dot gray"></span>
       <span class="chip-label">LLM</span>
       <span class="chip-detail" id="chipLLMDetail">...</span>
       <span class="chip-gear">&#9881;</span>
-    </div>
-    <div class="status-chip" id="chipSpacy" data-tooltip="spaCy NLP status">
-      <span class="chip-dot gray"></span>
-      <span class="chip-label">spaCy</span>
-      <span class="chip-detail" id="chipSpacyDetail">...</span>
     </div>
   </div>
   <div class="header-right">
@@ -1160,6 +1160,7 @@
       <div class="form-row" style="margin-bottom:8px">
         <button class="primary" id="enrichBtn" onclick="submitEnrichment()">Enrich Document</button>
         <button class="secondary" onclick="clearAll()">Clear</button>
+        <button id="debugModeBtn" onclick="toggleDebugMode()" style="margin-left:auto;background:var(--surface2);border:none;color:var(--text-dim)" title="Truncate input to ~500 words for faster pipeline testing">Debug Mode</button>
       </div>
 
       <!-- File upload -->
@@ -1350,6 +1351,7 @@ let knownModels = {};     // provider name → [{id, name, context_window}]
 let pricingData = {};     // model id → {input_cost_per_1k, output_cost_per_1k, ...}
 let selectedDocType = null;
 let showUncertain = true;
+let debugMode = false;
 
 // ==============================================
 // Session Cache — persist pipeline results across reloads
@@ -1564,7 +1566,7 @@ async function checkHealth() {
     const f = d.folio_ontology || {};
     if (f.status === 'ready') {
       setChip('chipFolio', 'green',
-        `${(f.concepts || 0).toLocaleString()} concepts`,
+        '',
         `FOLIO loaded: ${(f.concepts || 0).toLocaleString()} concepts, ${(f.labels_indexed || 0).toLocaleString()} labels indexed`);
     } else if (f.status === 'not_loaded') {
       setChip('chipFolio', 'orange', 'Standby', 'FOLIO ontology not yet loaded — loads on first enrichment request');
@@ -1575,10 +1577,9 @@ async function checkHealth() {
     // Embedding
     const e = d.embedding || {};
     if (e.status === 'ready') {
-      const shortProvider = (e.provider || 'Ready').replace(/Provider$/i, '').replace(/Embedding$/i, '').replace(/^Local$/i, 'Local');
       setChip('chipEmbedding', 'green',
-        shortProvider || 'Ready',
-        `Embedding: ${e.provider}, ${(e.index_size || 0).toLocaleString()} vectors indexed`);
+        '',
+        `Embedding: ${e.provider || 'Local'}, ${(e.index_size || 0).toLocaleString()} vectors indexed`);
     } else if (e.status === 'not_loaded') {
       setChip('chipEmbedding', 'orange', 'Standby', 'Embedding service loads on first use');
     } else {
@@ -1603,7 +1604,7 @@ async function checkHealth() {
     // spaCy
     const s = d.spacy || {};
     if (s.status === 'ready') {
-      setChip('chipSpacy', 'green', `v${s.version}`, `spaCy ${s.version} — EntityRuler ready`);
+      setChip('chipSpacy', 'green', '', `spaCy ${s.version} — EntityRuler ready`);
     } else {
       setChip('chipSpacy', 'red', 'Error', s.message || 'spaCy not available');
     }
@@ -1989,6 +1990,7 @@ async function processFile(file) {
     // Read as text
     const text = await file.text();
     document.getElementById('docInput').value = text;
+    applyDebugTruncation();
   }
 }
 
@@ -1996,9 +1998,40 @@ async function processFile(file) {
 // Enrichment Submission & Polling
 // ==============================================
 
+const DEBUG_MAX_WORDS = 500;
+
+function truncateToWords(text, maxWords) {
+  const words = text.split(/\s+/);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(' ') + '\n\n[... truncated by Debug Mode — ' + words.length + ' words \u2192 ' + maxWords + ' words]';
+}
+
+function applyDebugTruncation() {
+  if (!debugMode) return;
+  const ta = document.getElementById('docInput');
+  const text = ta.value.trim();
+  if (text) ta.value = truncateToWords(text, DEBUG_MAX_WORDS);
+}
+
+function toggleDebugMode() {
+  debugMode = !debugMode;
+  const btn = document.getElementById('debugModeBtn');
+  if (debugMode) {
+    btn.style.background = 'rgba(232,165,76,0.15)';
+    btn.style.color = 'var(--orange)';
+    btn.textContent = 'Debug Mode ON';
+    applyDebugTruncation();
+  } else {
+    btn.style.background = 'var(--surface2)';
+    btn.style.color = 'var(--text-dim)';
+    btn.textContent = 'Debug Mode';
+  }
+}
+
 async function submitEnrichment() {
-  const content = document.getElementById('docInput').value.trim();
+  let content = document.getElementById('docInput').value.trim();
   if (!content) return;
+  if (debugMode) content = truncateToWords(content, 500);
 
   const provider = document.getElementById('providerSelect').value;
   const model = document.getElementById('modelSelect').value;
@@ -3078,6 +3111,7 @@ async function generateSynthetic() {
     const data = await r.json();
     document.getElementById('docInput').value = data.document;
     uploadedFilename = null;
+    applyDebugTruncation();
     closeSynthetic();
 
     // Auto-enrich
@@ -3115,6 +3149,7 @@ function toggleUncertain() {
 function loadSample(name) {
   document.getElementById('docInput').value = SAMPLES[name] || '';
   uploadedFilename = null;
+  applyDebugTruncation();
 }
 
 function clearAll() {
