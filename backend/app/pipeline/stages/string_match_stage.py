@@ -100,6 +100,23 @@ class StringMatchStage(PipelineStage):
                 folio_alt_labels=match.value.get("folio_alt_labels"),
             )
 
+            # Build backup ConceptMatch objects from runner-up candidates
+            backup_concepts: list[ConceptMatch] = []
+            for bc in match.value.get("_backup_candidates", []):
+                backup_concepts.append(ConceptMatch(
+                    concept_text=bc.get("concept_text", ""),
+                    folio_iri=bc.get("folio_iri"),
+                    folio_label=bc.get("folio_label"),
+                    folio_definition=bc.get("folio_definition"),
+                    branches=bc.get("branches", []),
+                    branch_color=bc.get("branch_color"),
+                    confidence=bc.get("confidence", 0.0),
+                    source=bc.get("source", "matched"),
+                    state="backup",
+                    iri_hash=bc.get("iri_hash"),
+                    folio_alt_labels=bc.get("folio_alt_labels"),
+                ))
+
             # Materialize upstream _lineage_events from resolved concept dicts
             upstream_events: list[StageEvent] = []
             for evt in match.value.get("_lineage_events", []):
@@ -115,7 +132,7 @@ class StringMatchStage(PipelineStage):
             if span_key in existing_by_span:
                 # Update existing annotation: enrich with resolved FOLIO data
                 existing = existing_by_span[span_key]
-                existing.concepts = [concept]
+                existing.concepts = [concept] + backup_concepts
                 existing.state = "confirmed"
                 # Preserve existing lineage, then add upstream + this stage
                 existing.lineage.extend(upstream_events)
@@ -130,7 +147,7 @@ class StringMatchStage(PipelineStage):
                         end=match.end,
                         text=full_text[match.start:match.end],
                     ),
-                    concepts=[concept],
+                    concepts=[concept] + backup_concepts,
                     state="confirmed",
                     lineage=upstream_events,
                 )

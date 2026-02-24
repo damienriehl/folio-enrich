@@ -95,6 +95,90 @@ class ConceptResolver:
         self._cache[cache_key] = resolved
         return resolved
 
+    def resolve_multi(
+        self,
+        concept_text: str,
+        branches: list[str] | None = None,
+        confidence: float = 0.0,
+        source: str = "llm",
+        max_candidates: int = 5,
+    ) -> list[ResolvedConcept]:
+        """Resolve a concept to multiple FOLIO candidates (up to max_candidates)."""
+        branch = branches[0] if branches else ""
+        all_results = self._multi_strategy_resolve_all(concept_text, branch, max_candidates)
+        resolved_list: list[ResolvedConcept] = []
+        for fc, score in all_results:
+            if any(b in EXCLUDED_BRANCHES for b in ([fc.branch] if fc.branch else [])):
+                continue
+            iri_hash = fc.iri.rsplit("/", 1)[-1] if fc.iri else ""
+            branch_color = ""
+            try:
+                from app.services.folio.branch_config import get_branch_color
+                branch_color = get_branch_color(fc.branch) if fc.branch else ""
+            except Exception:
+                pass
+            resolved_branches = [fc.branch] if fc.branch else (branches or [])
+            resolved_list.append(ResolvedConcept(
+                concept_text=concept_text,
+                folio_concept=fc,
+                confidence=max(confidence, score),
+                branches=resolved_branches,
+                source=source,
+                branch_color=branch_color,
+                hierarchy_path=[],
+                iri_hash=iri_hash,
+            ))
+        return resolved_list[:max_candidates]
+
+    def _multi_strategy_resolve_all(
+        self, concept_text: str, branch: str, top_n: int = 5
+    ) -> list[tuple[FOLIOConcept, float]]:
+        """Return all scored results from multi-strategy search."""
+        try:
+            from app.services.folio.search import multi_strategy_search
+
+            folio_raw = self.folio._get_folio()
+
+            def _get_branch(folio_inst, iri_hash: str) -> str:
+                owl_class = folio_inst[iri_hash]
+                if owl_class and hasattr(owl_class, "iri"):
+                    return self.folio._get_branch(owl_class.iri, [])
+                return ""
+
+            results = multi_strategy_search(
+                folio_raw, concept_text, branch=branch or None, top_n=top_n,
+                get_branch_fn=_get_branch,
+            )
+            if not results:
+                return []
+
+            # If branch hint provided, sort preferred branch matches first
+            if branch:
+                results.sort(key=lambda r: (
+                    0 if r.get("branch") and branch.lower() in r["branch"].lower() else 1,
+                    -r["score"],
+                ))
+
+            out: list[tuple[FOLIOConcept, float]] = []
+            for r in results:
+                fc = FOLIOConcept(
+                    iri=r["iri"],
+                    preferred_label=r["label"],
+                    alternative_labels=r.get("synonyms", []),
+                    definition=r.get("definition", "") or "",
+                    branch=r.get("branch", ""),
+                    parent_iris=[],
+                )
+                out.append((fc, r["score"] / 100.0))
+            return out
+        except Exception:
+            logger.debug(
+                "Multi-strategy resolve_all failed for '%s'",
+                concept_text,
+                exc_info=True,
+            )
+            return []
+
     def _multi_strategy_resolve(
         self, concept_text: str, branch: str
     ) -> tuple[FOLIOConcept | None, float]:

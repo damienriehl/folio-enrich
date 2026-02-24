@@ -29,6 +29,7 @@ class Span(BaseModel):
     start: int
     end: int
     text: str
+    sentence_text: str | None = None
 
 
 class ConceptMatch(BaseModel):
@@ -41,7 +42,7 @@ class ConceptMatch(BaseModel):
     confidence: float = 0.0
     source: str = "llm"  # "llm", "entity_ruler", "semantic_ruler", "reconciled"
     match_type: str | None = None  # "preferred" or "alternative" (from EntityRuler)
-    state: str = "preliminary"  # "preliminary", "confirmed", "rejected"
+    state: str = "preliminary"  # "preliminary", "confirmed", "rejected", "backup"
     hierarchy_path: list[str] | None = None
     iri_hash: str | None = None
     children_count: int | None = None

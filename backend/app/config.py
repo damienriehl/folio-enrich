@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     embedding_disabled: bool = False
     semantic_similarity_threshold: float = 0.80
 
+    # Candidates
+    max_candidates: int = 5
+
     # Job management
     job_retention_days: int = 30
     max_concurrent_jobs: int = 10

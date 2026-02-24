@@ -1114,16 +1114,6 @@
     padding-left: 54px; margin-top: 2px;
   }
 
-  /* Alternatives badge on annotation spans */
-  .annotation-alt-badge {
-    display: inline-flex; align-items: center; justify-content: center;
-    font-size: 9px; font-weight: 700; color: #fff;
-    background: #3b64e0; border-radius: 50%;
-    width: 14px; height: 14px; line-height: 14px;
-    margin-left: 2px; vertical-align: super;
-    pointer-events: none;
-  }
-
   /* Alternatives section in tooltip */
   .tooltip-alternatives { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e5ea; }
   .tooltip-alternatives-toggle {
@@ -2476,8 +2466,7 @@ function renderAnnotatedText(text, annotations) {
       }
     }
 
-    const badge = altCount > 0 ? `<sup class="annotation-alt-badge">${altCount}</sup>` : '';
-    pieces.push(`<span class="annotation-span" ${dataAttrs}${confStyle ? ` style="${confStyle}"` : ''}>${escapeHtml(text.slice(ann.span.start, ann.span.end))}${badge}</span>`);
+    pieces.push(`<span class="annotation-span" ${dataAttrs}${confStyle ? ` style="${confStyle}"` : ''}>${escapeHtml(text.slice(ann.span.start, ann.span.end))}</span>`);
     lastEnd = Math.max(lastEnd, ann.span.end);
   }
 
@@ -2567,6 +2556,11 @@ function showTooltip(event, el) {
 
   tooltip.classList.add('visible');
 
+  // Auto-expand alternatives if the global toggle is on
+  if (annId && _alternativesExpanded && alts.length > 0) {
+    toggleAlternatives(annId);
+  }
+
   // Auto-expand lineage if the global toggle is on
   if (annId && currentJobId && _lineageExpanded) {
     toggleLineage(annId);
@@ -2600,6 +2594,9 @@ const _feedbackCache = {};
 
 // Global toggle: show stage lineage on all tooltips (persists across sessions)
 let _lineageExpanded = localStorage.getItem('lineageExpanded') === 'true';
+
+// Global toggle: show alternatives on all tooltips (persists across sessions)
+let _alternativesExpanded = localStorage.getItem('alternativesExpanded') === 'true';
 
 async function submitFeedback(btn, rating) {
   const feedbackDiv = btn.closest('.tooltip-feedback');
@@ -2752,9 +2749,13 @@ function toggleAlternatives(annId) {
     list.style.display = 'none';
     const count = list.children.length;
     btn.textContent = `Show ${count} alternative${count > 1 ? 's' : ''}`;
+    _alternativesExpanded = false;
+    localStorage.setItem('alternativesExpanded', 'false');
   } else {
     list.style.display = 'flex';
     btn.textContent = 'Hide alternatives';
+    _alternativesExpanded = true;
+    localStorage.setItem('alternativesExpanded', 'true');
   }
 }
 

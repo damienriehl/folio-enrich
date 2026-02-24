@@ -9,6 +9,7 @@ from app.services.entity_ruler.ruler import EntityRulerMatch, FOLIOEntityRuler
 from app.services.entity_ruler.semantic_ruler import SemanticEntityRuler
 from app.services.folio.branch_config import get_branch_color
 from app.services.folio.folio_service import FolioService
+from app.services.normalization.normalizer import build_sentence_index, find_sentence_for_span
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ class EntityRulerStage(PipelineStage):
 
         self._ensure_patterns_loaded()
         full_text = job.result.canonical_text.full_text
+        sentence_index = build_sentence_index(full_text)
         matches = self.ruler.find_matches(full_text)
 
         ruler_concepts = []
@@ -122,12 +124,15 @@ class EntityRulerStage(PipelineStage):
 
         # Create preliminary annotations from matches for progressive rendering
         preliminary_annotations = self._build_preliminary_annotations(
-            matches, full_text
+            matches, full_text, sentence_index
         )
         # Add semantic match annotations (reuse results from above)
         for sm in semantic_matches:
             ann = Annotation(
-                span=Span(start=sm.start, end=sm.end, text=sm.text),
+                span=Span(
+                    start=sm.start, end=sm.end, text=sm.text,
+                    sentence_text=find_sentence_for_span(sentence_index, sm.start, sm.end),
+                ),
                 concepts=[ConceptMatch(
                     concept_text=sm.text,
                     folio_iri=sm.iri,
@@ -169,7 +174,8 @@ class EntityRulerStage(PipelineStage):
         return job
 
     def _build_preliminary_annotations(
-        self, matches: list[EntityRulerMatch], full_text: str
+        self, matches: list[EntityRulerMatch], full_text: str,
+        sentence_index: list[tuple[int, int, str]] | None = None,
     ) -> list[Annotation]:
         """Build preliminary Annotation objects from EntityRuler matches."""
         annotations: list[Annotation] = []
@@ -177,11 +183,16 @@ class EntityRulerStage(PipelineStage):
             confidence = _match_confidence(match)
             branch = self._iri_to_branch.get(match.entity_id, "")
             is_multi = "multi-word" if len(match.text.split()) > 1 else "single-word"
+            sent = (
+                find_sentence_for_span(sentence_index, match.start_char, match.end_char)
+                if sentence_index else None
+            )
             ann = Annotation(
                 span=Span(
                     start=match.start_char,
                     end=match.end_char,
                     text=full_text[match.start_char:match.end_char],
+                    sentence_text=sent,
                 ),
                 concepts=[ConceptMatch(
                     concept_text=match.text,

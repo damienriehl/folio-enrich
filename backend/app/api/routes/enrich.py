@@ -120,6 +120,98 @@ async def get_annotation_lineage(job_id: UUID, annotation_id: str) -> dict:
     raise HTTPException(status_code=404, detail="Annotation not found")
 
 
+class PromoteRequest(BaseModel):
+    concept_index: int
+
+
+class CascadePromoteRequest(BaseModel):
+    old_iri: str
+    new_iri: str
+
+
+@router.post("/{job_id}/annotations/{annotation_id}/promote")
+async def promote_concept(job_id: UUID, annotation_id: str, req: PromoteRequest) -> dict:
+    """Promote a backup concept to primary (index 0)."""
+    job = await _job_store.load(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    for ann in job.result.annotations:
+        if ann.id == annotation_id:
+            if req.concept_index < 0 or req.concept_index >= len(ann.concepts):
+                raise HTTPException(status_code=400, detail="Invalid concept_index")
+            if req.concept_index == 0:
+                return {"status": "already_primary"}
+
+            # Swap: move selected to position 0
+            promoted = ann.concepts.pop(req.concept_index)
+            old_primary = ann.concepts[0]
+            promoted.state = "confirmed"
+            old_primary.state = "backup"
+            ann.concepts[0] = promoted
+            ann.concepts.insert(req.concept_index, old_primary)
+
+            # Record lineage event
+            from app.models.annotation import StageEvent
+            ann.lineage.append(StageEvent(
+                stage="user",
+                action="user_promotion",
+                detail=f"Promoted '{promoted.folio_label}' over '{old_primary.folio_label}'",
+            ))
+
+            await _job_store.save(job)
+            return {
+                "status": "promoted",
+                "annotation_id": annotation_id,
+                "promoted_iri": promoted.folio_iri,
+                "demoted_iri": old_primary.folio_iri,
+            }
+
+    raise HTTPException(status_code=404, detail="Annotation not found")
+
+
+@router.post("/{job_id}/cascade-promote")
+async def cascade_promote(job_id: UUID, req: CascadePromoteRequest) -> dict:
+    """Promote a backup concept across all annotations sharing the old primary IRI."""
+    job = await _job_store.load(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    from app.models.annotation import StageEvent
+
+    updated = 0
+    for ann in job.result.annotations:
+        if not ann.concepts or ann.concepts[0].folio_iri != req.old_iri:
+            continue
+        # Find backup with new_iri
+        backup_idx = None
+        for i, c in enumerate(ann.concepts[1:], start=1):
+            if c.folio_iri == req.new_iri:
+                backup_idx = i
+                break
+        if backup_idx is None:
+            continue
+
+        promoted = ann.concepts.pop(backup_idx)
+        old_primary = ann.concepts[0]
+        promoted.state = "confirmed"
+        old_primary.state = "backup"
+        ann.concepts[0] = promoted
+        ann.concepts.insert(backup_idx, old_primary)
+
+        ann.lineage.append(StageEvent(
+            stage="user",
+            action="user_promotion",
+            detail=f"Cascade: promoted '{promoted.folio_label}' over '{old_primary.folio_label}'",
+        ))
+        updated += 1
+
+    if updated > 0:
+        await _job_store.save(job)
+
+    return {"status": "cascade_complete", "updated_count": updated}
+
+
 @router.get("/{job_id}/stream")
 async def stream_enrichment(job_id: UUID):
     job = await _job_store.load(job_id)

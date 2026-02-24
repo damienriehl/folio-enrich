@@ -11,6 +11,7 @@ from app.services.folio.branch_config import (
     VIRTUAL_BRANCHES,
     VIRTUAL_BRANCH_TARGETS,
 )
+from app.config import settings
 from app.services.folio.resolver import ConceptResolver
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,44 @@ class ResolutionStage(PipelineStage):
         }
         return result
 
+    def _attach_backup_candidates(
+        self, rd: dict, concept_data: dict
+    ) -> None:
+        """Attach runner-up candidates from multi-strategy search."""
+        max_cand = settings.max_candidates
+        if max_cand <= 1:
+            return
+        primary_iri = rd.get("folio_iri", "")
+        alternates = self.resolver.resolve_multi(
+            concept_text=concept_data.get("concept_text", ""),
+            branches=concept_data.get("branches", []),
+            confidence=concept_data.get("confidence", 0.0),
+            source=concept_data.get("source", "resolved"),
+            max_candidates=max_cand,
+        )
+        backups = []
+        for alt in alternates:
+            if alt.folio_concept.iri == primary_iri:
+                continue
+            if any(b in EXCLUDED_BRANCHES for b in alt.branches):
+                continue
+            fc = alt.folio_concept
+            backups.append({
+                "concept_text": alt.concept_text,
+                "folio_iri": fc.iri,
+                "folio_label": fc.preferred_label,
+                "folio_definition": fc.definition,
+                "branches": alt.branches,
+                "branch_color": alt.branch_color,
+                "confidence": alt.confidence,
+                "source": alt.source,
+                "state": "backup",
+                "iri_hash": alt.iri_hash,
+                "folio_alt_labels": fc.alternative_labels or None,
+            })
+        if backups:
+            rd["_backup_candidates"] = backups
+
     @staticmethod
     def _resolve_virtual_branches(resolved_dict: dict, folio_branch: str) -> None:
         """Replace virtual branches with actual FOLIO branches after resolution."""
@@ -86,6 +125,7 @@ class ResolutionStage(PipelineStage):
                 if resolved and not any(b in EXCLUDED_BRANCHES for b in resolved.branches):
                     rd = self._to_resolved_dict(resolved)
                     self._resolve_virtual_branches(rd, resolved.folio_concept.branch)
+                    self._attach_backup_candidates(rd, concept_data)
                     # Carry forward upstream lineage events
                     events = list(concept_data.get("_lineage_events", []))
                     events.append({
@@ -110,6 +150,7 @@ class ResolutionStage(PipelineStage):
                 if resolved and not any(b in EXCLUDED_BRANCHES for b in resolved.branches):
                     rd = self._to_resolved_dict(resolved)
                     self._resolve_virtual_branches(rd, resolved.folio_concept.branch)
+                    self._attach_backup_candidates(rd, concept_data)
                     resolved_concepts.append(rd)
 
             # Then LLM concepts
@@ -131,6 +172,7 @@ class ResolutionStage(PipelineStage):
                     if resolved and not any(b in EXCLUDED_BRANCHES for b in resolved.branches):
                         rd = self._to_resolved_dict(resolved)
                         self._resolve_virtual_branches(rd, resolved.folio_concept.branch)
+                        self._attach_backup_candidates(rd, concept_data)
                         resolved_concepts.append(rd)
 
         job.result.metadata["resolved_concepts"] = resolved_concepts

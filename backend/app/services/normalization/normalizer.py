@@ -34,6 +34,47 @@ def split_sentences(text: str) -> list[str]:
         return [p for p in parts if p.strip()]
 
 
+def build_sentence_index(text: str) -> list[tuple[int, int, str]]:
+    """Build a list of (start, end, sentence_text) for all sentences in text.
+
+    Uses the same NuPunkt splitter as the pipeline, so sentence boundaries
+    are consistent with the normalization stage.
+    """
+    sentences = split_sentences(text)
+    index: list[tuple[int, int, str]] = []
+    position = 0
+    for sent in sentences:
+        start = text.find(sent, position)
+        if start == -1:
+            start = position
+        end = start + len(sent)
+        index.append((start, end, sent))
+        position = end
+    return index
+
+
+def find_sentence_for_span(
+    sentence_index: list[tuple[int, int, str]],
+    span_start: int,
+    span_end: int,
+) -> str | None:
+    """Return the sentence containing the given character span, or None."""
+    for sent_start, sent_end, sent_text in sentence_index:
+        if sent_start <= span_start and span_end <= sent_end:
+            return sent_text
+    # Fallback: find the sentence whose overlap with the span is largest
+    best = None
+    best_overlap = 0
+    for sent_start, sent_end, sent_text in sentence_index:
+        overlap_start = max(sent_start, span_start)
+        overlap_end = min(sent_end, span_end)
+        overlap = max(0, overlap_end - overlap_start)
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best = sent_text
+    return best
+
+
 def chunk_text(
     text: str,
     max_chars: int | None = None,
