@@ -32,9 +32,10 @@ class HTMLExporter(ExporterBase):
                 continue
             concept = ann.concepts[0]
             branch_str = concept.branches[0] if concept.branches else ""
+            branch_part = f" ({branch_str})" if branch_str else ""
             tooltip = html.escape(
                 f"{concept.folio_label or concept.concept_text}"
-                f" ({branch_str or 'unknown branch'})"
+                f"{branch_part}"
                 f" - {concept.folio_definition or 'No definition'}"
             )
             iri = html.escape(concept.folio_iri or "#")

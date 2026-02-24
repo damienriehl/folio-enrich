@@ -2241,7 +2241,7 @@ function renderAnnotatedText(text, annotations) {
     if (ann.span.start < lastEnd) continue; // skip overlapping
 
     const c = ann.concepts[0];
-    const branch = c.branches ? c.branches[0] : (c.branch || '');
+    const branch = (c.branches && c.branches.length > 0) ? c.branches[0] : (c.branch || '');
     const branchColor = BRANCH_COLORS[branch] || '#3b64e0';
 
     // Text before this annotation
@@ -2366,7 +2366,7 @@ function renderConceptsList(annotations) {
   // Group by branch
   const groups = {};
   for (const c of conceptMap.values()) {
-    const branch = c.branches ? c.branches[0] : (c.branch || 'Other');
+    const branch = (c.branches && c.branches.length > 0) ? c.branches[0] : (c.branch || 'Other');
     if (!groups[branch]) groups[branch] = [];
     groups[branch].push(c);
   }

@@ -7,6 +7,7 @@ from app.models.job import Job, JobStatus
 from app.pipeline.stages.base import PipelineStage
 from app.services.entity_ruler.ruler import EntityRulerMatch, FOLIOEntityRuler
 from app.services.entity_ruler.semantic_ruler import SemanticEntityRuler
+from app.services.folio.branch_config import get_branch_color
 from app.services.folio.folio_service import FolioService
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ class EntityRulerStage(PipelineStage):
         self.ruler = ruler or FOLIOEntityRuler()
         self._embedding_service = embedding_service
         self._patterns_loaded = False
+        self._iri_to_branch: dict[str, str] = {}
 
     def _ensure_patterns_loaded(self) -> None:
         """Load FOLIO patterns into the EntityRuler on first use."""
@@ -43,6 +45,11 @@ class EntityRulerStage(PipelineStage):
             all_labels = folio_service.get_all_labels()
             if all_labels:
                 self.ruler.load_patterns(all_labels)
+                # Build IRI→branch map for populating branches on matches
+                for label_info in all_labels.values():
+                    fc = label_info.concept
+                    if fc.iri and fc.branch:
+                        self._iri_to_branch[fc.iri] = fc.branch
                 logger.info("EntityRuler loaded %d FOLIO patterns", len(all_labels))
             else:
                 logger.warning("No FOLIO labels found — EntityRuler will be empty")
@@ -65,10 +72,13 @@ class EntityRulerStage(PipelineStage):
         ruler_concepts = []
         for match in matches:
             confidence = _match_confidence(match)
+            branch = self._iri_to_branch.get(match.entity_id, "")
             ruler_concepts.append(
                 ConceptMatch(
                     concept_text=match.text,
                     folio_iri=match.entity_id,
+                    branches=[branch] if branch else [],
+                    branch_color=get_branch_color(branch) if branch else None,
                     confidence=confidence,
                     source="entity_ruler",
                     match_type=match.match_type,
@@ -161,6 +171,7 @@ class EntityRulerStage(PipelineStage):
         annotations: list[Annotation] = []
         for match in matches:
             confidence = _match_confidence(match)
+            branch = self._iri_to_branch.get(match.entity_id, "")
             annotations.append(
                 Annotation(
                     span=Span(
@@ -171,6 +182,8 @@ class EntityRulerStage(PipelineStage):
                     concepts=[ConceptMatch(
                         concept_text=match.text,
                         folio_iri=match.entity_id,
+                        branches=[branch] if branch else [],
+                        branch_color=get_branch_color(branch) if branch else None,
                         confidence=confidence,
                         source="entity_ruler",
                         match_type=match.match_type,
