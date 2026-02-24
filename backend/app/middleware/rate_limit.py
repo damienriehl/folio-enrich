@@ -10,6 +10,9 @@ from starlette.responses import JSONResponse
 from app.config import settings
 
 
+_EXEMPT_PATHS: frozenset[str] = frozenset({"/health", "/openapi.json", "/docs", "/redoc"})
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Simple in-memory per-IP rate limiter using sliding window."""
 
@@ -20,6 +23,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._requests: dict[str, list[float]] = defaultdict(list)
 
     async def dispatch(self, request: Request, call_next):
+        # Skip rate limiting for health checks and docs
+        if request.url.path in _EXEMPT_PATHS:
+            return await call_next(request)
+
         client_ip = request.client.host if request.client else "unknown"
 
         now = time.time()
