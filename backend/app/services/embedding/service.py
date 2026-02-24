@@ -53,14 +53,17 @@ def build_embedding_index(folio_service) -> None:
     labels = []
     definitions = []
     branches = []
+    examples = []
 
     for owl_class in folio_raw.classes:
         iri_hash = owl_class.iri.rsplit("/", 1)[-1]
         label = owl_class.label or iri_hash
         defn = owl_class.definition
+        exs = getattr(owl_class, "examples", []) or []
         iri_hashes.append(iri_hash)
         labels.append(label)
         definitions.append(defn)
+        examples.append(list(exs))
         # Branch detection is expensive; leave empty for now
         branches.append("")
 
@@ -70,6 +73,7 @@ def build_embedding_index(folio_service) -> None:
         labels=labels,
         definitions=definitions,
         branches=branches,
+        examples=examples,
     )
     index.build()
     _embedding_index = index

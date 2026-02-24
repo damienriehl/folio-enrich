@@ -7,6 +7,21 @@ from app.models.annotation import ConceptMatch
 
 logger = logging.getLogger(__name__)
 
+
+def _definition_overlap_score(context: str, definition: str) -> float:
+    """Compute word overlap between context and definition as a simple semantic signal."""
+    if not context or not definition:
+        return 0.0
+    ctx_words = set(context.lower().split())
+    def_words = set(definition.lower().split())
+    # Remove very common words
+    stopwords = {"the", "a", "an", "of", "to", "in", "for", "and", "or", "is", "on", "at", "by", "with"}
+    ctx_words -= stopwords
+    def_words -= stopwords
+    if not ctx_words or not def_words:
+        return 0.0
+    return len(ctx_words & def_words) / max(len(ctx_words), len(def_words))
+
 EMBEDDING_AUTO_RESOLVE_THRESHOLD = 0.85
 
 # Ruler-only concepts need at least this confidence to be accepted
@@ -159,6 +174,21 @@ class Reconciler:
                         lc.confidence = max(lc.confidence, llm_sim)
                         results.append(ReconciliationResult(concept=lc, category="conflict_resolved"))
                 else:
+                    # Both below threshold — try definition-based tiebreaker
+                    rc_defn = rc.folio_definition or ""
+                    lc_defn = lc.folio_definition or ""
+                    if rc_defn or lc_defn:
+                        rc_overlap = _definition_overlap_score(key, rc_defn)
+                        lc_overlap = _definition_overlap_score(key, lc_defn)
+                        if rc_overlap > lc_overlap and rc_overlap > 0:
+                            rc.source = "reconciled"
+                            results.append(ReconciliationResult(concept=rc, category="conflict_resolved"))
+                            continue
+                        elif lc_overlap > rc_overlap and lc_overlap > 0:
+                            lc.source = "reconciled"
+                            results.append(ReconciliationResult(concept=lc, category="conflict_resolved"))
+                            continue
+                    # No clear winner — keep both
                     rc.source = "reconciled"
                     lc.source = "reconciled"
                     results.append(ReconciliationResult(concept=rc, category="conflict_resolved"))

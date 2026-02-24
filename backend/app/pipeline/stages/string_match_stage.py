@@ -8,10 +8,30 @@ from app.pipeline.stages.base import PipelineStage
 from app.services.matching.aho_corasick import AhoCorasickMatcher
 
 
+_ALT_LABEL_STOPWORDS: frozenset[str] = frozenset({
+    "act", "bar", "bill", "bond", "brief", "case", "charge", "claim",
+    "code", "count", "court", "deed", "due", "duty", "fee", "fine",
+    "firm", "fund", "grant", "hold", "law", "lien", "loan", "loss",
+    "note", "order", "party", "pay", "plea", "right", "rule", "sale",
+    "seal", "suit", "tax", "term", "title", "tort", "trust", "use",
+    "wage", "ward", "will", "writ",
+})
+
+
 class StringMatchStage(PipelineStage):
     @property
     def name(self) -> str:
         return "string_matching"
+
+    @staticmethod
+    def _is_safe_alt_label(label: str) -> bool:
+        """Check if an alt label is safe to add to the automaton (not a common false positive)."""
+        if len(label) <= 3:
+            return False
+        # Single-word labels that are common English words should be skipped
+        if " " not in label and label.lower() in _ALT_LABEL_STOPWORDS:
+            return False
+        return True
 
     async def execute(self, job: Job) -> Job:
         job.status = JobStatus.MATCHING
@@ -30,6 +50,19 @@ class StringMatchStage(PipelineStage):
             key = rc["concept_text"].lower()
             if key not in concept_map or rc["confidence"] > concept_map[key]["confidence"]:
                 concept_map[key] = rc
+
+            # Also add alt labels and hidden label as patterns pointing to same data
+            alt_labels = rc.get("folio_alt_labels") or []
+            for alt in alt_labels:
+                alt_key = alt.lower()
+                if alt_key not in concept_map and self._is_safe_alt_label(alt):
+                    concept_map[alt_key] = rc
+
+            hidden = rc.get("folio_hidden_label") or ""
+            if hidden:
+                hidden_key = hidden.lower()
+                if hidden_key not in concept_map and self._is_safe_alt_label(hidden):
+                    concept_map[hidden_key] = rc
 
         for text, data in concept_map.items():
             matcher.add_pattern(text, data)
@@ -60,6 +93,11 @@ class StringMatchStage(PipelineStage):
                 confidence=match.value.get("confidence", 0.0),
                 source=match.value.get("source", "matched"),
                 state="confirmed",
+                folio_examples=match.value.get("folio_examples"),
+                folio_notes=match.value.get("folio_notes"),
+                folio_see_also=match.value.get("folio_see_also"),
+                folio_source=match.value.get("folio_source"),
+                folio_alt_labels=match.value.get("folio_alt_labels"),
             )
 
             if span_key in existing_by_span:

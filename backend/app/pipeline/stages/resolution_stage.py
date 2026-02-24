@@ -27,11 +27,12 @@ class ResolutionStage(PipelineStage):
     @staticmethod
     def _to_resolved_dict(resolved) -> dict:
         """Convert a ResolvedConcept to a dict with enriched metadata."""
-        return {
+        fc = resolved.folio_concept
+        result = {
             "concept_text": resolved.concept_text,
-            "folio_iri": resolved.folio_concept.iri,
-            "folio_label": resolved.folio_concept.preferred_label,
-            "folio_definition": resolved.folio_concept.definition,
+            "folio_iri": fc.iri,
+            "folio_label": fc.preferred_label,
+            "folio_definition": fc.definition,
             "branches": resolved.branches,
             "branch_color": resolved.branch_color,
             "confidence": resolved.confidence,
@@ -39,7 +40,14 @@ class ResolutionStage(PipelineStage):
             "state": "confirmed",
             "hierarchy_path": resolved.hierarchy_path,
             "iri_hash": resolved.iri_hash,
+            "folio_examples": fc.examples or None,
+            "folio_notes": fc.notes or None,
+            "folio_see_also": fc.see_also or None,
+            "folio_source": fc.source or None,
+            "folio_alt_labels": fc.alternative_labels or None,
+            "folio_hidden_label": fc.hidden_label or None,
         }
+        return result
 
     @staticmethod
     def _resolve_virtual_branches(resolved_dict: dict, folio_branch: str) -> None:

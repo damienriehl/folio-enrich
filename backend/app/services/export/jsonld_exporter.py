@@ -31,11 +31,19 @@ class JSONLDExporter(ExporterBase):
                         },
                     },
                     "oa:hasBody": {
-                        "@type": "skos:Concept",
-                        "@id": concept.folio_iri or "",
-                        "skos:prefLabel": concept.folio_label or concept.concept_text,
-                        "skos:definition": concept.folio_definition or "",
-                        "folio:branch": concept.branches[0] if concept.branches else "",
+                        k: v
+                        for k, v in {
+                            "@type": "skos:Concept",
+                            "@id": concept.folio_iri or "",
+                            "skos:prefLabel": concept.folio_label or concept.concept_text,
+                            "skos:definition": concept.folio_definition or "",
+                            "folio:branch": concept.branches[0] if concept.branches else "",
+                            "skos:altLabel": concept.folio_alt_labels or None,
+                            "skos:example": concept.folio_examples or None,
+                            "rdfs:seeAlso": concept.folio_see_also or None,
+                            "dc:source": concept.folio_source or None,
+                        }.items()
+                        if v is not None
                     },
                     "oa:motivatedBy": "oa:tagging",
                     "schema:confidence": concept.confidence,
@@ -47,6 +55,8 @@ class JSONLDExporter(ExporterBase):
                 "skos": "http://www.w3.org/2004/02/skos/core#",
                 "schema": "http://schema.org/",
                 "folio": "https://folio.openlegalstandard.org/",
+                "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+                "dc": "http://purl.org/dc/elements/1.1/",
             },
             "@type": "oa:AnnotationCollection",
             "schema:name": f"FOLIO Enrich annotations for job {job.id}",

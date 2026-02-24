@@ -30,6 +30,7 @@ class FOLIOEmbeddingIndex:
         labels: list[str],
         definitions: list[str | None],
         branches: list[str],
+        examples: list[list[str]] | None = None,
     ):
         try:
             import faiss
@@ -44,6 +45,7 @@ class FOLIOEmbeddingIndex:
         self._labels = labels
         self._definitions = definitions
         self._branches = branches
+        self._examples = examples or [[] for _ in labels]
         self._faiss = faiss
 
         # Build branch -> index set for fast filtering
@@ -59,13 +61,15 @@ class FOLIOEmbeddingIndex:
         return len(self._iri_hashes)
 
     def _build_texts(self) -> list[str]:
-        """Build embedding texts: 'label: definition' or just 'label'."""
+        """Build embedding texts: 'label: definition. Examples: ...' or just 'label'."""
         texts = []
-        for label, defn in zip(self._labels, self._definitions):
+        for label, defn, exs in zip(self._labels, self._definitions, self._examples):
+            parts = [label]
             if defn:
-                texts.append(f"{label}: {defn}")
-            else:
-                texts.append(label)
+                parts.append(f": {defn}")
+            if exs:
+                parts.append(f". Examples: {', '.join(exs[:3])}")
+            texts.append("".join(parts))
         return texts
 
     def _cache_path(self, owl_hash: str) -> Path:

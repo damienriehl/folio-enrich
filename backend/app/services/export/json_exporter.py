@@ -37,14 +37,22 @@ class JSONExporter(ExporterBase):
                     },
                     "concepts": [
                         {
-                            "concept_text": c.concept_text,
-                            "folio_iri": c.folio_iri,
-                            "folio_label": c.folio_label,
-                            "folio_definition": c.folio_definition,
-                            "branch": c.branches[0] if c.branches else "",
-                            "branches": c.branches,
-                            "confidence": c.confidence,
-                            "source": c.source,
+                            k: v
+                            for k, v in {
+                                "concept_text": c.concept_text,
+                                "folio_iri": c.folio_iri,
+                                "folio_label": c.folio_label,
+                                "folio_definition": c.folio_definition,
+                                "branch": c.branches[0] if c.branches else "",
+                                "branches": c.branches,
+                                "confidence": c.confidence,
+                                "source": c.source,
+                                "folio_examples": c.folio_examples or None,
+                                "folio_alt_labels": c.folio_alt_labels or None,
+                                "folio_see_also": c.folio_see_also or None,
+                                "folio_source": c.folio_source or None,
+                            }.items()
+                            if v is not None
                         }
                         for c in a.concepts
                     ],

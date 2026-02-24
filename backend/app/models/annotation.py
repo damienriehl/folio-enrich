@@ -26,6 +26,11 @@ class ConceptMatch(BaseModel):
     iri_hash: str | None = None
     children_count: int | None = None
     translations: dict[str, str] | None = None
+    folio_examples: list[str] | None = None
+    folio_notes: list[str] | None = None
+    folio_see_also: list[str] | None = None
+    folio_source: str | None = None
+    folio_alt_labels: list[str] | None = None
 
     @model_validator(mode="before")
     @classmethod

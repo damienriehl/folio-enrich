@@ -20,6 +20,15 @@ class FOLIOConcept:
     definition: str
     branch: str
     parent_iris: list[str]
+    examples: list[str] | None = None
+    notes: list[str] | None = None
+    editorial_note: str = ""
+    comment: str = ""
+    description: str = ""
+    source: str = ""
+    see_also: list[str] | None = None
+    hidden_label: str = ""
+    is_defined_by: str = ""
 
 
 @dataclass
@@ -185,6 +194,16 @@ class FolioService:
                                 label_type="alternative",
                                 matched_label=alt,
                             )
+
+                # Index hidden label (only if not already preferred or alternative)
+                if fc.hidden_label:
+                    key = fc.hidden_label.lower()
+                    if key not in labels or labels[key].label_type not in ("preferred", "alternative"):
+                        labels[key] = LabelInfo(
+                            concept=fc,
+                            label_type="hidden",
+                            matched_label=fc.hidden_label,
+                        )
             except Exception:
                 continue
 
@@ -200,6 +219,17 @@ class FolioService:
         iri = getattr(concept, "iri", "") or ""
         parent_iris = getattr(concept, "sub_class_of", []) or []
 
+        # OWL/SKOS metadata fields
+        examples = getattr(concept, "examples", []) or []
+        notes = getattr(concept, "notes", []) or []
+        editorial_note = getattr(concept, "editorial_note", "") or ""
+        comment = getattr(concept, "comment", "") or ""
+        description = getattr(concept, "description", "") or ""
+        source = getattr(concept, "source", "") or ""
+        see_also = getattr(concept, "see_also", []) or []
+        hidden_label = getattr(concept, "hidden_label", "") or ""
+        is_defined_by = getattr(concept, "is_defined_by", "") or ""
+
         branch = self._get_branch(iri, list(parent_iris))
 
         return FOLIOConcept(
@@ -209,4 +239,13 @@ class FolioService:
             definition=definition,
             branch=branch,
             parent_iris=list(parent_iris),
+            examples=list(examples) if examples else None,
+            notes=list(notes) if notes else None,
+            editorial_note=editorial_note,
+            comment=comment,
+            description=description,
+            source=source,
+            see_also=list(see_also) if see_also else None,
+            hidden_label=hidden_label,
+            is_defined_by=is_defined_by,
         )
