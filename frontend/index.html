@@ -1685,7 +1685,7 @@ function populateSettingsCards() {
       </div>
       <div class="provider-card-field">
         <span class="field-label">Key</span>
-        <input type="password" id="settingsKey_${escapedName}" placeholder="API key for ${displayName}">
+        <input type="password" id="settingsKey_${escapedName}" placeholder="${meta.api_key_set ? 'Key saved — enter new to replace' : 'API key for ' + displayName}"${meta.api_key_set ? ' data-key-saved="true"' : ''}>
       </div>
       <div class="provider-card-field">
         <span class="field-label">Model</span>
@@ -1823,6 +1823,9 @@ async function saveSettings() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+
+    // Refresh provider metadata (updates api_key_set flags)
+    await loadProviders();
 
     // Update inline config
     document.getElementById('providerSelect').value = provider;

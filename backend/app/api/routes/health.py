@@ -69,13 +69,26 @@ def _check_llm() -> dict:
     provider = settings.llm_provider
     model = settings.llm_model
 
-    has_key = False
-    if provider == "openai":
-        has_key = bool(settings.openai_api_key)
-    elif provider == "anthropic":
-        has_key = bool(settings.anthropic_api_key)
-    elif provider in ("ollama", "lm_studio"):
-        has_key = True  # Local models don't need API keys
+    # Map provider name → settings attribute for API key
+    _KEY_ATTRS = {
+        "openai": "openai_api_key",
+        "anthropic": "anthropic_api_key",
+        "google": "google_api_key",
+        "mistral": "mistral_api_key",
+        "cohere": "cohere_api_key",
+        "meta_llama": "meta_llama_api_key",
+        "groq": "groq_api_key",
+        "xai": "xai_api_key",
+        "github_models": "github_models_api_key",
+    }
+    # Local providers never need an API key
+    _LOCAL_PROVIDERS = {"ollama", "lmstudio", "lm_studio", "custom", "llamafile"}
+
+    if provider in _LOCAL_PROVIDERS:
+        has_key = True
+    else:
+        attr = _KEY_ATTRS.get(provider)
+        has_key = bool(getattr(settings, attr, "")) if attr else False
 
     if has_key:
         return {
