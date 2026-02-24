@@ -17,7 +17,7 @@ Rules:
 - Include both explicit legal terms (e.g., "breach of contract") and contextual legal concepts (e.g., "damages" when used in a legal sense)
 - Use the EXACT text as it appears — do not paraphrase or normalize
 - A concept can be 1-5 words long
-- Prefer the most specific concept (e.g., "breach of contract" over just "breach")
+- Match the complete phrase as it appears in the text. Use "breach of contract" rather than just "breach" when the full phrase is present, but do not infer a more specific sub-concept that isn't in the text (e.g., do not turn "cause of action" into "failure to state a cause of action")
 - Do not include common English words that are not legal concepts in context
 - Do NOT identify "area of law" categories (e.g., "litigation", "corporate law", "real estate law") — these are document-level classifications, not text-level concepts
 

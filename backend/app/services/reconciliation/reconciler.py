@@ -127,6 +127,12 @@ class Reconciler:
                     results.append(ReconciliationResult(concept=concept, category="both_agree"))
                 elif rc.folio_iri and lc.folio_iri:
                     conflicts.append((key, rc, lc))
+                elif rc.folio_iri and not lc.folio_iri:
+                    # Ruler has a direct IRI lookup; preserve it
+                    concept = rc
+                    concept.confidence = min(1.0, max(rc.confidence, lc.confidence) + 0.05)
+                    concept.source = "reconciled"
+                    results.append(ReconciliationResult(concept=concept, category="both_agree"))
                 else:
                     concept = lc
                     concept.confidence = min(1.0, max(rc.confidence, lc.confidence) + 0.05)

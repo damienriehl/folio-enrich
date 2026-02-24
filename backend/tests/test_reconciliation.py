@@ -87,6 +87,61 @@ class TestReconciler:
         assert results[0].category == "both_agree"
 
 
+class TestIRIPreservation:
+    """Tests for IRI-preservation logic in embedding triage reconciliation."""
+
+    def test_ruler_iri_preserved_when_llm_has_none(self):
+        """When ruler has an IRI but LLM doesn't, ruler's IRI should be preserved."""
+        from unittest.mock import MagicMock
+        mock_emb = MagicMock()
+        mock_emb.index_size = 100
+        reconciler = Reconciler(embedding_service=mock_emb)
+
+        ruler = [ConceptMatch(concept_text="cause of action", source="entity_ruler",
+                              confidence=0.90, folio_iri="iri_correct", folio_label="Cause of Action")]
+        llm = [ConceptMatch(concept_text="cause of action", source="llm",
+                            confidence=0.85, folio_iri=None, folio_label=None)]
+        results = reconciler.reconcile_with_embedding_triage(ruler, llm)
+        assert len(results) == 1
+        assert results[0].category == "both_agree"
+        assert results[0].concept.folio_iri == "iri_correct"
+        assert results[0].concept.confidence == min(1.0, 0.90 + 0.05)
+
+    def test_llm_used_when_neither_has_iri(self):
+        """When neither side has an IRI, LLM version should be used (existing behavior)."""
+        from unittest.mock import MagicMock
+        mock_emb = MagicMock()
+        mock_emb.index_size = 100
+        reconciler = Reconciler(embedding_service=mock_emb)
+
+        ruler = [ConceptMatch(concept_text="due process", source="entity_ruler",
+                              confidence=0.80, folio_iri=None)]
+        llm = [ConceptMatch(concept_text="due process", source="llm",
+                            confidence=0.85, folio_iri=None)]
+        results = reconciler.reconcile_with_embedding_triage(ruler, llm)
+        assert len(results) == 1
+        assert results[0].category == "both_agree"
+        assert results[0].concept.source == "reconciled"
+        # LLM version used — confidence is max(0.80, 0.85) + 0.05
+        assert results[0].concept.confidence == min(1.0, 0.85 + 0.05)
+
+    def test_llm_iri_used_when_ruler_has_none(self):
+        """When LLM has an IRI but ruler doesn't, LLM version should be used."""
+        from unittest.mock import MagicMock
+        mock_emb = MagicMock()
+        mock_emb.index_size = 100
+        reconciler = Reconciler(embedding_service=mock_emb)
+
+        ruler = [ConceptMatch(concept_text="injunction", source="entity_ruler",
+                              confidence=0.80, folio_iri=None)]
+        llm = [ConceptMatch(concept_text="injunction", source="llm",
+                            confidence=0.85, folio_iri="iri_llm", folio_label="Injunction")]
+        results = reconciler.reconcile_with_embedding_triage(ruler, llm)
+        assert len(results) == 1
+        assert results[0].category == "both_agree"
+        assert results[0].concept.folio_iri == "iri_llm"
+
+
 class TestEmbeddingTriage:
     def test_embedding_triage_without_service_falls_back(self):
         """Without embedding service, triage delegates to basic reconciliation."""

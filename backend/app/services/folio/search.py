@@ -380,7 +380,7 @@ def multi_strategy_search(
                 break
             parent_hash = _extract_iri_hash(current.sub_class_of[0])
             if parent_hash not in raw:
-                parent_score = score * (0.6 ** depth)
+                parent_score = score * (0.85 ** depth)
                 if parent_score >= min_score:
                     ancestor_scores[parent_hash] = max(
                         ancestor_scores.get(parent_hash, 0), parent_score

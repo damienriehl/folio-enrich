@@ -529,8 +529,10 @@
   .concept-tooltip .tooltip-lineage-list { margin-top: 6px; padding: 0; list-style: none; font-size: 11px; color: #6b6b80; }
   .concept-tooltip .tooltip-lineage-list li { padding: 3px 0; border-bottom: 1px solid #f0f0f4; display: flex; gap: 6px; }
   .concept-tooltip .tooltip-lineage-list li:last-child { border-bottom: none; }
-  .concept-tooltip .lineage-stage { font-weight: 600; color: #1a1a2e; min-width: 90px; }
-  .concept-tooltip .lineage-action { color: #3b64e0; min-width: 60px; }
+  .concept-tooltip .lineage-stage-name { font-weight: 600; color: #1a1a2e; min-width: 100px; font-size: 11px; }
+  .concept-tooltip .lineage-action { color: #3b64e0; min-width: 60px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+  .concept-tooltip .lineage-detail-text { color: #6b6b80; flex: 1; font-size: 11px; }
+  .concept-tooltip .lineage-confidence { font-weight: 600; color: #555; font-size: 10px; background: #f0f0f4; padding: 0 4px; border-radius: 3px; }
 
   /* Insights panel */
   .insights-header {
@@ -575,8 +577,35 @@
     border-left: 2px solid var(--accent);
   }
   .insights-lineage-detail {
-    font-size: 10px; color: var(--text-dim); margin-top: 6px;
-    font-family: 'SF Mono', 'Fira Code', Consolas, monospace; line-height: 1.5;
+    font-size: 11px; color: var(--text); margin-top: 8px;
+    line-height: 1.5;
+  }
+  .insights-lineage-detail .lineage-stage {
+    display: flex; align-items: baseline; gap: 6px;
+    padding: 4px 0; border-bottom: 1px solid var(--border);
+  }
+  .insights-lineage-detail .lineage-stage:last-child { border-bottom: none; }
+  .insights-lineage-detail .lineage-stage-name {
+    font-weight: 600; font-size: 11px; color: var(--accent);
+    white-space: nowrap; min-width: 110px;
+  }
+  .insights-lineage-detail .lineage-action {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    padding: 1px 5px; border-radius: 3px; white-space: nowrap;
+  }
+  .lineage-action.act-created { background: #e3f2fd; color: #1565c0; }
+  .lineage-action.act-confirmed { background: #e8f5e9; color: #2e7d32; }
+  .lineage-action.act-rejected { background: #fce4ec; color: #c62828; }
+  .lineage-action.act-enriched { background: #f3e5f5; color: #6a1b9a; }
+  .lineage-action.act-identified { background: #fff3e0; color: #e65100; }
+  .lineage-action.act-branch_assigned { background: #e0f2f1; color: #00695c; }
+  .lineage-action.act-kept { background: #fff8e1; color: #f57f17; }
+  .insights-lineage-detail .lineage-detail-text {
+    font-size: 11px; color: var(--text-dim); flex: 1;
+  }
+  .insights-lineage-detail .lineage-confidence {
+    font-size: 10px; font-weight: 600; white-space: nowrap;
+    padding: 1px 6px; border-radius: 3px; background: #f0f0f0; color: #555;
   }
   .insights-empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 40px 16px; }
 
@@ -2622,11 +2651,18 @@ async function toggleLineage(annId) {
       if (resp.ok) {
         const data = await resp.json();
         if (data.lineage && data.lineage.length > 0) {
+          const stageLabels = {
+            entity_ruler: 'Entity Ruler', semantic_ruler: 'Semantic Ruler',
+            llm_concept: 'LLM Analysis', reconciliation: 'Reconciliation',
+            resolution: 'Resolution', branch_judge: 'Branch Judge',
+            string_matching: 'String Matching',
+          };
           list.innerHTML = data.lineage.map(e => `
             <li>
-              <span class="lineage-stage">${escapeHtml(e.stage)}</span>
+              <span class="lineage-stage-name">${escapeHtml(stageLabels[e.stage] || e.stage)}</span>
               <span class="lineage-action">${escapeHtml(e.action)}</span>
-              <span>${escapeHtml(e.detail || '')}${e.confidence != null ? ` (${(e.confidence * 100).toFixed(0)}%)` : ''}</span>
+              ${e.confidence != null ? `<span class="lineage-confidence">${(e.confidence * 100).toFixed(0)}%</span>` : ''}
+              ${e.detail ? `<span class="lineage-detail-text">${escapeHtml(e.detail)}</span>` : ''}
             </li>
           `).join('');
         } else {
@@ -2750,8 +2786,31 @@ function renderInsightsPanel(data) {
           <thead><tr><th>Annotation</th><th>Rating</th><th>Details</th></tr></thead>
           <tbody>
             ${data.recent_feedback.map(fb => {
-              const lineageSummary = (fb.lineage && fb.lineage.length > 0)
-                ? fb.lineage.map(e => `${e.stage}: ${e.action}`).join(' \u2192 ')
+              const stageLabels = {
+                entity_ruler: 'Entity Ruler',
+                semantic_ruler: 'Semantic Ruler',
+                llm_concept: 'LLM Analysis',
+                reconciliation: 'Reconciliation',
+                resolution: 'Resolution',
+                branch_judge: 'Branch Judge',
+                string_matching: 'String Matching',
+              };
+              const lineageHtml = (fb.lineage && fb.lineage.length > 0)
+                ? `<div class="insights-lineage-detail">${fb.lineage.map(e => {
+                    const label = stageLabels[e.stage] || e.stage;
+                    const actionClass = 'act-' + (e.action || '').replace(/\s+/g, '_');
+                    const confHtml = (e.confidence != null)
+                      ? `<span class="lineage-confidence">${(e.confidence * 100).toFixed(0)}%</span>`
+                      : '';
+                    const detailHtml = e.detail
+                      ? `<span class="lineage-detail-text">${escapeHtml(e.detail)}</span>`
+                      : '';
+                    return `<div class="lineage-stage">
+                      <span class="lineage-stage-name">${escapeHtml(label)}</span>
+                      <span class="lineage-action ${actionClass}">${escapeHtml(e.action || '')}</span>
+                      ${confHtml}${detailHtml}
+                    </div>`;
+                  }).join('')}</div>`
                 : '';
               return `
                 <tr>
@@ -2767,7 +2826,7 @@ function renderInsightsPanel(data) {
                   <td>
                     ${fb.comment ? `<div class="insights-comment">${escapeHtml(fb.comment)}</div>` : ''}
                     ${fb.stage ? `<div style="font-size:11px;color:var(--text-dim);margin-top:4px">Stage: ${escapeHtml(fb.stage)}</div>` : ''}
-                    ${lineageSummary ? `<div class="insights-lineage-detail">${escapeHtml(lineageSummary)}</div>` : ''}
+                    ${lineageHtml}
                   </td>
                 </tr>
               `;
