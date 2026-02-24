@@ -685,8 +685,33 @@
     position: relative;
     border-top: 1px solid var(--border);
     margin-top: 6px;
-    padding-top: 4px;
+    padding-top: 0;
   }
+
+  .log-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+    cursor: pointer;
+    user-select: none;
+    font-size: 11px;
+    color: var(--text-dim);
+    background: none;
+    border: none;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+  }
+  .log-toggle:hover { color: var(--text); }
+  .log-toggle .chevron {
+    display: inline-block;
+    transition: transform 0.15s ease;
+    font-size: 9px;
+  }
+  .activity-log-wrapper.collapsed .chevron { transform: rotate(-90deg); }
+  .activity-log-wrapper.collapsed .activity-log,
+  .activity-log-wrapper.collapsed .btn-copy-log { display: none; }
 
   .activity-log {
     max-height: 240px;
@@ -1222,7 +1247,8 @@
     <div class="pipeline-progress" id="pipelineProgress">
       <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
       <div class="progress-stages" id="progressStages"></div>
-      <div class="activity-log-wrapper">
+      <div class="activity-log-wrapper collapsed" id="logWrapper">
+        <button class="log-toggle" onclick="toggleLog()"><span class="chevron">&#9660;</span> Log</button>
         <button class="btn-copy-log" onclick="copyActivityLog()" title="Copy log to clipboard">Copy</button>
         <div class="activity-log" id="activityLog"></div>
       </div>
@@ -2318,6 +2344,10 @@ function renderActivityLog() {
     return `<div class="activity-entry"><span class="activity-ts">${t}</span><span class="activity-stage${cls}">${e.stage}</span><span class="activity-msg">${e.msg}</span></div>`;
   }).join('');
   container.scrollTop = container.scrollHeight;
+}
+
+function toggleLog() {
+  document.getElementById('logWrapper').classList.toggle('collapsed');
 }
 
 function copyActivityLog() {
@@ -3483,6 +3513,7 @@ function clearAll() {
   Object.keys(_feedbackCache).forEach(k => delete _feedbackCache[k]);
   Object.keys(_noteCache).forEach(k => delete _noteCache[k]);
   document.getElementById('activityLog').innerHTML = '';
+  document.getElementById('logWrapper').classList.add('collapsed');
   stopPolling();
   setStatus('Ready', 'idle');
   renderProgressStages('pending');
