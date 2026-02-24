@@ -477,37 +477,62 @@
   .tooltip-iri a:hover { text-decoration: underline; }
 
   /* Feedback UI in tooltip — scoped to .concept-tooltip to override global dark styles */
-  .concept-tooltip .tooltip-feedback { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e5ea; }
-  .concept-tooltip .tooltip-feedback-row { display: flex; align-items: center; gap: 8px; }
-  .concept-tooltip .tooltip-feedback-btn {
-    background: #ffffff; border: 1px solid #d0d0da; border-radius: 6px; padding: 4px 10px;
-    cursor: pointer; font-size: 16px; display: flex; align-items: center; gap: 4px;
-    color: #6b6b80; transition: all 0.15s; min-height: auto; line-height: 1;
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;
+  .concept-tooltip .tooltip-feedback {
+    margin-top: 12px; padding: 10px 12px; border-top: none;
+    background: #f7f8fb; border-radius: 8px;
   }
-  .concept-tooltip .tooltip-feedback-btn:hover { border-color: #3b64e0; background: #f0f4ff; }
+  .concept-tooltip .tooltip-feedback-row { display: flex; align-items: center; gap: 6px; }
+  .concept-tooltip .tooltip-feedback-btn {
+    background: #ffffff; border: 1px solid #e2e3ea; border-radius: 20px; padding: 5px 14px;
+    cursor: pointer; font-size: 15px; display: inline-flex; align-items: center; justify-content: center;
+    color: #9090a0; transition: all 0.2s ease; line-height: 1;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06); min-height: auto;
+  }
+  .concept-tooltip .tooltip-feedback-btn:hover {
+    border-color: #c0c0d0; background: #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1); transform: translateY(-1px);
+  }
   .concept-tooltip .tooltip-feedback-btn.active-up,
-  .concept-tooltip .tooltip-feedback-btn.active-up:hover { border-color: #166534; background: #dcfce7; color: #166534; }
+  .concept-tooltip .tooltip-feedback-btn.active-up:hover {
+    border-color: #22c55e; background: #f0fdf4; color: #166534;
+    box-shadow: 0 0 0 2px rgba(34,197,94,0.15); transform: none;
+  }
   .concept-tooltip .tooltip-feedback-btn.active-down,
-  .concept-tooltip .tooltip-feedback-btn.active-down:hover { border-color: #991b1b; background: #fee2e2; color: #991b1b; }
+  .concept-tooltip .tooltip-feedback-btn.active-down:hover {
+    border-color: #ef4444; background: #fef2f2; color: #991b1b;
+    box-shadow: 0 0 0 2px rgba(239,68,68,0.15); transform: none;
+  }
   .concept-tooltip .tooltip-feedback-btn:disabled { opacity: 0.5; cursor: default; }
   .concept-tooltip .tooltip-feedback-note {
-    width: 100%; margin-top: 6px; padding: 6px 8px; border: 1px solid #d0d0da;
-    border-radius: 6px; font-size: 12px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    resize: vertical; min-height: 28px; max-height: 80px;
+    width: 100%; margin-top: 8px; padding: 7px 10px; border: 1px solid #e2e3ea;
+    border-radius: 8px; font-size: 12px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    resize: vertical; min-height: 32px; max-height: 80px;
     background: #ffffff; color: #1a1a2e; line-height: 1.4;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.04); transition: border-color 0.2s, box-shadow 0.2s;
   }
-  .concept-tooltip .tooltip-feedback-note::placeholder { color: #a0a0b0; }
-  .concept-tooltip .tooltip-feedback-note:focus { outline: none; border-color: #3b64e0; box-shadow: 0 0 0 2px rgba(59, 100, 224, 0.15); }
-  .concept-tooltip .tooltip-feedback-saved { font-size: 11px; color: #166534; margin-left: auto; }
+  .concept-tooltip .tooltip-feedback-note::placeholder { color: #b0b0c0; }
+  .concept-tooltip .tooltip-feedback-note:focus {
+    outline: none; border-color: #3b64e0;
+    box-shadow: 0 0 0 3px rgba(59,100,224,0.12);
+  }
+  .concept-tooltip .tooltip-feedback-saved {
+    font-size: 11px; color: #22c55e; margin-left: auto; font-weight: 500;
+  }
 
   /* Lineage trail in tooltip */
-  .concept-tooltip .tooltip-lineage { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e5ea; }
+  .concept-tooltip .tooltip-lineage { margin-top: 6px; padding-top: 0; border-top: none; }
   .concept-tooltip .tooltip-lineage-toggle {
-    font-size: 11px; color: #3b64e0; cursor: pointer; background: none; border: none;
-    padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    display: flex; align-items: center; gap: 6px; width: 100%;
+    font-size: 12px; font-weight: 500; color: #5a6080; cursor: pointer;
+    background: #f7f8fb; border: 1px solid #e8e9f0; border-radius: 8px;
+    padding: 7px 12px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
   }
-  .concept-tooltip .tooltip-lineage-toggle:hover { text-decoration: underline; }
+  .concept-tooltip .tooltip-lineage-toggle:hover {
+    background: #eef0f7; border-color: #d0d4e4; color: #3b64e0;
+    text-decoration: none;
+  }
   .concept-tooltip .tooltip-lineage-list { margin-top: 6px; padding: 0; list-style: none; font-size: 11px; color: #6b6b80; }
   .concept-tooltip .tooltip-lineage-list li { padding: 3px 0; border-bottom: 1px solid #f0f0f4; display: flex; gap: 6px; }
   .concept-tooltip .tooltip-lineage-list li:last-child { border-bottom: none; }
@@ -1162,18 +1187,25 @@
   }
 
   /* Alternatives section in tooltip */
-  .tooltip-alternatives { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e5ea; }
+  .tooltip-alternatives { margin-top: 6px; padding-top: 0; border-top: none; }
   .tooltip-alternatives-toggle {
-    background: none; border: none; color: #3b64e0; cursor: pointer;
-    font-size: 12px; padding: 0; font-family: inherit;
+    display: flex; align-items: center; gap: 6px; width: 100%;
+    font-size: 12px; font-weight: 500; color: #5a6080; cursor: pointer;
+    background: #f7f8fb; border: 1px solid #e8e9f0; border-radius: 8px;
+    padding: 7px 12px; font-family: inherit;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
   }
-  .tooltip-alternatives-toggle:hover { text-decoration: underline; }
-  .tooltip-alternatives-list { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+  .tooltip-alternatives-toggle:hover {
+    background: #eef0f7; border-color: #d0d4e4; color: #3b64e0;
+    text-decoration: none;
+  }
+  .tooltip-alternatives-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
   .tooltip-alt-card {
-    border: 1px solid #e0e0e8; border-radius: 6px; padding: 8px 10px;
-    font-size: 12px; background: #fafafc; transition: background 0.15s;
+    border: 1px solid #e2e3ea; border-radius: 8px; padding: 10px 12px;
+    font-size: 12px; background: #fafafc; transition: all 0.15s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
   }
-  .tooltip-alt-card:hover { background: #f0f0f6; }
+  .tooltip-alt-card:hover { background: #f0f2f8; border-color: #d0d4e4; box-shadow: 0 2px 4px rgba(0,0,0,0.06); }
   .tooltip-alt-card-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .tooltip-alt-card-label { font-weight: 600; color: #1a1a2e; }
   .tooltip-alt-card-branch {
@@ -1184,12 +1216,12 @@
   .tooltip-alt-card-def { font-size: 11px; color: #6b6b80; margin-top: 3px; line-height: 1.3;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .tooltip-alt-promote-btn {
-    margin-top: 6px; padding: 3px 10px; font-size: 11px;
-    border: 1px solid #3b64e0; border-radius: 4px;
+    margin-top: 6px; padding: 4px 12px; font-size: 11px; font-weight: 500;
+    border: 1px solid #3b64e0; border-radius: 6px;
     background: transparent; color: #3b64e0; cursor: pointer;
-    font-family: inherit; transition: background 0.15s, color 0.15s;
+    font-family: inherit; transition: all 0.2s ease;
   }
-  .tooltip-alt-promote-btn:hover { background: #3b64e0; color: #fff; }
+  .tooltip-alt-promote-btn:hover { background: #3b64e0; color: #fff; box-shadow: 0 2px 6px rgba(59,100,224,0.25); }
 
   /* Concepts list alternatives indicator */
   .concept-alt-indicator { font-size: 10px; color: #3b64e0; margin-left: 6px; }
@@ -2576,7 +2608,7 @@ function showTooltip(event, el) {
       </div>`;
     }).join('');
     altsHtml = `<div class="tooltip-alternatives">
-      <button class="tooltip-alternatives-toggle" onclick="toggleAlternatives('${escapeAttr(annId)}')">Show ${alts.length} alternative${alts.length > 1 ? 's' : ''}</button>
+      <button class="tooltip-alternatives-toggle" onclick="toggleAlternatives('${escapeAttr(annId)}')"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="transition:transform .2s;flex-shrink:0"><path d="M3 1.5L7 5L3 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Show ${alts.length} alternative${alts.length > 1 ? 's' : ''}</span></button>
       <div class="tooltip-alternatives-list" id="alts-${escapeAttr(annId)}" style="display:none">${altCards}</div>
     </div>`;
   }
@@ -2604,7 +2636,7 @@ function showTooltip(event, el) {
     </div>
     ${altsHtml}
     ${annId && currentJobId ? `<div class="tooltip-lineage">
-      <button class="tooltip-lineage-toggle" onclick="toggleLineage('${escapeAttr(annId)}')">Show stage lineage</button>
+      <button class="tooltip-lineage-toggle" onclick="toggleLineage('${escapeAttr(annId)}')"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="transition:transform .2s;flex-shrink:0"><path d="M3 1.5L7 5L3 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Show stage lineage</span></button>
       <ul class="tooltip-lineage-list" id="lineage-${escapeAttr(annId)}" style="display:none"></ul>
     </div>` : ''}
   `;
@@ -2752,9 +2784,13 @@ async function toggleLineage(annId) {
   const list = document.getElementById(`lineage-${annId}`);
   if (!list) return;
 
+  const lineBtn = list.previousElementSibling;
+  const lineSvg = lineBtn.querySelector('svg');
   if (list.style.display !== 'none') {
     list.style.display = 'none';
-    list.previousElementSibling.textContent = 'Show stage lineage';
+    if (lineSvg) lineSvg.style.transform = 'rotate(0deg)';
+    const lineLabel = lineBtn.querySelector('span');
+    if (lineLabel) lineLabel.textContent = 'Show stage lineage';
     _lineageExpanded = false;
     localStorage.setItem('lineageExpanded', 'false');
     return;
@@ -2818,7 +2854,9 @@ async function toggleLineage(annId) {
   }
 
   list.style.display = 'block';
-  list.previousElementSibling.textContent = 'Hide stage lineage';
+  if (lineSvg) lineSvg.style.transform = 'rotate(90deg)';
+  const lineLabelExp = lineBtn.querySelector('span');
+  if (lineLabelExp) lineLabelExp.textContent = 'Hide stage lineage';
   _lineageExpanded = true;
   localStorage.setItem('lineageExpanded', 'true');
 }
@@ -2827,15 +2865,19 @@ function toggleAlternatives(annId) {
   const list = document.getElementById(`alts-${annId}`);
   if (!list) return;
   const btn = list.previousElementSibling;
+  const svg = btn.querySelector('svg');
+  const label = btn.querySelector('span');
   if (list.style.display !== 'none') {
     list.style.display = 'none';
     const count = list.children.length;
-    btn.textContent = `Show ${count} alternative${count > 1 ? 's' : ''}`;
+    if (svg) svg.style.transform = 'rotate(0deg)';
+    if (label) label.textContent = `Show ${count} alternative${count > 1 ? 's' : ''}`;
     _alternativesExpanded = false;
     localStorage.setItem('alternativesExpanded', 'false');
   } else {
     list.style.display = 'flex';
-    btn.textContent = 'Hide alternatives';
+    if (svg) svg.style.transform = 'rotate(90deg)';
+    if (label) label.textContent = 'Hide alternatives';
     _alternativesExpanded = true;
     localStorage.setItem('alternativesExpanded', 'true');
   }
