@@ -161,6 +161,10 @@ class FolioService:
             try:
                 fc = self._to_folio_concept(concept)
 
+                # Skip concepts from excluded branches
+                if fc.branch in EXCLUDED_BRANCHES:
+                    continue
+
                 # Index preferred label (always wins over alt)
                 pref = fc.preferred_label
                 if pref:

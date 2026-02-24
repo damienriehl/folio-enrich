@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from app.services.folio.branch_config import EXCLUDED_BRANCHES
 from app.services.folio.folio_service import FOLIOConcept, FolioService
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,11 @@ class ConceptResolver:
 
         resolved_branches = [best_concept.branch] if best_concept.branch else (branches or [])
 
+        # Defense-in-depth: reject concepts from excluded branches
+        if any(b in EXCLUDED_BRANCHES for b in resolved_branches):
+            self._cache[cache_key] = None
+            return None
+
         resolved = ResolvedConcept(
             concept_text=concept_text,
             folio_concept=best_concept,
@@ -97,8 +103,17 @@ class ConceptResolver:
             from app.services.folio.search import multi_strategy_search
 
             folio_raw = self.folio._get_folio()
+
+            def _get_branch(folio_inst, iri_hash: str) -> str:
+                """Resolve branch for a concept IRI hash."""
+                owl_class = folio_inst[iri_hash]
+                if owl_class and hasattr(owl_class, "iri"):
+                    return self.folio._get_branch(owl_class.iri, [])
+                return ""
+
             results = multi_strategy_search(
                 folio_raw, concept_text, branch=branch or None, top_n=5,
+                get_branch_fn=_get_branch,
             )
             if not results:
                 return None, 0.0
