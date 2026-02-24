@@ -109,6 +109,7 @@ class StringMatchStage(PipelineStage):
                     detail=evt.get("detail", ""),
                     confidence=evt.get("confidence"),
                     timestamp=evt.get("timestamp", ""),
+                    reasoning=evt.get("reasoning", ""),
                 ))
 
             if span_key in existing_by_span:

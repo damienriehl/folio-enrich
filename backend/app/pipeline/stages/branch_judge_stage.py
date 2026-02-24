@@ -72,6 +72,7 @@ class BranchJudgeStage(PipelineStage):
                             "action": "branch_assigned",
                             "detail": f"LLM judge assigned branch '{branch}'",
                             "confidence": result.get("confidence"),
+                            "reasoning": result.get("reasoning", ""),
                         })
                     else:
                         events.append({
@@ -79,6 +80,7 @@ class BranchJudgeStage(PipelineStage):
                             "action": "rejected",
                             "detail": "LLM judge could not assign a branch",
                             "confidence": result.get("confidence"),
+                            "reasoning": result.get("reasoning", ""),
                         })
 
         log = job.result.metadata.setdefault("activity_log", [])

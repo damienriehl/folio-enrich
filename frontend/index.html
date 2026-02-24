@@ -585,6 +585,18 @@
     font-size: 10px; font-weight: 600; white-space: nowrap;
     padding: 1px 6px; border-radius: 3px; background: #f0f0f0; color: #555;
   }
+  .lineage-reasoning {
+    display: none;
+    font-size: 11px; font-style: italic; color: var(--text-dim);
+    margin: 2px 0 2px 116px; padding: 3px 8px;
+    border-left: 2px solid var(--accent-dim);
+    line-height: 1.4;
+  }
+  body.show-thinking .lineage-reasoning { display: block; }
+  .concept-tooltip .lineage-reasoning {
+    margin-left: 0; color: #6b6b80; border-left-color: #c0c0d0;
+  }
+  body.show-thinking .concept-tooltip .lineage-reasoning { display: block; }
   .insights-empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 40px 16px; }
 
   .insights-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--surface3); }
@@ -1162,7 +1174,8 @@
       <div class="form-row" style="margin-bottom:8px">
         <button class="primary" id="enrichBtn" onclick="submitEnrichment()">Enrich Document</button>
         <button class="secondary" onclick="clearAll()">Clear</button>
-        <button id="debugModeBtn" onclick="toggleDebugMode()" style="margin-left:auto;background:var(--surface2);border:none;color:var(--text-dim)" title="Truncate input to ~500 words for faster pipeline testing"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:transparent"></span>Debug Mode</button>
+        <button id="showThinkingBtn" onclick="toggleShowThinking()" style="margin-left:auto;background:var(--surface2);border:none;color:var(--text-dim)" title="Show LLM chain-of-thought reasoning in lineage"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:transparent"></span>Show Thinking</button>
+        <button id="debugModeBtn" onclick="toggleDebugMode()" style="background:var(--surface2);border:none;color:var(--text-dim)" title="Truncate input to ~500 words for faster pipeline testing"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:transparent"></span>Debug Mode</button>
       </div>
 
       <!-- File upload -->
@@ -1354,6 +1367,7 @@ let pricingData = {};     // model id → {input_cost_per_1k, output_cost_per_1k
 let selectedDocType = null;
 let showUncertain = true;
 let debugMode = localStorage.getItem('debugMode') === 'true';
+let showThinking = localStorage.getItem('showThinking') === 'true';
 
 // ==============================================
 // Session Cache — persist pipeline results across reloads
@@ -1515,6 +1529,7 @@ const SAMPLES = {
 
 async function init() {
   // Restore UI state immediately (before any async calls)
+  if (showThinking) applyShowThinkingStyle(document.getElementById('showThinkingBtn'), true);
   if (debugMode) applyDebugBtnStyle(document.getElementById('debugModeBtn'), true);
   if (!restoreState()) {
     renderProgressStages('pending');
@@ -2023,6 +2038,19 @@ function applyDebugBtnStyle(btn, on) {
   btn.style.background = on ? 'rgba(232,165,76,0.15)' : 'var(--surface2)';
   btn.style.color = on ? 'var(--orange)' : 'var(--text-dim)';
   btn.innerHTML = '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:' + (on ? 'var(--orange)' : 'transparent') + '"></span>Debug Mode';
+}
+
+function applyShowThinkingStyle(btn, on) {
+  btn.style.background = on ? 'rgba(176,126,232,0.15)' : 'var(--surface2)';
+  btn.style.color = on ? 'var(--purple)' : 'var(--text-dim)';
+  btn.innerHTML = '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:' + (on ? 'var(--purple)' : 'transparent') + '"></span>Show Thinking';
+  document.body.classList.toggle('show-thinking', on);
+}
+
+function toggleShowThinking() {
+  showThinking = !showThinking;
+  localStorage.setItem('showThinking', showThinking);
+  applyShowThinkingStyle(document.getElementById('showThinkingBtn'), showThinking);
 }
 
 function toggleDebugMode() {
@@ -2601,6 +2629,7 @@ async function toggleLineage(annId) {
               <span class="lineage-action">${escapeHtml((e.action || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))}</span>
               ${e.confidence != null ? `<span class="lineage-confidence">${(e.confidence * 100).toFixed(0)}%</span>` : ''}
               ${e.detail ? `<span class="lineage-detail-text">${escapeHtml(e.detail)}</span>` : ''}
+              ${e.reasoning ? `<span class="lineage-reasoning">${escapeHtml(e.reasoning)}</span>` : ''}
             </li>
           `).join('');
         } else {
@@ -2745,10 +2774,13 @@ function renderInsightsPanel(data) {
                     const detailHtml = e.detail
                       ? `<span class="lineage-detail-text">${escapeHtml(e.detail)}</span>`
                       : '';
+                    const reasoningHtml = e.reasoning
+                      ? `<span class="lineage-reasoning">${escapeHtml(e.reasoning)}</span>`
+                      : '';
                     return `<div class="lineage-stage">
                       <span class="lineage-stage-name">${escapeHtml(label)}</span>
                       <span class="lineage-action ${actionClass}">${escapeHtml((e.action || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))}</span>
-                      ${confHtml}${detailHtml}
+                      ${confHtml}${detailHtml}${reasoningHtml}
                     </div>`;
                   }).join('')}</div>`
                 : '';

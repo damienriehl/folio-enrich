@@ -12,6 +12,7 @@ class StageEvent(BaseModel):
     detail: str = ""
     confidence: float | None = None
     timestamp: str = ""
+    reasoning: str = ""
 
 
 class FeedbackItem(BaseModel):
