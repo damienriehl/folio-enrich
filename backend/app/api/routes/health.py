@@ -31,6 +31,7 @@ async def health_detail() -> dict:
 def _check_folio() -> dict:
     try:
         from app.services.folio.folio_service import FolioService
+        from app.services.folio.owl_cache import get_owl_status
         svc = FolioService.get_instance()
         if svc._folio is not None:
             count = len(svc._folio.classes)
@@ -39,9 +40,10 @@ def _check_folio() -> dict:
                 "status": "ready",
                 "concepts": count,
                 "labels_indexed": label_count,
+                "owl_cache": get_owl_status(),
             }
         else:
-            return {"status": "not_loaded", "message": "Loads on first request"}
+            return {"status": "not_loaded", "message": "Loaded at startup"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -58,7 +60,7 @@ def _check_embedding() -> dict:
                 "index_size": svc.index_size,
             }
         else:
-            return {"status": "not_loaded", "message": "Loads on first use"}
+            return {"status": "not_loaded", "message": "Loaded at startup"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

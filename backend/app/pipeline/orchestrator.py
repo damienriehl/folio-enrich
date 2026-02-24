@@ -24,12 +24,16 @@ logger = logging.getLogger(__name__)
 
 
 def _get_embedding_service():
-    """Get the singleton EmbeddingService if it has indexed labels."""
+    """Get the singleton EmbeddingService (always available after startup)."""
     try:
         from app.services.embedding.service import EmbeddingService
         svc = EmbeddingService.get_instance()
-        return svc if svc.index_size > 0 else None
+        if svc.index_size > 0:
+            return svc
+        logger.warning("Embedding index is empty — semantic features will be disabled")
+        return None
     except Exception:
+        logger.warning("Failed to get embedding service", exc_info=True)
         return None
 
 
