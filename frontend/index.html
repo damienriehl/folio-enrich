@@ -308,42 +308,18 @@
 
   textarea:focus { outline: none; border-color: var(--accent); }
 
-  /* Collapsible sections */
-  .collapsible {
-    margin-bottom: 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
+  /* Clickable status chip (e.g. LLM settings) */
+  .status-chip.clickable { cursor: pointer; }
+  .status-chip.clickable:hover {
+    border-color: var(--accent);
+    background: rgba(59,100,224,0.08);
   }
-
-  .collapsible-header {
-    padding: 8px 12px;
-    background: var(--surface);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-dim);
-    user-select: none;
-  }
-
-  .collapsible-header:hover { color: var(--text); }
-
-  .collapsible-header .arrow {
-    transition: transform 0.2s;
+  .status-chip.clickable .chip-gear {
     font-size: 10px;
+    opacity: 0.4;
+    transition: opacity 0.2s;
   }
-
-  .collapsible-header.open .arrow { transform: rotate(90deg); }
-
-  .collapsible-body {
-    display: none;
-    padding: 12px;
-  }
-
-  .collapsible-body.open { display: block; }
+  .status-chip.clickable:hover .chip-gear { opacity: 0.9; }
 
   /* Tabs */
   .tabs {
@@ -788,11 +764,6 @@
   .aol-item .aol-name { flex: 1; min-width: 0; }
   .aol-item .confidence-bar { flex: 0 0 60px; margin-top: 0; }
 
-  .confidence-legend { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #6b6b80; margin-right: 8px; }
-  .confidence-legend .legend-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
-  .confidence-legend .legend-dot.conf-high { background: #22c55e; }
-  .confidence-legend .legend-dot.conf-mid { background: #f59e0b; }
-  .confidence-legend .legend-dot.conf-low { background: #ef4444; }
 
   .meta-value .confidence-badge { display: inline-block; padding: 1px 6px; border-radius: 8px; font-weight: 600; font-size: 11px; }
   .confidence-badge.conf-high { background: #dcfce7; color: #166534; }
@@ -937,25 +908,26 @@
   .radio-group input[type="radio"] { accent-color: #3b64e0; }
 
   /* Toggle switch */
-  .toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6b6b80; cursor: pointer; }
-  .toggle input { display: none; }
+  .toggle { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #c8c8d8; cursor: pointer; }
+  .toggle input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
   .toggle-track {
-    width: 32px; height: 18px;
+    width: 24px; height: 14px;
     background: #c0c0cc;
-    border-radius: 9px;
+    border-radius: 7px;
     position: relative;
     transition: background 0.2s;
   }
   .toggle input:checked + .toggle-track { background: #3b64e0; }
+  .toggle input:focus-visible + .toggle-track { outline: 2px solid #3b64e0; outline-offset: 2px; }
   .toggle-thumb {
-    width: 14px; height: 14px;
+    width: 10px; height: 10px;
     background: #fff;
     border-radius: 50%;
     position: absolute;
     top: 2px; left: 2px;
     transition: left 0.2s;
   }
-  .toggle input:checked + .toggle-track .toggle-thumb { left: 16px; }
+  .toggle input:checked + .toggle-track .toggle-thumb { left: 12px; }
 
   /* Spinner */
   .spinner {
@@ -1149,10 +1121,11 @@
       <span class="chip-label">Embedding</span>
       <span class="chip-detail" id="chipEmbeddingDetail">...</span>
     </div>
-    <div class="status-chip" id="chipLLM" data-tooltip="LLM provider status" onclick="openSettings()" style="cursor:pointer">
+    <div class="status-chip clickable" id="chipLLM" data-tooltip="Click to configure LLM provider" onclick="openSettings()">
       <span class="chip-dot gray"></span>
       <span class="chip-label">LLM</span>
       <span class="chip-detail" id="chipLLMDetail">...</span>
+      <span class="chip-gear">&#9881;</span>
     </div>
     <div class="status-chip" id="chipSpacy" data-tooltip="spaCy NLP status">
       <span class="chip-dot gray"></span>
@@ -1161,15 +1134,10 @@
     </div>
   </div>
   <div class="header-right">
-    <div class="confidence-legend">
-      <span class="legend-dot conf-high"></span><span>High (&ge;80%)</span>
-      <span class="legend-dot conf-mid"></span><span>Medium (50–79%)</span>
-      <span class="legend-dot conf-low"></span><span>Low (&lt;50%)</span>
-    </div>
-    <label class="toggle" title="Toggle uncertain annotations">
-      <input type="checkbox" id="hideUncertainToggle" checked onchange="toggleUncertain()">
-      <span class="toggle-track"><span class="toggle-thumb"></span></span>
-      <span>Show all</span>
+    <label class="toggle">
+      <input type="checkbox" id="hideUncertainToggle" checked onchange="toggleUncertain()" role="switch" aria-checked="true">
+      <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
+      <span>Show Uncertain</span>
     </label>
   </div>
 </header>
@@ -1181,33 +1149,11 @@
       <h2>Document Input</h2>
     </div>
     <div class="panel-body">
-      <!-- LLM Configuration (inline) -->
-      <div class="collapsible">
-        <div class="collapsible-header" onclick="toggleCollapsible(this)">
-          <span class="arrow">&#9654;</span>
-          LLM Provider
-          <span style="margin-left:auto;font-weight:400;font-size:11px" id="llmSummary">Loading...</span>
-        </div>
-        <div class="collapsible-body" id="llmConfig">
-          <div class="form-row" style="margin-bottom:8px">
-            <div style="flex:1">
-              <label>Provider</label>
-              <select id="providerSelect" onchange="onProviderChange()"></select>
-            </div>
-            <div style="flex:1">
-              <label>Model</label>
-              <select id="modelSelect"></select>
-            </div>
-          </div>
-          <div class="form-group" id="apiKeyGroup">
-            <label>API Key</label>
-            <div class="form-row">
-              <input type="password" id="apiKeyInput" placeholder="sk-...">
-              <button class="small" onclick="testConnection()">Test</button>
-            </div>
-            <div class="test-status" id="testStatus"></div>
-          </div>
-        </div>
+      <!-- Hidden LLM state holders (managed via Settings modal) -->
+      <div style="display:none">
+        <select id="providerSelect" onchange="onProviderChange()"></select>
+        <select id="modelSelect"></select>
+        <input type="password" id="apiKeyInput">
       </div>
 
       <!-- Upload & Enrich -->
@@ -1586,7 +1532,10 @@ function setChip(id, dotColor, detail, tooltip) {
   const dot = chip.querySelector('.chip-dot');
   dot.className = 'chip-dot ' + dotColor;
   const detailEl = document.getElementById(id + 'Detail');
-  if (detailEl) detailEl.textContent = detail;
+  if (detailEl) {
+    detailEl.textContent = detail;
+    detailEl.style.display = detail ? '' : 'none';
+  }
   chip.setAttribute('data-tooltip', tooltip);
 }
 
@@ -1595,7 +1544,7 @@ async function checkHealth() {
   try {
     const r = await fetch(`${API}/health`);
     if (!r.ok) throw new Error();
-    setChip('chipBackend', 'green', 'Connected', 'Backend is running');
+    setChip('chipBackend', 'green', '', 'Backend is running');
   } catch {
     setChip('chipBackend', 'red', 'Offline', 'Cannot reach backend at ' + API);
     setChip('chipFolio', 'gray', '---', 'Backend offline');
@@ -1626,8 +1575,9 @@ async function checkHealth() {
     // Embedding
     const e = d.embedding || {};
     if (e.status === 'ready') {
+      const shortProvider = (e.provider || 'Ready').replace(/Provider$/i, '').replace(/Embedding$/i, '').replace(/^Local$/i, 'Local');
       setChip('chipEmbedding', 'green',
-        e.provider || 'Ready',
+        shortProvider || 'Ready',
         `Embedding: ${e.provider}, ${(e.index_size || 0).toLocaleString()} vectors indexed`);
     } else if (e.status === 'not_loaded') {
       setChip('chipEmbedding', 'orange', 'Standby', 'Embedding service loads on first use');
@@ -1640,11 +1590,11 @@ async function checkHealth() {
     const modelShort = (l.model || '').split('/').pop();
     if (l.status === 'configured') {
       setChip('chipLLM', 'green',
-        `${l.provider}/${modelShort}`,
+        modelShort,
         `LLM: ${l.provider} / ${l.model} — API key configured`);
     } else if (l.status === 'no_api_key') {
       setChip('chipLLM', 'orange',
-        `${l.provider}/${modelShort}`,
+        modelShort,
         `LLM: ${l.provider} / ${l.model} — No API key set. EntityRuler-only mode.`);
     } else {
       setChip('chipLLM', 'red', 'Error', l.message || 'LLM error');
@@ -1719,14 +1669,6 @@ function onProviderChange() {
   // Populate model dropdown from known models
   populateModelSelect(modelSelect, provider);
 
-  // Show/hide API key based on provider metadata
-  const needsKey = meta.requires_api_key !== false;
-  document.getElementById('apiKeyGroup').style.display = needsKey ? 'block' : 'none';
-
-  // Clear test status when switching providers
-  const testStatus = document.getElementById('testStatus');
-  if (testStatus) { testStatus.textContent = ''; testStatus.className = 'test-status'; }
-
   updateLLMSummary();
 }
 
@@ -1782,9 +1724,7 @@ async function fetchDynamicModels() {
 }
 
 function updateLLMSummary() {
-  const provider = document.getElementById('providerSelect').value;
-  const model = document.getElementById('modelSelect').value;
-  document.getElementById('llmSummary').textContent = `${provider} / ${model || '...'}`;
+  // No-op: inline collapsible removed; LLM info shown via chipLLM status chip
 }
 
 async function loadSettings() {
@@ -1803,56 +1743,6 @@ async function loadSettings() {
   } catch (e) {
     console.error('Failed to load settings:', e);
   }
-}
-
-async function testConnection() {
-  const provider = document.getElementById('providerSelect').value;
-  const model = document.getElementById('modelSelect').value;
-  const apiKey = document.getElementById('apiKeyInput').value;
-  const status = document.getElementById('testStatus');
-
-  status.textContent = 'Testing...';
-  status.className = 'test-status';
-
-  // Save provider/model/key to backend settings so health check updates
-  try {
-    const settingsBody = { llm_provider: provider, llm_model: model };
-    if (apiKey) {
-      // Map provider to correct API key field
-      const keyField = _providerKeyField(provider);
-      if (keyField) settingsBody[keyField] = apiKey;
-    }
-    await fetch(`${API}/settings`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settingsBody),
-    });
-  } catch { /* settings save is best-effort */ }
-
-  // Test the connection
-  try {
-    const r = await fetch(`${API}/settings/test-connection`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, model, api_key: apiKey || undefined }),
-    });
-    const data = await r.json();
-    if (data.success) {
-      status.textContent = 'Connection successful' + (data.model ? ` (${data.model})` : '');
-      status.className = 'test-status ok';
-      // Also fetch dynamic model list on successful connection
-      fetchDynamicModels();
-    } else {
-      status.textContent = data.message || 'Connection failed';
-      status.className = 'test-status error';
-    }
-  } catch (e) {
-    status.textContent = e.message;
-    status.className = 'test-status error';
-  }
-
-  checkHealth();
-  updateLLMSummary();
 }
 
 function _providerKeyField(provider) {
@@ -3204,12 +3094,6 @@ async function generateSynthetic() {
 // UI Controls
 // ==============================================
 
-function toggleCollapsible(header) {
-  header.classList.toggle('open');
-  const body = header.nextElementSibling;
-  body.classList.toggle('open');
-}
-
 function switchTab(tabEl, name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -3218,7 +3102,9 @@ function switchTab(tabEl, name) {
 }
 
 function toggleUncertain() {
-  showUncertain = document.getElementById('hideUncertainToggle').checked;
+  const cb = document.getElementById('hideUncertainToggle');
+  showUncertain = cb.checked;
+  cb.setAttribute('aria-checked', String(cb.checked));
   // Re-render if we have results
   if (currentJob) renderAnnotatedText(
     currentJob.result?.canonical_text?.full_text || '',
