@@ -294,16 +294,18 @@
 
   textarea {
     width: 100%;
-    min-height: 100px;
+    min-height: 120px;
+    max-height: 60vh;
     background: var(--surface2);
     color: var(--text);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 12px;
     font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.6;
     resize: vertical;
+    field-sizing: content;
   }
 
   textarea:focus { outline: none; border-color: var(--accent); }
@@ -1977,20 +1979,23 @@ async function processFile(file) {
   uploadedFilename = file.name;
   const ext = file.name.split('.').pop().toLowerCase();
 
+  const ta = document.getElementById('docInput');
   if (['pdf', 'docx', 'doc', 'rtf', 'msg'].includes(ext)) {
     // Read as base64
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result.split(',')[1];
-      document.getElementById('docInput').value = base64;
-      document.getElementById('docInput').placeholder = `File loaded: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+      ta.value = base64;
+      ta.placeholder = `File loaded: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+      if (ta._autoResize) ta._autoResize();
     };
     reader.readAsDataURL(file);
   } else {
     // Read as text
     const text = await file.text();
-    document.getElementById('docInput').value = text;
+    ta.value = text;
     applyDebugTruncation();
+    if (ta._autoResize) ta._autoResize();
   }
 }
 
@@ -2452,6 +2457,18 @@ function showTooltip(event, el) {
 
   tooltip.classList.add('visible');
 
+  // Auto-fetch lineage if it was previously expanded
+  if (annId && currentJobId && _lineageExpandedCache.has(annId)) {
+    toggleLineage(annId);
+    // toggleLineage will see display:block and hide it, so call it to show → we need to
+    // set display:none first so toggleLineage shows it and fetches data
+    const lineageList = document.getElementById(`lineage-${annId}`);
+    if (lineageList && !lineageList.dataset.loaded) {
+      lineageList.style.display = 'none';
+      toggleLineage(annId);
+    }
+  }
+
   // Position tooltip
   const rect = el.getBoundingClientRect();
   tooltip.style.left = '-9999px';
@@ -2474,6 +2491,9 @@ function showTooltip(event, el) {
 
 // Track feedback already submitted this session (annId → rating)
 const _feedbackCache = {};
+
+// Track which annotations have lineage expanded (persists across tooltip re-opens)
+const _lineageExpandedCache = new Set();
 
 async function submitFeedback(btn, rating) {
   const feedbackDiv = btn.closest('.tooltip-feedback');
@@ -2564,6 +2584,7 @@ async function toggleLineage(annId) {
   if (list.style.display !== 'none') {
     list.style.display = 'none';
     list.previousElementSibling.textContent = 'Show stage lineage';
+    _lineageExpandedCache.delete(annId);
     return;
   }
 
@@ -2600,6 +2621,7 @@ async function toggleLineage(annId) {
 
   list.style.display = 'block';
   list.previousElementSibling.textContent = 'Hide stage lineage';
+  _lineageExpandedCache.add(annId);
 }
 
 // Hide tooltip on click outside
@@ -3147,15 +3169,19 @@ function toggleUncertain() {
 }
 
 function loadSample(name) {
-  document.getElementById('docInput').value = SAMPLES[name] || '';
+  const ta = document.getElementById('docInput');
+  ta.value = SAMPLES[name] || '';
   uploadedFilename = null;
   applyDebugTruncation();
+  if (ta._autoResize) ta._autoResize();
 }
 
 function clearAll() {
   clearCache();
-  document.getElementById('docInput').value = '';
-  document.getElementById('docInput').placeholder = 'Paste your legal document text here...';
+  const ta = document.getElementById('docInput');
+  ta.value = '';
+  ta.placeholder = 'Paste your legal document text here...';
+  if (ta._autoResize) ta._autoResize();
   document.getElementById('annotatedText').innerHTML = '';
   document.getElementById('annotatedText').style.display = 'none';
   document.getElementById('emptyState').style.display = 'block';
@@ -3210,6 +3236,23 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
     if (e.target === overlay) overlay.classList.remove('visible');
   });
 });
+
+// ==============================================
+// Auto-resize textarea (fallback for browsers without field-sizing: content)
+// ==============================================
+
+(function() {
+  const ta = document.getElementById('docInput');
+  if (ta && !CSS.supports('field-sizing', 'content')) {
+    function autoResize() {
+      ta.style.height = 'auto';
+      ta.style.height = Math.min(ta.scrollHeight, window.innerHeight * 0.6) + 'px';
+    }
+    ta.addEventListener('input', autoResize);
+    // Expose for programmatic value changes (loadSample, clearAll)
+    ta._autoResize = autoResize;
+  }
+})();
 
 // ==============================================
 // Init
