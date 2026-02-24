@@ -18,6 +18,7 @@ class FeedbackEntry(BaseModel):
     comment: str = ""
     # Concept context (self-contained even after job is deleted)
     annotation_text: str = ""
+    sentence_text: str | None = None  # full source sentence for context
     folio_iri: str | None = None
     folio_label: str | None = None
     # System lineage snapshot — captured at feedback time

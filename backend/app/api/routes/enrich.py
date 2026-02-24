@@ -116,7 +116,11 @@ async def get_annotation_lineage(job_id: UUID, annotation_id: str) -> dict:
         raise HTTPException(status_code=404, detail="Job not found")
     for ann in job.result.annotations:
         if ann.id == annotation_id:
-            return {"annotation_id": annotation_id, "lineage": [e.model_dump() for e in ann.lineage]}
+            return {
+                "annotation_id": annotation_id,
+                "lineage": [e.model_dump() for e in ann.lineage],
+                "sentence_text": ann.span.sentence_text,
+            }
     raise HTTPException(status_code=404, detail="Annotation not found")
 
 

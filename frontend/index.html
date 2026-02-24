@@ -456,6 +456,8 @@
     padding: 16px;
     max-width: 400px;
     min-width: 250px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
     box-shadow: 0 8px 32px rgba(0,0,0,0.15);
     z-index: 1000;
     display: none;
@@ -468,6 +470,8 @@
   .tooltip-label { font-size: 15px; font-weight: 600; color: #3b64e0; margin-bottom: 2px; }
   .tooltip-branch { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding: 2px 6px; border-radius: 3px; display: inline-block; }
   .tooltip-definition { font-size: 13px; color: #1a1a2e; line-height: 1.5; margin-bottom: 8px; }
+  .tooltip-synonyms { font-size: 12px; color: #555; margin-bottom: 8px; line-height: 1.4; }
+  .tooltip-synonyms strong { color: #333; }
   .tooltip-meta { font-size: 11px; color: #6b6b80; display: flex; gap: 12px; margin-bottom: 6px; }
   .tooltip-iri a { color: #3b64e0; text-decoration: none; font-size: 11px; word-break: break-all; }
   .tooltip-iri a:hover { text-decoration: underline; }
@@ -597,6 +601,24 @@
     margin-left: 0; color: #6b6b80; border-left-color: #c0c0d0;
   }
   body.show-thinking .concept-tooltip .lineage-reasoning { display: block; }
+
+  /* Sentence context & candidate badge in lineage */
+  .lineage-context-block {
+    margin-bottom: 8px; padding: 6px 8px; border-radius: 4px;
+    background: #f8f9fc; border-left: 3px solid #c0c8e0; font-size: 11px; line-height: 1.6;
+  }
+  .lineage-context-block .ctx-line { color: #444;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .lineage-context-block .ctx-line-label {
+    font-weight: 600; color: #8888a0; margin-right: 4px;
+  }
+  .lineage-context-block .ctx-highlight {
+    background: #fff3cd; padding: 0 2px; border-radius: 2px; font-weight: 600;
+  }
+  .lineage-context-block .ctx-match-value {
+    font-weight: 600; color: #3730a3;
+  }
+
   .insights-empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 40px 16px; }
 
   .insights-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--surface3); }
@@ -1134,7 +1156,8 @@
     white-space: nowrap;
   }
   .tooltip-alt-card-conf { font-size: 11px; margin-top: 2px; }
-  .tooltip-alt-card-def { font-size: 11px; color: #6b6b80; margin-top: 3px; line-height: 1.3; }
+  .tooltip-alt-card-def { font-size: 11px; color: #6b6b80; margin-top: 3px; line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .tooltip-alt-promote-btn {
     margin-top: 6px; padding: 3px 10px; font-size: 11px;
     border: 1px solid #3b64e0; border-radius: 4px;
@@ -2532,6 +2555,7 @@ function showTooltip(event, el) {
     <div class="tooltip-branch" style="background:${branchColor}20;color:${branchColor}">${escapeHtml(branch || 'Unknown Branch')}</div>
     <div class="tooltip-confidence ${confTier}">${confPct.toFixed(0)}% confidence</div>
     ${def ? `<div class="tooltip-definition">${escapeHtml(def)}</div>` : ''}
+    ${(() => { const pc = annData && annData.concepts && annData.concepts[0]; const syns = pc && pc.folio_alt_labels; return syns && syns.length ? `<div class="tooltip-synonyms"><strong>Synonyms:</strong> ${escapeHtml(syns.join(', '))}</div>` : ''; })()}
     <div class="tooltip-meta">
       <span>Source: ${escapeHtml(source || 'unknown')}</span>
       <span>State: ${escapeHtml(el.dataset.state || 'confirmed')}</span>
@@ -2579,7 +2603,9 @@ function showTooltip(event, el) {
 
     if (left + tw > window.innerWidth) left = window.innerWidth - tw - 10;
     if (left < 10) left = 10;
+    // Try below; if it doesn't fit, try above; finally clamp to viewport
     if (top + th > window.innerHeight) top = rect.top - th - 8;
+    if (top < 10) top = 10;
 
     tooltip.style.top = top + 'px';
     tooltip.style.left = left + 'px';
@@ -2709,6 +2735,31 @@ async function toggleLineage(annId) {
       const resp = await fetch(`${API}/enrich/${currentJobId}/annotations/${annId}/lineage`);
       if (resp.ok) {
         const data = await resp.json();
+        let contextHtml = '';
+        const annData = _annotationDataById[annId];
+        const sentenceText = data.sentence_text || (annData && annData.span && annData.span.sentence_text);
+        const spanText = (annData && annData.span) ? annData.span.text || '' : '';
+        const candidateLabel = (annData && annData.concepts && annData.concepts.length > 0)
+          ? (annData.concepts[0].folio_label || annData.concepts[0].concept_text || '') : '';
+        if (sentenceText || candidateLabel) {
+          let lines = '';
+          if (spanText) {
+            // Source line: highlight the matched span within the sentence (or just show the span)
+            if (sentenceText) {
+              const idx = sentenceText.indexOf(spanText);
+              const sentHtml = idx >= 0
+                ? escapeHtml(sentenceText.slice(0, idx)) + `<span class="ctx-highlight">${escapeHtml(spanText)}</span>` + escapeHtml(sentenceText.slice(idx + spanText.length))
+                : escapeHtml(sentenceText);
+              lines += `<div class="ctx-line"><span class="ctx-line-label">Source:</span> ${sentHtml}</div>`;
+            } else {
+              lines += `<div class="ctx-line"><span class="ctx-line-label">Source:</span> ${escapeHtml(spanText)}</div>`;
+            }
+          }
+          if (candidateLabel) {
+            lines += `<div class="ctx-line"><span class="ctx-line-label">Match:</span> <span class="ctx-match-value">${escapeHtml(candidateLabel)}</span></div>`;
+          }
+          contextHtml = `<div class="lineage-context-block">${lines}</div>`;
+        }
         if (data.lineage && data.lineage.length > 0) {
           const stageLabels = {
             entity_ruler: 'Entity Ruler', semantic_ruler: 'Semantic Ruler',
@@ -2716,7 +2767,7 @@ async function toggleLineage(annId) {
             resolution: 'Resolution', branch_judge: 'Branch Judge',
             string_matching: 'String Matching',
           };
-          list.innerHTML = data.lineage.map(e => `
+          list.innerHTML = contextHtml + data.lineage.map(e => `
             <li>
               <span class="lineage-stage-name">${escapeHtml(stageLabels[e.stage] || e.stage)}</span>
               <span class="lineage-action">${escapeHtml((e.action || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))}</span>
@@ -2726,7 +2777,7 @@ async function toggleLineage(annId) {
             </li>
           `).join('');
         } else {
-          list.innerHTML = '<li style="color:#a0a0b0">No lineage recorded</li>';
+          list.innerHTML = contextHtml + '<li style="color:#a0a0b0">No lineage recorded</li>';
         }
         list.dataset.loaded = 'true';
       }
@@ -2963,11 +3014,33 @@ function renderInsightsPanel(data) {
                     </div>`;
                   }).join('')}</div>`
                 : '';
+              // Build two-line context block for insights table
+              let insightsCtxHtml = '';
+              const at = fb.annotation_text || '';
+              const fl = fb.folio_label || '';
+              if (fb.sentence_text || fl) {
+                let ctxLines = '';
+                if (at) {
+                  if (fb.sentence_text) {
+                    const si = fb.sentence_text.indexOf(at);
+                    const srcHtml = si >= 0
+                      ? escapeHtml(fb.sentence_text.slice(0, si)) + `<span class="ctx-highlight">${escapeHtml(at)}</span>` + escapeHtml(fb.sentence_text.slice(si + at.length))
+                      : escapeHtml(fb.sentence_text);
+                    ctxLines += `<div class="ctx-line"><span class="ctx-line-label">Source:</span> ${srcHtml}</div>`;
+                  } else {
+                    ctxLines += `<div class="ctx-line"><span class="ctx-line-label">Source:</span> ${escapeHtml(at)}</div>`;
+                  }
+                }
+                if (fl) {
+                  ctxLines += `<div class="ctx-line"><span class="ctx-line-label">Match:</span> <span class="ctx-match-value">${escapeHtml(fl)}</span></div>`;
+                }
+                insightsCtxHtml = `<div class="lineage-context-block" style="margin-top:4px">${ctxLines}</div>`;
+              }
               return `
                 <tr>
                   <td>
-                    <span class="insights-concept-label">${escapeHtml(fb.annotation_text || '')}</span>
-                    ${fb.folio_label && fb.folio_label !== fb.annotation_text ? `<br><span class="insights-concept-sub">${escapeHtml(fb.folio_label)}</span>` : ''}
+                    <span class="insights-concept-label">${escapeHtml(at)}</span>
+                    ${insightsCtxHtml}
                   </td>
                   <td style="text-align:center">
                     <span class="${fb.rating === 'up' ? 'insights-rating-up' : 'insights-rating-down'}">

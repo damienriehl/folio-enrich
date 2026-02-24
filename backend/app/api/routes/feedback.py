@@ -86,6 +86,7 @@ async def submit_feedback(req: FeedbackRequest) -> dict:
             stage=req.stage,
             comment=req.comment,
             annotation_text=annotation.span.text,
+            sentence_text=annotation.span.sentence_text,
             folio_iri=concept.folio_iri if concept else None,
             folio_label=concept.folio_label if concept else None,
             lineage=[e.model_dump() for e in annotation.lineage],

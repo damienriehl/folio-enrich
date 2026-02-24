@@ -6,6 +6,7 @@ from app.models.annotation import Annotation, ConceptMatch, Span, StageEvent
 from app.models.job import Job, JobStatus
 from app.pipeline.stages.base import PipelineStage, record_lineage
 from app.services.matching.aho_corasick import AhoCorasickMatcher
+from app.services.normalization.normalizer import build_sentence_index, find_sentence_for_span
 
 
 _ALT_LABEL_STOPWORDS: frozenset[str] = frozenset({
@@ -70,6 +71,7 @@ class StringMatchStage(PipelineStage):
 
         # Search full canonical text
         full_text = job.result.canonical_text.full_text
+        sentence_index = build_sentence_index(full_text)
         matches = matcher.search(full_text)
 
         # Build lookup of existing annotations by span for merging
@@ -134,6 +136,11 @@ class StringMatchStage(PipelineStage):
                 existing = existing_by_span[span_key]
                 existing.concepts = [concept] + backup_concepts
                 existing.state = "confirmed"
+                # Backfill sentence_text if not already populated
+                if not existing.span.sentence_text:
+                    existing.span.sentence_text = find_sentence_for_span(
+                        sentence_index, match.start, match.end
+                    )
                 # Preserve existing lineage, then add upstream + this stage
                 existing.lineage.extend(upstream_events)
                 record_lineage(existing, "string_matching", "confirmed",
@@ -146,6 +153,7 @@ class StringMatchStage(PipelineStage):
                         start=match.start,
                         end=match.end,
                         text=full_text[match.start:match.end],
+                        sentence_text=find_sentence_for_span(sentence_index, match.start, match.end),
                     ),
                     concepts=[concept] + backup_concepts,
                     state="confirmed",

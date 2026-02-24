@@ -36,6 +36,7 @@ class EntityRulerStage(PipelineStage):
         self._embedding_service = embedding_service
         self._patterns_loaded = False
         self._iri_to_branch: dict[str, str] = {}
+        self._iri_to_concept: dict[str, object] = {}  # IRI → FOLIOConcept
 
     def _ensure_patterns_loaded(self) -> None:
         """Load FOLIO patterns into the EntityRuler on first use."""
@@ -49,8 +50,10 @@ class EntityRulerStage(PipelineStage):
                 # Build IRI→branch map for populating branches on matches
                 for label_info in all_labels.values():
                     fc = label_info.concept
-                    if fc.iri and fc.branch:
-                        self._iri_to_branch[fc.iri] = fc.branch
+                    if fc.iri:
+                        if fc.branch:
+                            self._iri_to_branch[fc.iri] = fc.branch
+                        self._iri_to_concept[fc.iri] = fc
                 logger.info("EntityRuler loaded %d FOLIO patterns", len(all_labels))
             else:
                 logger.warning("No FOLIO labels found — EntityRuler will be empty")
@@ -75,10 +78,14 @@ class EntityRulerStage(PipelineStage):
         for match in matches:
             confidence = _match_confidence(match)
             branch = self._iri_to_branch.get(match.entity_id, "")
+            fc = self._iri_to_concept.get(match.entity_id)
             ruler_concepts.append(
                 ConceptMatch(
                     concept_text=match.text,
                     folio_iri=match.entity_id,
+                    folio_label=fc.preferred_label if fc else None,
+                    folio_definition=fc.definition if fc else None,
+                    folio_alt_labels=fc.alternative_labels if fc and fc.alternative_labels else None,
                     branches=[branch] if branch else [],
                     branch_color=get_branch_color(branch) if branch else None,
                     confidence=confidence,
@@ -187,6 +194,7 @@ class EntityRulerStage(PipelineStage):
                 find_sentence_for_span(sentence_index, match.start_char, match.end_char)
                 if sentence_index else None
             )
+            fc = self._iri_to_concept.get(match.entity_id)
             ann = Annotation(
                 span=Span(
                     start=match.start_char,
@@ -197,6 +205,9 @@ class EntityRulerStage(PipelineStage):
                 concepts=[ConceptMatch(
                     concept_text=match.text,
                     folio_iri=match.entity_id,
+                    folio_label=fc.preferred_label if fc else None,
+                    folio_definition=fc.definition if fc else None,
+                    folio_alt_labels=fc.alternative_labels if fc and fc.alternative_labels else None,
                     branches=[branch] if branch else [],
                     branch_color=get_branch_color(branch) if branch else None,
                     confidence=confidence,
