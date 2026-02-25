@@ -10,6 +10,20 @@ from app.main import app
 from app.storage.job_store import JobStore
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Clear the in-memory rate limiter between tests to prevent 429s."""
+    from app.middleware.rate_limit import RateLimitMiddleware
+
+    obj = getattr(app, "middleware_stack", None)
+    while obj is not None:
+        if isinstance(obj, RateLimitMiddleware):
+            obj._requests.clear()
+            break
+        obj = getattr(obj, "app", None)
+    yield
+
+
 @pytest.fixture
 def tmp_jobs_dir(tmp_path: Path) -> Path:
     return tmp_path / "jobs"

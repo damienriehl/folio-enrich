@@ -6,9 +6,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app.models.annotation import Annotation, ConceptMatch, Span
+from app.models.annotation import Annotation, ConceptMatch, Span, StageEvent
 from app.models.job import Job, JobStatus
 from app.models.document import DocumentInput
+from app.storage.feedback_store import FeedbackStore
 from app.storage.job_store import JobStore
 
 
@@ -16,7 +17,10 @@ class TestDismissRestore:
     @pytest.fixture
     def client(self, tmp_path: Path):
         import app.api.routes.enrich as enrich_mod
+        import app.api.routes.feedback as fb_mod
         enrich_mod._job_store = JobStore(base_dir=tmp_path / "jobs")
+        fb_mod._job_store = enrich_mod._job_store
+        fb_mod._feedback_store = FeedbackStore(base_dir=tmp_path / "feedback")
         from app.main import app
         return TestClient(app)
 
@@ -114,12 +118,67 @@ class TestDismissRestore:
         resp = client.post(f"/enrich/{job.id}/annotations/nonexistent/restore")
         assert resp.status_code == 404
 
+    def test_reject_creates_feedback_entry(self, client, job_with_annotations):
+        job, _ = job_with_annotations
+        client.post(f"/enrich/{job.id}/annotations/ann-1/reject")
+        resp = client.get(f"/feedback/insights/{job.id}")
+        data = resp.json()
+        assert data["total_dismissed"] == 1
+        assert len(data["recent_feedback"]) == 1
+        fb = data["recent_feedback"][0]
+        assert fb["rating"] == "dismissed"
+        assert fb["annotation_text"] == "Bid"
+        assert fb["folio_label"] == "Bid"
+        assert fb["folio_iri"] == "http://example.com/bid"
+        assert len(fb["lineage"]) > 0
+
+    def test_reject_feedback_has_sentence_context(self, client, tmp_path: Path):
+        """Reject captures sentence_text when available."""
+        import app.api.routes.enrich as enrich_mod
+        ann = Annotation(
+            id="ann-ctx",
+            span=Span(start=10, end=13, text="Bid",
+                      sentence_text="The Bid was submitted on time."),
+            concepts=[ConceptMatch(
+                concept_text="Bid", folio_iri="http://example.com/bid",
+                folio_label="Bid", confidence=0.9, source="entity_ruler",
+            )],
+            state="confirmed",
+            lineage=[StageEvent(stage="entity_ruler", action="created", detail="Matched")],
+        )
+        job = Job(input=DocumentInput(content="The Bid was submitted on time."),
+                  status=JobStatus.COMPLETED)
+        job.result.annotations = [ann]
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(enrich_mod._job_store.save(job))
+
+        client.post(f"/enrich/{job.id}/annotations/ann-ctx/reject")
+        resp = client.get(f"/feedback/insights/{job.id}")
+        fb = resp.json()["recent_feedback"][0]
+        assert fb["sentence_text"] == "The Bid was submitted on time."
+        assert fb["annotation_text"] == "Bid"
+
+    def test_restore_removes_feedback_entry(self, client, job_with_annotations):
+        job, _ = job_with_annotations
+        client.post(f"/enrich/{job.id}/annotations/ann-1/reject")
+        # Verify feedback exists
+        resp = client.get(f"/feedback/insights/{job.id}")
+        assert resp.json()["total_feedback"] == 1
+
+        # Restore
+        client.post(f"/enrich/{job.id}/annotations/ann-1/restore")
+        resp = client.get(f"/feedback/insights/{job.id}")
+        assert resp.json()["total_feedback"] == 0
+
 
 class TestBulkReject:
     @pytest.fixture
     def client(self, tmp_path: Path):
         import app.api.routes.enrich as enrich_mod
+        import app.api.routes.feedback as fb_mod
         enrich_mod._job_store = JobStore(base_dir=tmp_path / "jobs")
+        fb_mod._job_store = enrich_mod._job_store
+        fb_mod._feedback_store = FeedbackStore(base_dir=tmp_path / "feedback")
         from app.main import app
         return TestClient(app)
 
@@ -194,14 +253,31 @@ class TestBulkReject:
         resp = client.post(f"/enrich/{uuid4()}/annotations/bulk-reject", json={"folio_iri": "http://example.com/x"})
         assert resp.status_code == 404
 
+    def test_bulk_reject_creates_feedback_entries(self, client, job_with_shared_concepts):
+        job, iri = job_with_shared_concepts
+        client.post(f"/enrich/{job.id}/annotations/bulk-reject", json={"folio_iri": iri})
+        resp = client.get(f"/feedback/insights/{job.id}")
+        data = resp.json()
+        # ann-1 and ann-2 were active with that IRI (ann-4 was already rejected)
+        assert data["total_dismissed"] == 2
+        assert data["total_feedback"] == 2
+        assert all(fb["rating"] == "dismissed" for fb in data["recent_feedback"])
+        # Each entry should have context
+        for fb in data["recent_feedback"]:
+            assert fb["annotation_text"] == "Bid"
+            assert fb["folio_iri"] == iri
+
 
 class TestExportExcludesDismissed:
     @pytest.fixture
     def client(self, tmp_path: Path):
         import app.api.routes.enrich as enrich_mod
         import app.api.routes.export as export_mod
+        import app.api.routes.feedback as fb_mod
         enrich_mod._job_store = JobStore(base_dir=tmp_path / "jobs")
         export_mod._job_store = JobStore(base_dir=tmp_path / "jobs")
+        fb_mod._job_store = enrich_mod._job_store
+        fb_mod._feedback_store = FeedbackStore(base_dir=tmp_path / "feedback")
         from app.main import app
         return TestClient(app)
 
