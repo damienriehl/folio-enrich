@@ -67,5 +67,6 @@ class Annotation(BaseModel):
     span: Span
     concepts: list[ConceptMatch] = Field(default_factory=list)
     state: str = "preliminary"  # "preliminary", "confirmed", "rejected"
+    dismissed_at: str | None = None  # ISO timestamp when user dismissed
     lineage: list[StageEvent] = Field(default_factory=list)
     feedback: list[FeedbackItem] = Field(default_factory=list)

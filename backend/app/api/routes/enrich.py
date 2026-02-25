@@ -221,6 +221,121 @@ async def cascade_promote(job_id: UUID, req: CascadePromoteRequest) -> dict:
     return {"status": "cascade_complete", "updated_count": updated}
 
 
+class BulkRejectRequest(BaseModel):
+    folio_iri: str
+    comment: str = ""
+
+
+@router.post("/{job_id}/annotations/{annotation_id}/reject")
+async def reject_annotation(job_id: UUID, annotation_id: str) -> dict:
+    """Dismiss an annotation as a false positive (set state to rejected)."""
+    from datetime import datetime, timezone
+    from app.models.annotation import StageEvent
+
+    job = await _job_store.load(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    for ann in job.result.annotations:
+        if ann.id == annotation_id:
+            if ann.state == "rejected":
+                return {"status": "already_rejected"}
+            prev_state = ann.state
+            ann.state = "rejected"
+            ann.dismissed_at = datetime.now(timezone.utc).isoformat()
+            ann.lineage.append(StageEvent(
+                stage="user",
+                action="user_rejected",
+                detail=f"Dismissed as false positive (was '{prev_state}')",
+            ))
+            await _job_store.save(job)
+
+            # Count how many other annotations share the same primary IRI
+            primary_iri = ann.concepts[0].folio_iri if ann.concepts else None
+            same_iri_count = 0
+            if primary_iri:
+                same_iri_count = sum(
+                    1 for a in job.result.annotations
+                    if a.id != annotation_id
+                    and a.state != "rejected"
+                    and a.concepts
+                    and a.concepts[0].folio_iri == primary_iri
+                )
+
+            return {
+                "status": "rejected",
+                "annotation_id": annotation_id,
+                "same_concept_count": same_iri_count,
+                "folio_iri": primary_iri,
+            }
+
+    raise HTTPException(status_code=404, detail="Annotation not found")
+
+
+@router.post("/{job_id}/annotations/{annotation_id}/restore")
+async def restore_annotation(job_id: UUID, annotation_id: str) -> dict:
+    """Restore a dismissed annotation (set state back to confirmed)."""
+    from app.models.annotation import StageEvent
+
+    job = await _job_store.load(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    for ann in job.result.annotations:
+        if ann.id == annotation_id:
+            if ann.state != "rejected":
+                return {"status": "not_rejected", "current_state": ann.state}
+            ann.state = "confirmed"
+            ann.dismissed_at = None
+            ann.lineage.append(StageEvent(
+                stage="user",
+                action="user_restored",
+                detail="Restored from dismissed state",
+            ))
+            await _job_store.save(job)
+            return {"status": "restored", "annotation_id": annotation_id}
+
+    raise HTTPException(status_code=404, detail="Annotation not found")
+
+
+@router.post("/{job_id}/annotations/bulk-reject")
+async def bulk_reject_annotations(job_id: UUID, req: BulkRejectRequest) -> dict:
+    """Dismiss all annotations sharing the same primary FOLIO IRI."""
+    from datetime import datetime, timezone
+    from app.models.annotation import StageEvent
+
+    job = await _job_store.load(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    updated = 0
+    rejected_ids = []
+    for ann in job.result.annotations:
+        if ann.state == "rejected":
+            continue
+        if not ann.concepts or ann.concepts[0].folio_iri != req.folio_iri:
+            continue
+        ann.state = "rejected"
+        ann.dismissed_at = now
+        ann.lineage.append(StageEvent(
+            stage="user",
+            action="user_rejected",
+            detail=f"Bulk dismissed as false positive",
+        ))
+        rejected_ids.append(ann.id)
+        updated += 1
+
+    if updated > 0:
+        await _job_store.save(job)
+
+    return {
+        "status": "bulk_rejected",
+        "updated_count": updated,
+        "rejected_ids": rejected_ids,
+    }
+
+
 @router.get("/{job_id}/stream")
 async def stream_enrichment(job_id: UUID):
     job = await _job_store.load(job_id)

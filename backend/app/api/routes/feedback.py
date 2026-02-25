@@ -110,12 +110,56 @@ async def submit_feedback(req: FeedbackRequest) -> dict:
 
 @router.get("/insights", response_model=InsightsSummary)
 async def get_insights() -> InsightsSummary:
-    return await _feedback_store.get_insights()
+    summary = await _feedback_store.get_insights()
+    # Enrich with dismiss metrics from all jobs
+    await _enrich_dismiss_metrics(summary)
+    return summary
 
 
 @router.get("/insights/{job_id}", response_model=InsightsSummary)
 async def get_job_insights(job_id: str) -> InsightsSummary:
-    return await _feedback_store.get_insights(job_id=job_id)
+    summary = await _feedback_store.get_insights(job_id=job_id)
+    # Enrich with dismiss metrics from the specific job
+    await _enrich_dismiss_metrics(summary, job_id=job_id)
+    return summary
+
+
+async def _enrich_dismiss_metrics(
+    summary: InsightsSummary, job_id: str | None = None
+) -> None:
+    """Add dismiss counts from job annotation states into the summary."""
+    from collections import Counter
+
+    jobs = []
+    if job_id:
+        try:
+            job = await _job_store.load(UUID(job_id))
+            if job:
+                jobs = [job]
+        except ValueError:
+            pass
+    else:
+        jobs = await _job_store.list_jobs()
+
+    dismissed_count = 0
+    concept_counter: Counter[str] = Counter()
+    concept_info: dict[str, dict] = {}
+
+    for job in jobs:
+        for ann in job.result.annotations:
+            if ann.state == "rejected":
+                dismissed_count += 1
+                if ann.concepts:
+                    label = ann.concepts[0].folio_label or ann.concepts[0].concept_text
+                    iri = ann.concepts[0].folio_iri
+                    concept_counter[label] += 1
+                    concept_info[label] = {"folio_label": label, "folio_iri": iri}
+
+    summary.total_dismissed = dismissed_count
+    summary.most_dismissed_concepts = [
+        {**concept_info[label], "dismissals": count}
+        for label, count in concept_counter.most_common(10)
+    ]
 
 
 @router.get("/export")

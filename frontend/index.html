@@ -863,6 +863,82 @@
   }
   .concept-tooltip .tooltip-feedback-btn:disabled { opacity: 0.5; cursor: default; }
 
+  /* Remove-tag button in tooltip — red-tinted at rest to signal destructive action */
+  .concept-tooltip .tooltip-dismiss-btn {
+    background: #fef2f2; border: 1px solid #fca5a5; border-radius: 4px; padding: 2px 6px;
+    cursor: pointer; font-size: 11px; display: inline-flex; align-items: center; gap: 3px;
+    color: #b91c1c; transition: all 0.15s ease; line-height: 1;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;
+    margin-left: 4px;
+  }
+  .concept-tooltip .tooltip-dismiss-btn:hover {
+    border-color: #ef4444; background: #fee2e2; color: #991b1b;
+  }
+  .concept-tooltip .tooltip-dismiss-btn svg { flex-shrink: 0; }
+  /* Restore variant — green tint */
+  .concept-tooltip .tooltip-dismiss-btn.is-rejected {
+    border-color: #86efac; background: #f0fdf4; color: #166534;
+  }
+  .concept-tooltip .tooltip-dismiss-btn.is-rejected:hover {
+    border-color: #22c55e; background: #dcfce7; color: #166534;
+  }
+
+  /* Remove-tag button in detail panel header */
+  .detail-dismiss-btn {
+    padding: 3px 10px; font-size: 12px; line-height: 1.2;
+    border: 1px solid #fca5a5; border-radius: 4px; cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #fef2f2; color: #b91c1c; transition: all 0.15s;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .detail-dismiss-btn svg { flex-shrink: 0; }
+  .detail-dismiss-btn:hover { border-color: #ef4444; background: #fee2e2; color: #991b1b; }
+  .detail-dismiss-btn.is-rejected { border-color: #86efac; color: #166534; background: #f0fdf4; }
+  .detail-dismiss-btn.is-rejected:hover { background: #dcfce7; }
+
+  /* Undo toast */
+  .undo-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1a1a2e; color: #fff; padding: 10px 20px; border-radius: 8px;
+    font-size: 13px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25); z-index: 2000;
+    display: flex; align-items: center; gap: 12px;
+    animation: toast-in 0.25s ease-out;
+  }
+  .undo-toast.toast-out { animation: toast-out 0.2s ease-in forwards; }
+  .undo-toast button {
+    background: none; border: 1px solid rgba(255,255,255,0.3); color: #93c5fd;
+    padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  .undo-toast button:hover { background: rgba(255,255,255,0.1); }
+  @keyframes toast-in { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+  @keyframes toast-out { from { opacity: 1; transform: translateX(-50%) translateY(0); } to { opacity: 0; transform: translateX(-50%) translateY(12px); } }
+
+  /* View filter toggle for dismissed annotations */
+  .ann-filter-bar {
+    display: inline-flex; gap: 0; border: 1px solid #e0e1e6; border-radius: 6px;
+    overflow: hidden; font-size: 11px; margin-left: 12px; vertical-align: middle;
+  }
+  .ann-filter-bar button {
+    padding: 3px 10px; border: none; background: #fff; color: #6b6b80;
+    cursor: pointer; font-size: 11px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    transition: all 0.15s; border-right: 1px solid #e0e1e6;
+  }
+  .ann-filter-bar button:last-child { border-right: none; }
+  .ann-filter-bar button:hover { background: #f5f6f8; }
+  .ann-filter-bar button.active { background: #3b64e0; color: #fff; }
+
+  /* Hidden annotation (via filter) */
+  .annotation-span.ann-hidden { display: none; }
+
+  /* Export tab: include dismissed checkbox */
+  .export-option-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+    font-size: 12px; color: #6b6b80;
+  }
+  .export-option-row input[type="checkbox"] { accent-color: #3b64e0; }
+
   /* Slide-open note field in tooltip */
   .tooltip-note-slide {
     display: grid; grid-template-rows: 0fr;
@@ -1805,6 +1881,11 @@
     </div>
     <div class="panel-body" id="resultBody">
       <div class="tab-content active" id="tab-annotated">
+        <div class="ann-filter-bar" id="annFilterBar" style="display:none;margin-bottom:8px">
+          <button class="active" onclick="setAnnFilter('all', this)" title="Show all annotations (dismissed ones are faded)">All</button>
+          <button onclick="setAnnFilter('hide-dismissed', this)" title="Hide dismissed annotations">Active only</button>
+          <button onclick="setAnnFilter('only-dismissed', this)" title="Show only dismissed annotations">Dismissed</button>
+        </div>
         <div class="empty-state" id="emptyState">
           <h3>No annotations yet</h3>
           <p>Paste a legal document and click "Enrich Document" to see FOLIO annotations.</p>
@@ -1822,6 +1903,9 @@
       </div>
       <div class="tab-content" id="tab-export">
         <p style="color:#6b6b80;font-size:12px;margin-bottom:12px">Download annotations in any of the 12 supported formats:</p>
+        <div class="export-option-row">
+          <label><input type="checkbox" id="exportIncludeDismissed"> Include dismissed annotations</label>
+        </div>
         <div class="export-grid" id="exportButtons"></div>
       </div>
       <div class="tab-content" id="tab-insights">
@@ -1834,7 +1918,10 @@
   <div class="panel panel-detail" id="panelDetail">
     <div class="panel-header">
       <h2>Concept Detail</h2>
-      <button class="small secondary" onclick="closeDetailPanel()" title="Close detail panel" style="padding:2px 8px;font-size:14px;line-height:1">&times;</button>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="detail-dismiss-btn" id="detailDismissBtn" style="display:none"></button>
+        <button class="small secondary" onclick="closeDetailPanel()" title="Close detail panel" style="padding:2px 8px;font-size:14px;line-height:1">&times;</button>
+      </div>
     </div>
     <div class="panel-body" id="detailBody">
       <div id="detailEmpty" class="detail-empty">Click an annotation to view concept details</div>
@@ -2989,11 +3076,16 @@ function renderResults(job) {
   const annotations = job.result?.annotations || [];
   const metadata = job.result?.metadata || {};
 
+  _seedDismissedCache(annotations);
   renderAnnotatedText(text, annotations);
   renderConceptsList(annotations);
   renderTriples(metadata.spo_triples || []);
   renderMetadata(metadata, job);
   renderExportButtons();
+
+  // Show filter bar if there are annotations
+  const filterBar = document.getElementById('annFilterBar');
+  if (filterBar) filterBar.style.display = annotations.length > 0 ? '' : 'none';
 }
 
 function renderAnnotatedText(text, annotations) {
@@ -3087,10 +3179,16 @@ function showTooltip(event, el) {
 
   // Check if this annotation already has feedback from this session
   const existingRating = _feedbackCache[annId] || null;
+  const isRejected = el.dataset.state === 'rejected';
 
-  // Compact tooltip: branch · label · score + thumbs · slide-open note
+  // Compact tooltip: branch · label · score + thumbs + dismiss · slide-open note
   const existingNote = _noteCache[annId] || '';
   const noteOpen = existingRating ? ' open' : '';
+  const dismissLabel = isRejected ? '&#x21A9; Restore' : '&#x2715; Dismiss';
+  const dismissClass = isRejected ? ' is-rejected' : '';
+  const dismissAction = isRejected
+    ? `restoreAnnotation('${escapeAttr(annId)}')`
+    : `dismissAnnotation('${escapeAttr(annId)}')`;
   tooltip.innerHTML = `
     <div class="tooltip-branch" style="color:${branchColor}">${escapeHtml(branch || 'Unknown')}</div>
     <div class="tooltip-label">${escapeHtml(label)}</div>
@@ -3100,6 +3198,7 @@ function showTooltip(event, el) {
         <div class="tooltip-feedback-row">
           <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" data-rating="up" onclick="submitFeedback(this, 'up')">&#x1F44D;</button>
           <button class="tooltip-feedback-btn${existingRating === 'down' ? ' active-down' : ''}" data-rating="down" onclick="submitFeedback(this, 'down')">&#x1F44E;</button>
+          <button class="tooltip-dismiss-btn${dismissClass}" onclick="${dismissAction}">${dismissLabel}</button>
         </div>
       </div>
     </div>
@@ -3323,6 +3422,181 @@ async function submitNote(annId) {
   } catch (e) {
     // silent
   }
+}
+
+// ========== Dismiss / Restore annotations ==========
+
+// Track dismissed state locally for instant UI updates
+const _dismissedCache = {};
+
+function _seedDismissedCache(annotations) {
+  (annotations || []).forEach(a => {
+    if (a.state === 'rejected') _dismissedCache[a.id] = true;
+  });
+}
+
+async function dismissAnnotation(annId) {
+  if (!annId || !currentJobId) return;
+
+  // Optimistic UI: mark as rejected immediately
+  _dismissedCache[annId] = true;
+  _updateAnnotationSpanState(annId, 'rejected');
+  _hideTooltip();
+
+  try {
+    const resp = await fetch(`${API}/enrich/${currentJobId}/annotations/${annId}/reject`, { method: 'POST' });
+    if (!resp.ok) {
+      // Revert on failure
+      delete _dismissedCache[annId];
+      _updateAnnotationSpanState(annId, 'confirmed');
+      return;
+    }
+    const data = await resp.json();
+
+    // Update detail panel dismiss button if visible
+    _updateDetailDismissBtn(annId);
+
+    // Show undo toast — offer bulk dismiss if other instances exist
+    const bulkMsg = data.same_concept_count > 0
+      ? ` (${data.same_concept_count} more instance${data.same_concept_count > 1 ? 's' : ''})`
+      : '';
+    _showUndoToast(
+      `Tag dismissed${bulkMsg}`,
+      () => restoreAnnotation(annId),
+      data.same_concept_count > 0 ? () => bulkDismiss(data.folio_iri) : null,
+      data.same_concept_count
+    );
+  } catch (e) {
+    delete _dismissedCache[annId];
+    _updateAnnotationSpanState(annId, 'confirmed');
+  }
+}
+
+async function restoreAnnotation(annId) {
+  if (!annId || !currentJobId) return;
+
+  // Optimistic UI
+  delete _dismissedCache[annId];
+  _updateAnnotationSpanState(annId, 'confirmed');
+  _hideTooltip();
+  _dismissUndoToast();
+
+  try {
+    const resp = await fetch(`${API}/enrich/${currentJobId}/annotations/${annId}/restore`, { method: 'POST' });
+    if (!resp.ok) {
+      _dismissedCache[annId] = true;
+      _updateAnnotationSpanState(annId, 'rejected');
+      return;
+    }
+    _updateDetailDismissBtn(annId);
+  } catch (e) {
+    _dismissedCache[annId] = true;
+    _updateAnnotationSpanState(annId, 'rejected');
+  }
+}
+
+async function bulkDismiss(folioIri) {
+  if (!folioIri || !currentJobId) return;
+  _dismissUndoToast();
+
+  try {
+    const resp = await fetch(`${API}/enrich/${currentJobId}/annotations/bulk-reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folio_iri: folioIri }),
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    // Update UI for all rejected annotations
+    (data.rejected_ids || []).forEach(id => {
+      _dismissedCache[id] = true;
+      _updateAnnotationSpanState(id, 'rejected');
+    });
+
+    _showUndoToast(`${data.updated_count} tag${data.updated_count > 1 ? 's' : ''} dismissed`, null, null, 0);
+  } catch (e) {
+    // silent
+  }
+}
+
+function _updateAnnotationSpanState(annId, newState) {
+  const span = document.querySelector(`.annotation-span[data-ann-id="${annId}"]`);
+  if (span) {
+    span.dataset.state = newState;
+    // Also update the in-memory annotation data
+    const annData = _annotationDataById[annId];
+    if (annData) annData.state = newState;
+  }
+  // Apply current filter
+  _applyAnnotationFilter();
+}
+
+function _updateDetailDismissBtn(annId) {
+  const btn = document.getElementById('detailDismissBtn');
+  if (!btn || btn.dataset.annId !== annId) return;
+  const isRejected = !!_dismissedCache[annId];
+  btn.className = 'detail-dismiss-btn' + (isRejected ? ' is-rejected' : '');
+  btn.innerHTML = isRejected ? '&#x21A9; Restore' : '&#x2715; Dismiss';
+  btn.onclick = isRejected ? () => restoreAnnotation(annId) : () => dismissAnnotation(annId);
+}
+
+// Undo toast management
+let _undoToastTimer = null;
+
+function _showUndoToast(message, undoFn, bulkFn, bulkCount) {
+  _dismissUndoToast();
+  const toast = document.createElement('div');
+  toast.className = 'undo-toast';
+  toast.id = 'undoToast';
+
+  let html = `<span>${escapeHtml(message)}</span>`;
+  if (undoFn) html += `<button onclick="document.getElementById('undoToast')._undoFn()">Undo</button>`;
+  if (bulkFn && bulkCount > 0) html += `<button onclick="document.getElementById('undoToast')._bulkFn()">Dismiss all ${bulkCount}</button>`;
+  toast.innerHTML = html;
+  if (undoFn) toast._undoFn = () => { undoFn(); _dismissUndoToast(); };
+  if (bulkFn) toast._bulkFn = () => { bulkFn(); _dismissUndoToast(); };
+
+  document.body.appendChild(toast);
+  _undoToastTimer = setTimeout(() => _dismissUndoToast(), 8000);
+}
+
+function _dismissUndoToast() {
+  clearTimeout(_undoToastTimer);
+  const toast = document.getElementById('undoToast');
+  if (toast) {
+    toast.classList.add('toast-out');
+    setTimeout(() => toast.remove(), 200);
+  }
+}
+
+function _hideTooltip() {
+  const tooltip = document.getElementById('tooltip');
+  if (tooltip) tooltip.classList.remove('visible');
+}
+
+// ========== Annotation view filter ==========
+let _annFilter = 'all'; // 'all' | 'hide-dismissed' | 'only-dismissed'
+
+function setAnnFilter(mode, btn) {
+  _annFilter = mode;
+  // Update button states
+  document.querySelectorAll('#annFilterBar button').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  _applyAnnotationFilter();
+}
+
+function _applyAnnotationFilter() {
+  document.querySelectorAll('.annotation-span').forEach(el => {
+    const isRejected = el.dataset.state === 'rejected';
+    if (_annFilter === 'hide-dismissed') {
+      el.classList.toggle('ann-hidden', isRejected);
+    } else if (_annFilter === 'only-dismissed') {
+      el.classList.toggle('ann-hidden', !isRejected);
+    } else {
+      el.classList.remove('ann-hidden');
+    }
+  });
 }
 
 async function toggleLineage(annId) {
@@ -3718,6 +3992,7 @@ async function loadConceptDetail(iriHash, annId) {
     renderDetailRelated(detail);
     renderDetailNotes(iriHash, annId);
     renderDetailGraphButton(iriHash, detail.label);
+    renderDetailDismissBtn(annId);
 
     // Mark toggle button as having content
     document.getElementById('detailToggleBtn').classList.add('has-content');
@@ -4338,6 +4613,19 @@ function saveDetailNote(iriHash) {
   }
 }
 
+function renderDetailDismissBtn(annId) {
+  const btn = document.getElementById('detailDismissBtn');
+  if (!btn) return;
+  if (!annId) { btn.style.display = 'none'; return; }
+
+  btn.style.display = '';
+  btn.dataset.annId = annId;
+  const isRejected = !!_dismissedCache[annId];
+  btn.className = 'detail-dismiss-btn' + (isRejected ? ' is-rejected' : '');
+  btn.innerHTML = isRejected ? '&#x21A9; Restore' : '&#x2715; Dismiss';
+  btn.onclick = isRejected ? () => restoreAnnotation(annId) : () => dismissAnnotation(annId);
+}
+
 function renderDetailGraphButton(iriHash, label) {
   const container = document.getElementById('detailGraphBtn');
   container.innerHTML = `<button class="detail-graph-btn" onclick="openGraphModal('${escapeAttr(iriHash)}')">
@@ -4603,6 +4891,27 @@ function renderInsightsPanel(data) {
     `;
   }
 
+  // Most dismissed concepts
+  let dismissedHtml = '';
+  if (data.most_dismissed_concepts && data.most_dismissed_concepts.length > 0) {
+    dismissedHtml = `
+      <div class="insights-section">
+        <div class="insights-section-title">Most dismissed concepts</div>
+        <table class="insights-table">
+          <thead><tr><th>Concept</th><th>Dismissals</th></tr></thead>
+          <tbody>
+            ${data.most_dismissed_concepts.map(c => `
+              <tr>
+                <td>${escapeHtml(c.folio_label || '')}</td>
+                <td><span class="insights-rating-down">${c.dismissals}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
   // Recent feedback entries
   let recentHtml = '';
   if (data.recent_feedback && data.recent_feedback.length > 0) {
@@ -4716,6 +5025,12 @@ function renderInsightsPanel(data) {
         <div class="insights-stat-value">${totalPct}%</div>
         <div class="insights-stat-label">Positive</div>
       </div>
+      ${data.total_dismissed > 0 ? `
+        <div class="insights-stat stat-down">
+          <div class="insights-stat-value">${data.total_dismissed}</div>
+          <div class="insights-stat-label">Dismissed</div>
+        </div>
+      ` : ''}
     </div>
     ${stages.length > 0 ? `
       <div class="insights-section">
@@ -4724,6 +5039,7 @@ function renderInsightsPanel(data) {
       </div>
     ` : ''}
     ${downvotedHtml}
+    ${dismissedHtml}
     ${recentHtml}
   `;
 }
@@ -4930,7 +5246,8 @@ function renderExportButtons() {
 async function exportFormat(format, ext) {
   if (!currentJobId) return;
   try {
-    const r = await fetch(`${API}/enrich/${currentJobId}/export?format=${format}`);
+    const inclDismissed = document.getElementById('exportIncludeDismissed')?.checked ? '&include_dismissed=true' : '';
+    const r = await fetch(`${API}/enrich/${currentJobId}/export?format=${format}${inclDismissed}`);
     if (!r.ok) {
       const err = await r.json().catch(() => ({ detail: r.statusText }));
       throw new Error(err.detail || 'Export failed');
@@ -5106,9 +5423,17 @@ function clearAll() {
   closeSSE();
   accumulatedAnnotations = [];
   activityEntries = [];
-  // Clear feedback caches
+  // Clear feedback and dismiss caches
   Object.keys(_feedbackCache).forEach(k => delete _feedbackCache[k]);
   Object.keys(_noteCache).forEach(k => delete _noteCache[k]);
+  Object.keys(_dismissedCache).forEach(k => delete _dismissedCache[k]);
+  // Reset filter bar
+  _annFilter = 'all';
+  const filterBar = document.getElementById('annFilterBar');
+  if (filterBar) {
+    filterBar.style.display = 'none';
+    filterBar.querySelectorAll('button').forEach((b, i) => b.classList.toggle('active', i === 0));
+  }
   document.getElementById('activityLog').innerHTML = '';
   document.getElementById('logWrapper').classList.add('collapsed');
   stopPolling();

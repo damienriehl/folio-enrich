@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import copy
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
 from app.services.export.registry import get_exporter, list_formats
@@ -14,10 +15,21 @@ _job_store = JobStore()
 
 
 @router.get("/{job_id}/export")
-async def export_job(job_id: UUID, format: str = "json") -> Response:
+async def export_job(
+    job_id: UUID,
+    format: str = "json",
+    include_dismissed: bool = Query(False, description="Include rejected/dismissed annotations"),
+) -> Response:
     job = await _job_store.load(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Filter out dismissed annotations unless explicitly requested
+    if not include_dismissed:
+        job = copy.deepcopy(job)
+        job.result.annotations = [
+            a for a in job.result.annotations if a.state != "rejected"
+        ]
 
     try:
         exporter = get_exporter(format)

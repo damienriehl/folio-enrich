@@ -32,6 +32,8 @@ class InsightsSummary(BaseModel):
     total_feedback: int = 0
     thumbs_up: int = 0
     thumbs_down: int = 0
+    total_dismissed: int = 0
     by_stage: dict[str, dict[str, int]] = {}  # {"entity_ruler": {"up": 5, "down": 2}}
     most_downvoted_concepts: list[dict] = []
+    most_dismissed_concepts: list[dict] = []
     recent_feedback: list[FeedbackEntry] = []
