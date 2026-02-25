@@ -17,6 +17,8 @@ async def job_event_stream(
     """Generate SSE events as a job progresses through pipeline stages."""
     last_status = None
     seen_ids: set[str] = set()
+    seen_individual_ids: set[str] = set()
+    seen_property_ids: set[str] = set()
     last_states: dict[str, str] = {}
     last_activity_count: int = 0
 
@@ -64,6 +66,53 @@ async def job_event_stream(
                 last_states[ann_id] = ann_state
                 yield {"event": "annotation_update", "data": json.dumps(ann_data)}
 
+        # Emit new individuals
+        for ind in job.result.individuals:
+            if ind.id not in seen_individual_ids:
+                seen_individual_ids.add(ind.id)
+                ind_data = {
+                    "id": ind.id,
+                    "name": ind.name,
+                    "mention_text": ind.mention_text,
+                    "individual_type": ind.individual_type,
+                    "span": {"start": ind.span.start, "end": ind.span.end, "text": ind.span.text},
+                    "class_links": [
+                        {
+                            "annotation_id": cl.annotation_id,
+                            "folio_iri": cl.folio_iri,
+                            "folio_label": cl.folio_label,
+                            "branch": cl.branch,
+                            "confidence": cl.confidence,
+                        }
+                        for cl in ind.class_links
+                    ],
+                    "confidence": ind.confidence,
+                    "source": ind.source,
+                    "normalized_form": ind.normalized_form,
+                    "url": ind.url,
+                }
+                yield {"event": "individual_added", "data": json.dumps(ind_data)}
+
+        # Emit new properties
+        for prop in job.result.properties:
+            if prop.id not in seen_property_ids:
+                seen_property_ids.add(prop.id)
+                prop_data = {
+                    "id": prop.id,
+                    "property_text": prop.property_text,
+                    "folio_iri": prop.folio_iri,
+                    "folio_label": prop.folio_label,
+                    "folio_definition": prop.folio_definition,
+                    "span": {"start": prop.span.start, "end": prop.span.end, "text": prop.span.text},
+                    "domain_iris": prop.domain_iris,
+                    "range_iris": prop.range_iris,
+                    "inverse_of_iri": prop.inverse_of_iri,
+                    "confidence": prop.confidence,
+                    "source": prop.source,
+                    "match_type": prop.match_type,
+                }
+                yield {"event": "property_added", "data": json.dumps(prop_data)}
+
         # Emit new activity log entries
         activity_log = job.result.metadata.get("activity_log", [])
         if len(activity_log) > last_activity_count:
@@ -79,6 +128,8 @@ async def job_event_stream(
                     "job_id": str(job.id),
                     "status": job.status.value,
                     "total_annotations": len(job.result.annotations),
+                    "total_individuals": len(job.result.individuals),
+                    "total_properties": len(job.result.properties),
                     "error": job.error,
                 }),
             }

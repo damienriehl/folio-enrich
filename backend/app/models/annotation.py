@@ -70,3 +70,53 @@ class Annotation(BaseModel):
     dismissed_at: str | None = None  # ISO timestamp when user dismissed
     lineage: list[StageEvent] = Field(default_factory=list)
     feedback: list[FeedbackItem] = Field(default_factory=list)
+
+
+class IndividualClassLink(BaseModel):
+    """Links an Individual to an OWL Class annotation."""
+
+    annotation_id: str | None = None  # ID of the class Annotation
+    folio_iri: str | None = None
+    folio_label: str | None = None
+    branch: str = ""
+    relationship: str = "instance_of"
+    confidence: float = 0.0
+
+
+class Individual(BaseModel):
+    """An OWL Individual — a named instance of one or more OWL Classes."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str  # Canonical/normalized name
+    mention_text: str  # Exact text from document
+    individual_type: str = "named_entity"  # "legal_citation" | "named_entity"
+    span: Span
+    class_links: list[IndividualClassLink] = Field(default_factory=list)
+    confidence: float = 0.0
+    source: str = "llm"  # "eyecite" | "citeurl" | "regex" | "spacy_ner" | "llm" | "hybrid"
+    normalized_form: str | None = None  # Canonical citation form
+    url: str | None = None  # URL from CiteURL normalization
+    lineage: list[StageEvent] = Field(default_factory=list)
+    feedback: list[FeedbackItem] = Field(default_factory=list)
+
+
+class PropertyAnnotation(BaseModel):
+    """An OWL ObjectProperty match — a verb/relation found in the text."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    property_text: str  # Exact text from document
+    folio_iri: str | None = None
+    folio_label: str | None = None
+    folio_definition: str | None = None
+    folio_examples: list[str] | None = None
+    folio_alt_labels: list[str] | None = None
+    domain_iris: list[str] = Field(default_factory=list)
+    range_iris: list[str] = Field(default_factory=list)
+    inverse_of_iri: str | None = None
+    inverse_of_label: str | None = None
+    span: Span
+    confidence: float = 0.0
+    source: str = "aho_corasick"  # "aho_corasick" | "llm"
+    match_type: str | None = None  # "preferred" or "alternative"
+    lineage: list[StageEvent] = Field(default_factory=list)
+    feedback: list[FeedbackItem] = Field(default_factory=list)

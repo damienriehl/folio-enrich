@@ -2,8 +2,12 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import concepts, enrich, export, feedback, health, settings, synthetic
 from app.config import settings as app_settings
@@ -93,3 +97,12 @@ app.include_router(synthetic.router)
 app.include_router(concepts.router)
 app.include_router(feedback.router)
 app.include_router(settings.router)
+
+# Serve frontend
+_frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
+if _frontend_dir.is_dir():
+    @app.get("/", include_in_schema=False)
+    async def _serve_index():
+        return FileResponse(_frontend_dir / "index.html")
+
+    app.mount("/static", StaticFiles(directory=_frontend_dir), name="frontend")

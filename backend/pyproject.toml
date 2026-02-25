@@ -1,6 +1,6 @@
 [project]
 name = "folio-enrich"
-version = "0.2.0"
+version = "0.3.0"
 description = "Legal document annotation pipeline using the FOLIO ontology"
 requires-python = ">=3.11"
 dependencies = [
@@ -23,6 +23,8 @@ dependencies = [
     "httpx>=0.28.0",
     "faiss-cpu>=1.8",
     "openpyxl>=3.1.0",
+    "eyecite>=2.7",
+    "citeurl>=12.0",
 ]
 
 [project.optional-dependencies]

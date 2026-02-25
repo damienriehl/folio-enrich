@@ -945,6 +945,97 @@
   /* Hidden annotation (via filter) */
   .annotation-span.ann-hidden { display: none; }
 
+  /* ── Individual spans (OWL Individuals — named instances of classes) ── */
+  .individual-span {
+    border-top: 2px solid #009688;
+    cursor: pointer;
+    border-radius: 2px;
+    padding: 1px 2px;
+    transition: background 0.15s, border-top-color 0.15s;
+    position: relative;
+    color: #1a1a2e;
+    background: rgba(0,150,136,0.07);
+  }
+  .individual-span:hover { background: rgba(0,150,136,0.18); }
+  .individual-span[data-individual-type="legal_citation"] {
+    border-top-color: #009688; background: rgba(0,150,136,0.08);
+  }
+  .individual-span[data-individual-type="legal_citation"]:hover {
+    background: rgba(0,150,136,0.18);
+  }
+  .individual-span[data-individual-type="named_entity"] {
+    border-top-color: #e67e22; background: rgba(230,126,34,0.08);
+  }
+  .individual-span[data-individual-type="named_entity"]:hover {
+    background: rgba(230,126,34,0.18);
+  }
+  .individual-span.ann-hidden { display: none; }
+
+  /* Individual confidence-based border styles */
+  .individual-span[data-confidence-tier="low"]  { opacity: 0.55; border-top-style: dotted; }
+  .individual-span[data-confidence-tier="mid"]  { opacity: 0.75; border-top-style: dashed; }
+  .individual-span[data-confidence-tier="high"] { border-top-style: solid; }
+
+  /* Individuals tab */
+  .ind-group { margin-bottom: 18px; }
+  .ind-group-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: #6b6b80; margin-bottom: 6px;
+  }
+  .ind-card {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: 6px; cursor: pointer;
+    transition: background 0.12s; font-size: 13px;
+  }
+  .ind-card:hover { background: #f0f0f5; }
+  .ind-card .ind-name { font-weight: 600; color: #1a1a2e; flex: 1; }
+  .ind-card .ind-type-badge {
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    padding: 2px 6px; border-radius: 10px; letter-spacing: 0.4px;
+  }
+  .ind-card .ind-type-badge.citation { background: rgba(0,150,136,0.15); color: #009688; }
+  .ind-card .ind-type-badge.entity   { background: rgba(230,126,34,0.15); color: #e67e22; }
+  .ind-card .ind-conf { font-size: 11px; color: #8888a0; min-width: 28px; text-align: right; }
+  .ind-card .ind-count { font-size: 10px; color: #aaa; }
+  .ind-class-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+  .ind-class-chip {
+    font-size: 10px; background: #e8eaf6; color: #3b64e0;
+    padding: 1px 6px; border-radius: 8px; cursor: pointer;
+  }
+  .ind-class-chip:hover { background: #c5cae9; }
+
+  /* Property spans: purple wavy underline */
+  .property-span {
+    text-decoration: underline wavy #9C27B0;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .property-span:hover {
+    background: rgba(156,39,176,0.15);
+  }
+  .property-span.ann-hidden { display: none; }
+
+  /* Properties tab */
+  .prop-group { margin-bottom: 18px; }
+  .prop-group-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: #6b6b80; margin-bottom: 6px;
+  }
+  .prop-card {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: 6px; cursor: pointer;
+    transition: background 0.12s; font-size: 13px;
+  }
+  .prop-card:hover { background: #f0f0f5; }
+  .prop-card .prop-text { font-weight: 600; color: #1a1a2e; flex: 1; }
+  .prop-card .prop-label-badge {
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    padding: 2px 6px; border-radius: 10px; letter-spacing: 0.4px;
+    background: rgba(156,39,176,0.15); color: #9C27B0;
+  }
+  .prop-card .prop-conf { font-size: 11px; color: #8888a0; min-width: 28px; text-align: right; }
+
   /* Export tab: include dismissed checkbox */
   .export-option-row {
     display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
@@ -1889,6 +1980,8 @@
       <div class="tab" data-tab="concepts" onclick="switchTab(this, 'concepts')">Concepts</div>
       <div class="tab" data-tab="triples" onclick="switchTab(this, 'triples')">Triples</div>
       <div class="tab" data-tab="metadata" onclick="switchTab(this, 'metadata')">Metadata</div>
+      <div class="tab" data-tab="individuals" onclick="switchTab(this, 'individuals')">Individuals</div>
+      <div class="tab" data-tab="properties" onclick="switchTab(this, 'properties')">Properties</div>
       <div class="tab" data-tab="export" onclick="switchTab(this, 'export')">Export</div>
       <div class="tab" data-tab="insights" onclick="switchTab(this, 'insights'); loadInsights()">Insights</div>
     </div>
@@ -1913,6 +2006,14 @@
       </div>
       <div class="tab-content" id="tab-metadata">
         <div id="metadataDisplay"></div>
+      </div>
+      <div class="tab-content" id="tab-individuals">
+        <div id="individualsSummary" style="font-size:12px;color:#6b6b80;margin-bottom:10px"></div>
+        <div id="individualsList"></div>
+      </div>
+      <div class="tab-content" id="tab-properties">
+        <div id="propertiesSummary" style="font-size:12px;color:#6b6b80;margin-bottom:10px"></div>
+        <div id="propertiesList"></div>
       </div>
       <div class="tab-content" id="tab-export">
         <p style="color:#6b6b80;font-size:12px;margin-bottom:12px">Download annotations in any of the 12 supported formats:</p>
@@ -1948,6 +2049,7 @@
         <div id="detailDag" class="detail-section"></div>
         <div id="detailRelated" class="detail-section"></div>
         <div id="detailLineage" class="detail-section"></div>
+        <div id="detailIndividuals" class="detail-section"></div>
         <div id="detailNotes" class="detail-section"></div>
         <div id="detailGraphBtn" class="detail-section"></div>
       </div>
@@ -2051,6 +2153,8 @@ let uploadedFilename = null;
 let pollTimeout = null;
 let eventSource = null;
 let accumulatedAnnotations = [];
+let accumulatedIndividuals = [];
+let accumulatedProperties = [];
 let normalizedText = null;      // canonical full_text from backend, used for progressive rendering
 let activityEntries = [];
 let providersData = {};   // provider name → metadata {display_name, requires_api_key, default_model, api_key_set}
@@ -2072,6 +2176,8 @@ function cacheState() {
       jobId: currentJobId,
       job: currentJob,
       annotations: accumulatedAnnotations,
+      individuals: accumulatedIndividuals,
+      properties: accumulatedProperties,
       normalizedText: normalizedText,
       activity: activityEntries,
       docInput: document.getElementById('docInput')?.value || '',
@@ -2090,6 +2196,8 @@ function restoreState() {
     currentJobId = cache.jobId;
     currentJob = cache.job;
     accumulatedAnnotations = cache.annotations || [];
+    accumulatedIndividuals = cache.individuals || [];
+    accumulatedProperties = cache.properties || [];
     normalizedText = cache.normalizedText || null;
     activityEntries = cache.activity || [];
     uploadedFilename = cache.filename || null;
@@ -2125,7 +2233,8 @@ const PIPELINE_STAGES = [
 const STAGE_LABELS = {
   pending: 'Queued', ingesting: 'Ingesting', normalizing: 'Normalizing',
   enriching: 'Enriching', identifying: 'Identifying', resolving: 'Resolving',
-  matching: 'Matching', judging: 'Judging', exporting: 'Exporting', completed: 'Done'
+  matching: 'Matching', judging: 'Judging', extracting_individuals: 'Extracting Individuals',
+  exporting: 'Exporting', completed: 'Done'
 };
 
 const BRANCH_COLORS = {
@@ -2899,6 +3008,8 @@ function resetButton() {
 function startSSE() {
   closeSSE();
   accumulatedAnnotations = [];
+  accumulatedIndividuals = [];
+  accumulatedProperties = [];
   normalizedText = null;
 
   eventSource = new EventSource(`${API}/enrich/${currentJobId}/stream`);
@@ -2931,6 +3042,30 @@ function startSSE() {
     renderActivityLog();
   });
 
+  eventSource.addEventListener('individual_added', (e) => {
+    const data = JSON.parse(e.data);
+    const existingIdx = accumulatedIndividuals.findIndex(ind => ind.id === data.id);
+    if (existingIdx >= 0) {
+      accumulatedIndividuals[existingIdx] = data;
+    } else {
+      accumulatedIndividuals.push(data);
+    }
+    rerenderAnnotatedText();
+    renderIndividualsTab(accumulatedIndividuals);
+  });
+
+  eventSource.addEventListener('property_added', (e) => {
+    const data = JSON.parse(e.data);
+    const existingIdx = accumulatedProperties.findIndex(p => p.id === data.id);
+    if (existingIdx >= 0) {
+      accumulatedProperties[existingIdx] = data;
+    } else {
+      accumulatedProperties.push(data);
+    }
+    rerenderAnnotatedText();
+    renderPropertiesTab(accumulatedProperties);
+  });
+
   eventSource.addEventListener('complete', (e) => {
     const data = JSON.parse(e.data);
     closeSSE();
@@ -2943,7 +3078,11 @@ function startSSE() {
     }
 
     renderProgressStages('completed');
-    setStatus(`Completed: ${data.total_annotations} annotations`, 'completed');
+    const indCount = data.total_individuals || 0;
+    const propCount = data.total_properties || 0;
+    const indSuffix = indCount > 0 ? `, ${indCount} individuals` : '';
+    const propSuffix = propCount > 0 ? `, ${propCount} properties` : '';
+    setStatus(`Completed: ${data.total_annotations} annotations${indSuffix}${propSuffix}`, 'completed');
     // Fetch final job for full render (concepts list, metadata, triples, exports)
     fetchFinalJob();
     // Re-fetch after delay to pick up post-pipeline assessments (e.g., areas of law)
@@ -3030,12 +3169,22 @@ function rerenderAnnotatedText() {
     state: a.state,
   }));
 
+  // Use progressively accumulated individuals (from SSE), fall back to job data
+  const individuals = accumulatedIndividuals.length > 0
+    ? accumulatedIndividuals
+    : (currentJob?.result?.individuals || []);
+
+  // Use progressively accumulated properties (from SSE), fall back to job data
+  const properties = accumulatedProperties.length > 0
+    ? accumulatedProperties
+    : (currentJob?.result?.properties || []);
+
   // Use normalized text (spans are relative to it); fall back to raw input
   const text = normalizedText || document.getElementById('docInput').value.trim();
   if (text) {
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('annotatedText').style.display = 'block';
-    renderAnnotatedText(text, annotations);
+    renderAnnotatedText(text, annotations, individuals, properties);
   }
 }
 
@@ -3045,6 +3194,8 @@ async function fetchFinalJob() {
     if (!r.ok) return;
     const job = await r.json();
     currentJob = job;
+    accumulatedIndividuals = job.result?.individuals || [];
+    accumulatedProperties = job.result?.properties || [];
     renderResults(job);
     // Seed feedback caches from inline annotation feedback
     _seedFeedbackCaches(job.result?.annotations || []);
@@ -3087,13 +3238,17 @@ function renderProgressStages(currentStatus) {
 function renderResults(job) {
   const text = job.result?.canonical_text?.full_text || '';
   const annotations = job.result?.annotations || [];
+  const individuals = job.result?.individuals || [];
+  const properties = job.result?.properties || [];
   const metadata = job.result?.metadata || {};
 
   _seedDismissedCache(annotations);
-  renderAnnotatedText(text, annotations);
+  renderAnnotatedText(text, annotations, individuals, properties);
   renderConceptsList(annotations);
   renderTriples(metadata.spo_triples || []);
   renderMetadata(metadata, job);
+  renderIndividualsTab(individuals);
+  renderPropertiesTab(properties);
   renderExportButtons();
 
   // Show filter bar if there are annotations
@@ -3101,7 +3256,7 @@ function renderResults(job) {
   if (filterBar) filterBar.style.display = annotations.length > 0 ? '' : 'none';
 }
 
-function renderAnnotatedText(text, annotations) {
+function renderAnnotatedText(text, annotations, individuals, properties) {
   const container = document.getElementById('annotatedText');
   const empty = document.getElementById('emptyState');
 
@@ -3114,69 +3269,290 @@ function renderAnnotatedText(text, annotations) {
   empty.style.display = 'none';
   container.style.display = 'block';
 
-  // Sort annotations by start, then by length descending for nesting
-  const sorted = [...annotations].sort((a, b) => a.span.start - b.span.start || (b.span.end - b.span.start) - (a.span.end - a.span.start));
+  // Build unified span list: annotations (bottom border) + individuals (top border)
+  const spans = [];
 
-  let pieces = [];
-  let lastEnd = 0;
-
-  for (const ann of sorted) {
+  // Annotation spans
+  const sortedAnns = [...annotations].sort((a, b) => a.span.start - b.span.start || (b.span.end - b.span.start) - (a.span.end - a.span.start));
+  for (const ann of sortedAnns) {
     if (!ann.concepts || ann.concepts.length === 0) continue;
-    if (ann.span.start < lastEnd) continue; // skip overlapping
-
-    // Store full annotation data for tooltip access to backup concepts
     if (ann.id) _annotationDataById[ann.id] = ann;
-
-    const c = ann.concepts[0];
-    const branch = (c.branches && c.branches.length > 0) ? c.branches[0] : (c.branch || '');
-    const branchColor = BRANCH_COLORS[branch] || '#3b64e0';
-
-    // Text before this annotation
-    if (ann.span.start > lastEnd) {
-      pieces.push(escapeHtml(text.slice(lastEnd, ann.span.start)));
-    }
-
-    const state = ann.state || c.state || 'confirmed';
-    // Count backup alternatives (concepts beyond index 0)
-    const altCount = ann.concepts.length - 1;
-    const dataAttrs = [
-      `data-ann-id="${escapeAttr(ann.id || '')}"`,
-      `data-iri="${escapeAttr(c.folio_iri || '')}"`,
-      `data-label="${escapeAttr(c.folio_label || c.concept_text)}"`,
-      `data-def="${escapeAttr(c.folio_definition || '')}"`,
-      `data-branch="${escapeAttr(branch)}"`,
-      `data-confidence="${c.confidence}"`,
-      `data-source="${escapeAttr(c.source || '')}"`,
-      `data-state="${escapeAttr(state)}"`,
-      `data-alt-count="${altCount}"`,
-    ].join(' ');
-
-    // Confidence-based visual modulation (skip for rejected annotations)
-    let confStyle = '';
-    if (state !== 'rejected') {
-      const confVal = typeof c.confidence === 'number' ? (c.confidence > 1 ? c.confidence / 100 : c.confidence) : 1;
-      if (confVal < 0.5) {
-        confStyle = 'opacity:0.55;border-bottom-style:dotted;';
-      } else if (confVal < 0.8) {
-        confStyle = 'opacity:0.75;border-bottom-style:dashed;';
-      }
-    }
-
-    pieces.push(`<span class="annotation-span" ${dataAttrs}${confStyle ? ` style="${confStyle}"` : ''}>${escapeHtml(text.slice(ann.span.start, ann.span.end))}</span>`);
-    lastEnd = Math.max(lastEnd, ann.span.end);
+    spans.push({ type: 'annotation', start: ann.span.start, end: ann.span.end, data: ann });
   }
 
-  // Remaining text
-  if (lastEnd < text.length) {
-    pieces.push(escapeHtml(text.slice(lastEnd)));
+  // Individual spans (render as separate layer — individuals can overlap annotations)
+  const inds = individuals || [];
+  const sortedInds = [...inds].sort((a, b) => a.span.start - b.span.start);
+  for (const ind of sortedInds) {
+    if (ind.id) _individualDataById[ind.id] = ind;
+    spans.push({ type: 'individual', start: ind.span.start, end: ind.span.end, data: ind });
+  }
+
+  // Property spans (purple wavy underline layer)
+  const props = properties || [];
+  const sortedProps = [...props].sort((a, b) => a.span.start - b.span.start);
+  for (const prop of sortedProps) {
+    if (prop.id) _propertyDataById[prop.id] = prop;
+    spans.push({ type: 'property', start: prop.span.start, end: prop.span.end, data: prop });
+  }
+
+  // Flatten to non-overlapping segments: annotations take priority for bottom border,
+  // individuals take priority for top border. We render annotation-only spans, individual-only spans,
+  // and combined spans (both borders).
+
+  // Collect all boundary points
+  const points = new Set([0, text.length]);
+  for (const s of spans) { points.add(s.start); points.add(s.end); }
+  const sortedPoints = [...points].sort((a, b) => a - b);
+
+  let pieces = [];
+  for (let i = 0; i < sortedPoints.length - 1; i++) {
+    const segStart = sortedPoints[i];
+    const segEnd = sortedPoints[i + 1];
+    if (segStart >= segEnd) continue;
+
+    // Find which annotations, individuals, and properties cover this segment
+    const coveringAnns = [];
+    for (const s of spans) {
+      if (s.type === 'annotation' && s.start <= segStart && s.end >= segEnd) coveringAnns.push(s.data);
+    }
+    const coveringInds = [];
+    for (const s of spans) {
+      if (s.type === 'individual' && s.start <= segStart && s.end >= segEnd) coveringInds.push(s.data);
+    }
+    const coveringProps = [];
+    for (const s of spans) {
+      if (s.type === 'property' && s.start <= segStart && s.end >= segEnd) coveringProps.push(s.data);
+    }
+
+    const segText = escapeHtml(text.slice(segStart, segEnd));
+
+    if (coveringAnns.length === 0 && coveringInds.length === 0 && coveringProps.length === 0) {
+      pieces.push(segText);
+      continue;
+    }
+
+    // Use the first (highest priority) annotation, individual, and property
+    const ann = coveringAnns[0] || null;
+    const ind = coveringInds[0] || null;
+    const prop = coveringProps[0] || null;
+
+    // Build from innermost to outermost: property → individual → annotation
+    let html = segText;
+    if (prop) html = _buildPropertySpan(prop, html);
+    if (ind) html = _buildIndividualSpan(ind, html);
+    if (ann) html = _buildAnnotationSpan(ann, html, ind || prop ? true : false);
+    pieces.push(html);
   }
 
   container.innerHTML = pieces.join('');
 
-  // Add click handlers
+  // Add click handlers for annotation spans
   container.querySelectorAll('.annotation-span').forEach(el => {
     el.addEventListener('click', (e) => { e.stopPropagation(); showTooltip(e, el); });
   });
+  // Add click handlers for individual spans
+  container.querySelectorAll('.individual-span').forEach(el => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); showIndividualTooltip(e, el); });
+  });
+  // Add click handlers for property spans
+  container.querySelectorAll('.property-span').forEach(el => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); showPropertyTooltip(e, el); });
+  });
+}
+
+function _buildAnnotationSpan(ann, innerHtml, rawInner) {
+  const c = ann.concepts[0];
+  const branch = (c.branches && c.branches.length > 0) ? c.branches[0] : (c.branch || '');
+  const state = ann.state || c.state || 'confirmed';
+  const altCount = ann.concepts.length - 1;
+  const dataAttrs = [
+    `data-ann-id="${escapeAttr(ann.id || '')}"`,
+    `data-iri="${escapeAttr(c.folio_iri || '')}"`,
+    `data-label="${escapeAttr(c.folio_label || c.concept_text)}"`,
+    `data-def="${escapeAttr(c.folio_definition || '')}"`,
+    `data-branch="${escapeAttr(branch)}"`,
+    `data-confidence="${c.confidence}"`,
+    `data-source="${escapeAttr(c.source || '')}"`,
+    `data-state="${escapeAttr(state)}"`,
+    `data-alt-count="${altCount}"`,
+  ].join(' ');
+  let confStyle = '';
+  if (state !== 'rejected') {
+    const confVal = typeof c.confidence === 'number' ? (c.confidence > 1 ? c.confidence / 100 : c.confidence) : 1;
+    if (confVal < 0.5) confStyle = 'opacity:0.55;border-bottom-style:dotted;';
+    else if (confVal < 0.8) confStyle = 'opacity:0.75;border-bottom-style:dashed;';
+  }
+  return `<span class="annotation-span" ${dataAttrs}${confStyle ? ` style="${confStyle}"` : ''}>${innerHtml}</span>`;
+}
+
+function _buildPropertySpan(prop, innerHtml) {
+  const confVal = typeof prop.confidence === 'number' ? (prop.confidence > 1 ? prop.confidence / 100 : prop.confidence) : 1;
+  const confTier = confVal < 0.5 ? 'low' : confVal < 0.8 ? 'mid' : 'high';
+  const dataAttrs = [
+    `data-prop-id="${escapeAttr(prop.id || '')}"`,
+    `data-type="property"`,
+    `data-folio-iri="${escapeAttr(prop.folio_iri || '')}"`,
+    `data-folio-label="${escapeAttr(prop.folio_label || '')}"`,
+    `data-confidence="${prop.confidence}"`,
+    `data-confidence-tier="${confTier}"`,
+    `data-source="${escapeAttr(prop.source || '')}"`,
+    `data-match-type="${escapeAttr(prop.match_type || '')}"`,
+  ].join(' ');
+  return `<span class="property-span" ${dataAttrs}>${innerHtml}</span>`;
+}
+
+function _buildIndividualSpan(ind, innerHtml) {
+  const confVal = typeof ind.confidence === 'number' ? (ind.confidence > 1 ? ind.confidence / 100 : ind.confidence) : 1;
+  const confTier = confVal < 0.5 ? 'low' : confVal < 0.8 ? 'mid' : 'high';
+  const classLabel = (ind.class_links && ind.class_links.length > 0 && ind.class_links[0].folio_label) ? ind.class_links[0].folio_label : '';
+  const dataAttrs = [
+    `data-ind-id="${escapeAttr(ind.id || '')}"`,
+    `data-type="individual"`,
+    `data-individual-type="${escapeAttr(ind.individual_type || 'named_entity')}"`,
+    `data-name="${escapeAttr(ind.name || '')}"`,
+    `data-confidence="${ind.confidence}"`,
+    `data-confidence-tier="${confTier}"`,
+    `data-source="${escapeAttr(ind.source || '')}"`,
+    `data-class-label="${escapeAttr(classLabel)}"`,
+  ].join(' ');
+  return `<span class="individual-span" ${dataAttrs}>${innerHtml}</span>`;
+}
+
+function showIndividualTooltip(event, el) {
+  const tooltip = document.getElementById('tooltip');
+  const indId = el.dataset.indId;
+  const ind = _individualDataById[indId];
+  if (!ind) return;
+
+  const name = ind.name || el.dataset.name || '';
+  const indType = ind.individual_type || 'named_entity';
+  const typeBadge = indType === 'legal_citation' ? 'Citation' : 'Entity';
+  const typeClass = indType === 'legal_citation' ? 'citation' : 'entity';
+  const conf = ind.confidence || 0;
+  const confPct = conf > 1 ? conf : conf * 100;
+  const confTier = confPct >= 80 ? 'conf-high' : confPct >= 50 ? 'conf-mid' : 'conf-low';
+
+  // Build class link chips
+  let classChips = '';
+  if (ind.class_links && ind.class_links.length > 0) {
+    classChips = '<div class="ind-class-chips" style="margin-top:4px">' +
+      ind.class_links.map(cl => {
+        const label = cl.folio_label || '';
+        const annId = cl.annotation_id || '';
+        const onclick = annId
+          ? `onclick="navigateToAnnotation('${escapeAttr(annId)}')" style="cursor:pointer"`
+          : '';
+        return `<span class="ind-class-chip" ${onclick}>${escapeHtml(label)}</span>`;
+      }).join('') + '</div>';
+  }
+
+  let normalizedLine = '';
+  if (ind.normalized_form && ind.normalized_form !== ind.mention_text) {
+    normalizedLine = `<div style="font-size:10px;color:#888;margin-top:2px">Normalized: ${escapeHtml(ind.normalized_form)}</div>`;
+  }
+  let urlLine = '';
+  if (ind.url) {
+    urlLine = `<div style="font-size:10px;margin-top:2px"><a href="${escapeAttr(ind.url)}" target="_blank" style="color:#3b64e0">View source</a></div>`;
+  }
+
+  tooltip.innerHTML = `
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px" class="ind-type-badge ${typeClass}">${typeBadge}</div>
+    <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-top:2px">${escapeHtml(name)}</div>
+    <div class="tooltip-main-row">
+      <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}</span>
+      <span style="font-size:10px;color:#888;margin-left:4px">${escapeHtml(ind.source || '')}</span>
+    </div>
+    ${normalizedLine}
+    ${urlLine}
+    ${classChips}
+  `;
+  tooltip.classList.add('visible');
+
+  // Position tooltip
+  const rect = el.getBoundingClientRect();
+  const panelRight = document.querySelector('.panel-right');
+  const panelRect = panelRight ? panelRight.getBoundingClientRect() : { left: 0, right: window.innerWidth };
+  tooltip.style.left = `${Math.max(panelRect.left + 8, Math.min(rect.left, panelRect.right - 320))}px`;
+  tooltip.style.top = `${rect.bottom + 6}px`;
+}
+
+function showPropertyTooltip(event, el) {
+  const tooltip = document.getElementById('tooltip');
+  const propId = el.dataset.propId;
+  const prop = _propertyDataById[propId];
+  if (!prop) return;
+
+  const label = prop.folio_label || prop.property_text || '';
+  const iri = prop.folio_iri || '';
+  const def = prop.folio_definition || '';
+  const conf = prop.confidence || 0;
+  const confPct = conf > 1 ? conf : conf * 100;
+  const confTier = confPct >= 80 ? 'conf-high' : confPct >= 50 ? 'conf-mid' : 'conf-low';
+
+  // Domain/range info
+  let domainRange = '';
+  if (prop.domain_iris && prop.domain_iris.length > 0) {
+    const domains = prop.domain_iris.map(d => escapeHtml(d.split('/').pop().split('#').pop())).join(', ');
+    domainRange += `<div style="font-size:10px;color:#888;margin-top:2px">Domain: ${domains}</div>`;
+  }
+  if (prop.range_iris && prop.range_iris.length > 0) {
+    const ranges = prop.range_iris.map(r => escapeHtml(r.split('/').pop().split('#').pop())).join(', ');
+    domainRange += `<div style="font-size:10px;color:#888;margin-top:2px">Range: ${ranges}</div>`;
+  }
+
+  // Inverse property
+  let inverseLine = '';
+  if (prop.inverse_of_iri || prop.inverse_of_label) {
+    const invLabel = prop.inverse_of_label || prop.inverse_of_iri.split('/').pop().split('#').pop();
+    inverseLine = `<div style="font-size:10px;color:#888;margin-top:2px">Inverse: ${escapeHtml(invLabel)}</div>`;
+  }
+
+  // Alt labels
+  let altLine = '';
+  if (prop.folio_alt_labels && prop.folio_alt_labels.length > 0) {
+    altLine = `<div style="font-size:10px;color:#888;margin-top:2px">Also: ${prop.folio_alt_labels.map(l => escapeHtml(l)).join(', ')}</div>`;
+  }
+
+  // Examples
+  let examplesLine = '';
+  if (prop.folio_examples && prop.folio_examples.length > 0) {
+    const exList = prop.folio_examples.slice(0, 2).map(ex => escapeHtml(ex)).join('; ');
+    examplesLine = `<div style="font-size:10px;color:#888;margin-top:2px;font-style:italic">e.g. ${exList}</div>`;
+  }
+
+  tooltip.innerHTML = `
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#9C27B0">Property</div>
+    <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-top:2px">${escapeHtml(label)}</div>
+    <div class="tooltip-main-row">
+      <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}</span>
+      <span style="font-size:10px;color:#888;margin-left:4px">${escapeHtml(prop.source || '')} ${escapeHtml(prop.match_type || '')}</span>
+    </div>
+    ${def ? `<div style="font-size:11px;color:#444;margin-top:4px">${escapeHtml(def)}</div>` : ''}
+    ${domainRange}
+    ${inverseLine}
+    ${altLine}
+    ${examplesLine}
+    ${iri ? `<div style="font-size:9px;color:#aaa;margin-top:4px;word-break:break-all">${escapeHtml(iri)}</div>` : ''}
+  `;
+  tooltip.classList.add('visible');
+
+  // Position tooltip
+  const rect = el.getBoundingClientRect();
+  const panelRight = document.querySelector('.panel-right');
+  const panelRect = panelRight ? panelRight.getBoundingClientRect() : { left: 0, right: window.innerWidth };
+  tooltip.style.left = `${Math.max(panelRect.left + 8, Math.min(rect.left, panelRect.right - 320))}px`;
+  tooltip.style.top = `${rect.bottom + 6}px`;
+}
+
+function navigateToAnnotation(annId) {
+  const el = document.querySelector(`.annotation-span[data-ann-id="${annId}"]`);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.outline = '2px solid #3b64e0';
+    setTimeout(() => { el.style.outline = ''; }, 2000);
+    showTooltip(null, el);
+  }
 }
 
 function showTooltip(event, el) {
@@ -3305,6 +3681,12 @@ function repositionTooltip() {
 
 // Full annotation data by ID (for tooltip access to backup concepts)
 const _annotationDataById = {};
+
+// Full individual data by ID
+const _individualDataById = {};
+
+// Full property data by ID
+const _propertyDataById = {};
 
 // Track feedback already submitted this session (annId → rating)
 const _feedbackCache = {};
@@ -4022,6 +4404,7 @@ async function loadConceptDetail(iriHash, annId) {
     renderDetailInfo(detail);
     renderDetailAlternatives(annId);
     renderDetailLineage(annId);
+    renderDetailIndividuals(annId);
     renderDetailDag(detail);
     renderDetailRelated(detail);
     renderDetailNotes(iriHash, annId);
@@ -4638,6 +5021,40 @@ function toggleDagSiblings() {
 function toggleDagChildren() {
   _dagToggles.children = !_dagToggles.children;
   _rerenderDag();
+}
+
+function renderDetailIndividuals(annId) {
+  const container = document.getElementById('detailIndividuals');
+  if (!annId) { container.innerHTML = ''; return; }
+
+  // Find individuals linked to this annotation
+  const individuals = currentJob?.result?.individuals || [];
+  const linked = individuals.filter(ind =>
+    ind.class_links && ind.class_links.some(cl => cl.annotation_id === annId)
+  );
+
+  if (linked.length === 0) { container.innerHTML = ''; return; }
+
+  let html = '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b6b80;margin-bottom:6px">Individuals</div>';
+  for (const ind of linked) {
+    const typeBadge = ind.individual_type === 'legal_citation' ? 'citation' : 'entity';
+    const typeLabel = ind.individual_type === 'legal_citation' ? 'Citation' : 'Entity';
+    html += `<div class="ind-card" onclick="navigateToIndividual('${escapeAttr(ind.id)}')" style="cursor:pointer">
+      <span class="ind-type-badge ${typeBadge}">${typeLabel}</span>
+      <span class="ind-name">${escapeHtml(ind.name)}</span>
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+function navigateToIndividual(indId) {
+  const el = document.querySelector(`.individual-span[data-ind-id="${indId}"]`);
+  if (el) {
+    switchTab(document.querySelector('.tab[data-tab="annotated"]'), 'annotated');
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.outline = '2px solid #009688';
+    setTimeout(() => { el.style.outline = ''; }, 2000);
+  }
 }
 
 function renderDetailRelated(detail) {
@@ -5302,6 +5719,16 @@ function renderMetadata(metadata, job) {
   html += `<div class="meta-key">Resolved Concepts</div><div class="meta-value">${resolved.length}</div>`;
   html += `<div class="meta-key">Total Annotations</div><div class="meta-value">${(job.result?.annotations || []).length}</div>`;
 
+  // Individuals statistics
+  const inds = job.result?.individuals || [];
+  if (inds.length > 0) {
+    const citations = inds.filter(i => i.individual_type === 'legal_citation').length;
+    const entities = inds.filter(i => i.individual_type === 'named_entity').length;
+    html += `<div class="meta-key">Individuals Identified</div><div class="meta-value">${inds.length}</div>`;
+    html += `<div class="meta-key">Legal Citations</div><div class="meta-value">${citations}</div>`;
+    html += `<div class="meta-key">Named Entities</div><div class="meta-value">${entities}</div>`;
+  }
+
   const triples = metadata.spo_triples || [];
   if (triples.length) {
     html += `<div class="meta-key">SPO Triples</div><div class="meta-value">${triples.length}</div>`;
@@ -5333,6 +5760,151 @@ function renderMetadata(metadata, job) {
 
   html += '</div>';
   container.innerHTML = html;
+}
+
+function renderIndividualsTab(individuals) {
+  const summary = document.getElementById('individualsSummary');
+  const list = document.getElementById('individualsList');
+  const inds = individuals || [];
+
+  if (inds.length === 0) {
+    summary.textContent = 'No individuals extracted yet.';
+    list.innerHTML = '';
+    return;
+  }
+
+  const citations = inds.filter(i => i.individual_type === 'legal_citation');
+  const entities = inds.filter(i => i.individual_type === 'named_entity');
+  summary.textContent = `${inds.length} individual${inds.length !== 1 ? 's' : ''} (${citations.length} citation${citations.length !== 1 ? 's' : ''}, ${entities.length} entit${entities.length !== 1 ? 'ies' : 'y'})`;
+
+  let html = '';
+
+  if (citations.length > 0) {
+    html += '<div class="ind-group"><div class="ind-group-title">Legal Citations</div>';
+    for (const ind of citations) {
+      html += _renderIndividualCard(ind);
+    }
+    html += '</div>';
+  }
+
+  if (entities.length > 0) {
+    html += '<div class="ind-group"><div class="ind-group-title">Named Entities</div>';
+    for (const ind of entities) {
+      html += _renderIndividualCard(ind);
+    }
+    html += '</div>';
+  }
+
+  list.innerHTML = html;
+
+  // Add click handlers to cards
+  list.querySelectorAll('.ind-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const indId = card.dataset.indId;
+      const el = document.querySelector(`.individual-span[data-ind-id="${indId}"]`);
+      if (el) {
+        switchTab(document.querySelector('.tab[data-tab="annotated"]'), 'annotated');
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.outline = '2px solid #009688';
+        setTimeout(() => { el.style.outline = ''; }, 2000);
+      }
+    });
+  });
+}
+
+function _renderIndividualCard(ind) {
+  const typeBadge = ind.individual_type === 'legal_citation' ? 'citation' : 'entity';
+  const typeLabel = ind.individual_type === 'legal_citation' ? 'Citation' : 'Entity';
+  const confPct = (ind.confidence > 1 ? ind.confidence : ind.confidence * 100).toFixed(0);
+  const confTier = confPct >= 80 ? 'conf-high' : confPct >= 50 ? 'conf-mid' : 'conf-low';
+
+  let classChips = '';
+  if (ind.class_links && ind.class_links.length > 0) {
+    classChips = '<div class="ind-class-chips">' +
+      ind.class_links.map(cl => {
+        const label = cl.folio_label || '';
+        const annId = cl.annotation_id || '';
+        const onclick = annId ? `onclick="event.stopPropagation(); navigateToAnnotation('${escapeAttr(annId)}')"` : '';
+        return `<span class="ind-class-chip" ${onclick}>${escapeHtml(label)}</span>`;
+      }).join('') + '</div>';
+  }
+
+  let extra = '';
+  if (ind.normalized_form && ind.normalized_form !== ind.mention_text) {
+    extra += `<div style="font-size:10px;color:#888">${escapeHtml(ind.normalized_form)}</div>`;
+  }
+
+  return `<div class="ind-card" data-ind-id="${escapeAttr(ind.id || '')}">
+    <span class="ind-type-badge ${typeBadge}">${typeLabel}</span>
+    <span class="ind-name">${escapeHtml(ind.name)}</span>
+    <span class="ind-conf ${confTier}">${confPct}</span>
+  </div>${classChips}${extra}`;
+}
+
+function renderPropertiesTab(properties) {
+  const summary = document.getElementById('propertiesSummary');
+  const list = document.getElementById('propertiesList');
+  const props = properties || [];
+
+  if (props.length === 0) {
+    summary.textContent = 'No properties extracted yet.';
+    list.innerHTML = '';
+    return;
+  }
+
+  const preferred = props.filter(p => p.match_type === 'preferred');
+  const alt = props.filter(p => p.match_type === 'alternative');
+  const llm = props.filter(p => p.source === 'llm');
+  const other = props.filter(p => p.match_type !== 'preferred' && p.match_type !== 'alternative' && p.source !== 'llm');
+
+  const uniqueIris = new Set(props.filter(p => p.folio_iri).map(p => p.folio_iri));
+  summary.textContent = `${props.length} propert${props.length !== 1 ? 'ies' : 'y'} (${uniqueIris.size} unique FOLIO propert${uniqueIris.size !== 1 ? 'ies' : 'y'})`;
+
+  let html = '';
+
+  // Group by FOLIO label for cleaner display
+  const grouped = {};
+  for (const prop of props) {
+    const key = prop.folio_label || prop.property_text || 'Unknown';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(prop);
+  }
+
+  const sortedKeys = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+
+  for (const key of sortedKeys) {
+    const groupProps = grouped[key];
+    const first = groupProps[0];
+    const count = groupProps.length;
+    const confPct = (first.confidence > 1 ? first.confidence : first.confidence * 100).toFixed(0);
+    const confTier = confPct >= 80 ? 'conf-high' : confPct >= 50 ? 'conf-mid' : 'conf-low';
+
+    html += `<div class="prop-card" data-prop-id="${escapeAttr(first.id || '')}">
+      <span class="prop-label-badge">${escapeHtml(first.source || 'match')}</span>
+      <span class="prop-text">${escapeHtml(key)}</span>
+      ${count > 1 ? `<span style="font-size:10px;color:#888">&times;${count}</span>` : ''}
+      <span class="prop-conf ${confTier}">${confPct}</span>
+    </div>`;
+    if (first.folio_definition) {
+      html += `<div style="font-size:10px;color:#888;padding:0 10px 6px 10px;margin-top:-4px">${escapeHtml(first.folio_definition)}</div>`;
+    }
+  }
+
+  list.innerHTML = html;
+
+  // Add click handlers to cards — navigate to first span in annotated text
+  list.querySelectorAll('.prop-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const propId = card.dataset.propId;
+      const el = document.querySelector(`.property-span[data-prop-id="${propId}"]`);
+      if (el) {
+        switchTab(document.querySelector('.tab[data-tab="annotated"]'), 'annotated');
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.outline = '2px solid #9C27B0';
+        setTimeout(() => { el.style.outline = ''; }, 2000);
+      }
+    });
+  });
 }
 
 function renderExportButtons() {
@@ -5497,7 +6069,8 @@ function toggleUncertain() {
   // Re-render if we have results
   if (currentJob) renderAnnotatedText(
     currentJob.result?.canonical_text?.full_text || '',
-    currentJob.result?.annotations || []
+    currentJob.result?.annotations || [],
+    currentJob.result?.individuals || []
   );
 }
 
@@ -5528,11 +6101,14 @@ function clearAll() {
   uploadedFilename = null;
   closeSSE();
   accumulatedAnnotations = [];
+  accumulatedIndividuals = [];
+  accumulatedProperties = [];
   activityEntries = [];
-  // Clear feedback and dismiss caches
+  // Clear feedback, dismiss, and data caches
   Object.keys(_feedbackCache).forEach(k => delete _feedbackCache[k]);
   Object.keys(_noteCache).forEach(k => delete _noteCache[k]);
   Object.keys(_dismissedCache).forEach(k => delete _dismissedCache[k]);
+  Object.keys(_propertyDataById).forEach(k => delete _propertyDataById[k]);
   // Reset filter bar
   _annFilter = 'all';
   const filterBar = document.getElementById('annFilterBar');

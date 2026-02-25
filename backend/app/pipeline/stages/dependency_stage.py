@@ -33,8 +33,9 @@ class DependencyStage(PipelineStage):
             job.result.canonical_text.full_text, concept_spans
         )
 
-        job.result.metadata["spo_triples"] = [
-            {
+        job.result.metadata["spo_triples"] = []
+        for t in triples:
+            triple_dict = {
                 "subject": t.subject,
                 "predicate": t.predicate,
                 "object": t.object,
@@ -42,8 +43,40 @@ class DependencyStage(PipelineStage):
                 "subject_iri": t.subject_iri,
                 "object_iri": t.object_iri,
             }
-            for t in triples
-        ]
+
+            # Enrich with individual references
+            for ind in job.result.individuals:
+                mention = ind.mention_text.lower()
+                if mention and mention in t.subject.lower():
+                    triple_dict["subject_individual"] = {
+                        "id": ind.id,
+                        "name": ind.name,
+                        "individual_type": ind.individual_type,
+                    }
+                    break
+            for ind in job.result.individuals:
+                mention = ind.mention_text.lower()
+                if mention and mention in t.object.lower():
+                    triple_dict["object_individual"] = {
+                        "id": ind.id,
+                        "name": ind.name,
+                        "individual_type": ind.individual_type,
+                    }
+                    break
+
+            # Enrich predicate with FOLIO property IRI
+            pred_lower = t.predicate.lower()
+            for prop in job.result.properties:
+                prop_text = prop.property_text.lower()
+                if prop_text and prop_text in pred_lower:
+                    triple_dict["predicate_property"] = {
+                        "id": prop.id,
+                        "folio_iri": prop.folio_iri,
+                        "folio_label": prop.folio_label,
+                    }
+                    break
+
+            job.result.metadata["spo_triples"].append(triple_dict)
 
         log = job.result.metadata.setdefault("activity_log", [])
         log.append({"ts": datetime.now(timezone.utc).isoformat(), "stage": self.name, "msg": f"Extracted {len(triples)} subject-predicate-object triples"})

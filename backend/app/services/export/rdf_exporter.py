@@ -48,4 +48,46 @@ class RDFExporter(ExporterBase):
                     if concept.folio_label:
                         g.add((concept_uri, SKOS.prefLabel, Literal(concept.folio_label)))
 
+        # OWL Named Individuals
+        for i, ind in enumerate(job.result.individuals):
+            ind_uri = URIRef(f"urn:folio-enrich:job:{job.id}:ind:{i}")
+            g.add((ind_uri, RDF.type, OWL.NamedIndividual))
+            g.add((doc_uri, FOLIO.hasIndividual, ind_uri))
+            g.add((ind_uri, RDFS.label, Literal(ind.name)))
+
+            # Target span
+            ind_target = BNode()
+            g.add((ind_uri, OA.hasTarget, ind_target))
+            g.add((ind_target, OA.start, Literal(ind.span.start, datatype=XSD.integer)))
+            g.add((ind_target, OA.end, Literal(ind.span.end, datatype=XSD.integer)))
+            g.add((ind_target, OA.exact, Literal(ind.mention_text)))
+
+            # Class links (rdf:type)
+            for cl in ind.class_links:
+                if cl.folio_iri:
+                    g.add((ind_uri, RDF.type, URIRef(cl.folio_iri)))
+
+        # OWL ObjectProperties
+        for i, prop in enumerate(job.result.properties):
+            prop_uri = URIRef(prop.folio_iri) if prop.folio_iri else URIRef(f"urn:folio-enrich:job:{job.id}:prop:{i}")
+            g.add((prop_uri, RDF.type, OWL.ObjectProperty))
+            g.add((doc_uri, FOLIO.hasProperty, prop_uri))
+            if prop.folio_label:
+                g.add((prop_uri, RDFS.label, Literal(prop.folio_label)))
+
+            # Target span
+            prop_target = BNode()
+            g.add((prop_uri, OA.hasTarget, prop_target))
+            g.add((prop_target, OA.start, Literal(prop.span.start, datatype=XSD.integer)))
+            g.add((prop_target, OA.end, Literal(prop.span.end, datatype=XSD.integer)))
+            g.add((prop_target, OA.exact, Literal(prop.property_text)))
+
+            # Domain and range
+            for d_iri in prop.domain_iris:
+                g.add((prop_uri, RDFS.domain, URIRef(d_iri)))
+            for r_iri in prop.range_iris:
+                g.add((prop_uri, RDFS.range, URIRef(r_iri)))
+            if prop.inverse_of_iri:
+                g.add((prop_uri, OWL.inverseOf, URIRef(prop.inverse_of_iri)))
+
         return g.serialize(format="turtle")

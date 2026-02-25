@@ -17,6 +17,8 @@ from app.pipeline.stages.string_match_stage import StringMatchStage
 from app.pipeline.stages.branch_judge_stage import BranchJudgeStage
 from app.pipeline.stages.metadata_stage import MetadataStage
 from app.pipeline.stages.dependency_stage import DependencyStage
+from app.pipeline.stages.individual_stage import EarlyIndividualStage, LLMIndividualStage
+from app.pipeline.stages.property_stage import EarlyPropertyStage, LLMPropertyStage
 from app.pipeline.stages.rerank_stage import ContextualRerankStage
 from app.services.llm.base import LLMProvider
 from app.storage.job_store import JobStore
@@ -24,7 +26,10 @@ from app.storage.job_store import JobStore
 logger = logging.getLogger(__name__)
 
 # Task names for per-task LLM configuration
-LLM_TASKS = ("classifier", "extractor", "concept", "branch_judge", "area_of_law", "synthetic")
+LLM_TASKS = ("classifier", "extractor", "concept", "branch_judge", "area_of_law", "synthetic", "individual", "property")
+
+# Map task names to TaskLLMs field names (needed when task name is a Python builtin)
+_TASK_FIELD_MAP: dict[str, str] = {"property": "property_llm"}
 
 
 @dataclass
@@ -42,6 +47,8 @@ class TaskLLMs:
     branch_judge: LLMProvider | None = None
     area_of_law: LLMProvider | None = None
     synthetic: LLMProvider | None = None
+    individual: LLMProvider | None = None
+    property_llm: LLMProvider | None = None
 
     # --- convenience helpers ------------------------------------------------
 
@@ -64,7 +71,8 @@ class TaskLLMs:
         result = cls()
         for task in LLM_TASKS:
             llm = _try_get_task_llm(task, fallback)
-            setattr(result, task, llm)
+            field = _TASK_FIELD_MAP.get(task, task)
+            setattr(result, field, llm)
         return result
 
 
@@ -88,6 +96,8 @@ class PipelineConfig:
     pre_parallel: list[PipelineStage] = field(default_factory=list)
     entity_ruler: PipelineStage | None = None
     llm_concept: PipelineStage | None = None
+    early_individual: PipelineStage | None = None
+    early_property: PipelineStage | None = None
     post_parallel: list[PipelineStage] = field(default_factory=list)
 
 
@@ -106,6 +116,8 @@ def build_pipeline_config(
     branch_judge_llm = (task_llms.branch_judge if task_llms else llm) or llm
     classifier_llm = (task_llms.classifier if task_llms else llm) or llm
     extractor_llm = (task_llms.extractor if task_llms else llm) or llm
+    individual_llm = (task_llms.individual if task_llms else llm) or llm
+    property_llm = (task_llms.property_llm if task_llms else llm) or llm
 
     config = PipelineConfig(
         pre_parallel=[
@@ -117,6 +129,12 @@ def build_pipeline_config(
 
     if concept_llm is not None:
         config.llm_concept = LLMConceptStage(concept_llm)
+
+    # Early individual extraction (citations + regex/spaCy) runs in parallel
+    config.early_individual = EarlyIndividualStage()
+
+    # Early property extraction (Aho-Corasick) runs in parallel
+    config.early_property = EarlyPropertyStage()
 
     config.post_parallel = [
         ReconciliationStage(embedding_service=embedding_service),
@@ -130,6 +148,12 @@ def build_pipeline_config(
         config.post_parallel.append(BranchJudgeStage(branch_judge_llm))
 
     config.post_parallel.append(StringMatchStage())
+
+    # LLM individual linking (after StringMatch, needs resolved classes)
+    config.post_parallel.append(LLMIndividualStage(llm=individual_llm))
+
+    # LLM property linking (after LLMIndividual, needs resolved classes)
+    config.post_parallel.append(LLMPropertyStage(llm=property_llm))
 
     if classifier_llm is not None or extractor_llm is not None:
         config.post_parallel.append(
@@ -162,12 +186,20 @@ def build_stages(
     branch_judge_llm = (task_llms.branch_judge if task_llms else llm) or llm
     classifier_llm = (task_llms.classifier if task_llms else llm) or llm
     extractor_llm = (task_llms.extractor if task_llms else llm) or llm
+    individual_llm = (task_llms.individual if task_llms else llm) or llm
+    property_llm = (task_llms.property_llm if task_llms else llm) or llm
 
     stages: list[PipelineStage] = [
         IngestionStage(),
         NormalizationStage(),
         EntityRulerStage(embedding_service=embedding_service),
     ]
+
+    # Early individual extraction (citations + regex/spaCy) — fast, no LLM
+    stages.append(EarlyIndividualStage())
+
+    # Early property extraction (Aho-Corasick) — fast, no LLM
+    stages.append(EarlyPropertyStage())
 
     if concept_llm is not None:
         stages.append(LLMConceptStage(concept_llm))
@@ -182,6 +214,12 @@ def build_stages(
         stages.append(BranchJudgeStage(branch_judge_llm))
 
     stages.append(StringMatchStage())
+
+    # LLM individual linking (after StringMatch, needs resolved classes)
+    stages.append(LLMIndividualStage(llm=individual_llm))
+
+    # LLM property linking (after LLMIndividual, needs resolved classes)
+    stages.append(LLMPropertyStage(llm=property_llm))
 
     if classifier_llm is not None or extractor_llm is not None:
         stages.append(
@@ -326,7 +364,7 @@ class PipelineOrchestrator:
             job.updated_at = datetime.now(timezone.utc)
             await self.job_store.save(job)
 
-            _log_activity(job, "orchestrator", "Running EntityRuler and LLM in parallel...")
+            _log_activity(job, "orchestrator", "Running EntityRuler, LLM, early individuals, and early properties in parallel...")
 
             async def run_entity_ruler(j: Job) -> None:
                 if config.entity_ruler is None:
@@ -352,7 +390,36 @@ class PipelineOrchestrator:
                     logger.warning("Stage %s failed for job %s: %s — continuing",
                                    config.llm_concept.name, j.id, e)
 
-            await asyncio.gather(run_entity_ruler(job), run_llm_concept(job))
+            async def run_early_individual(j: Job) -> None:
+                if config.early_individual is None:
+                    return
+                logger.info("Running stage %s for job %s (parallel)", config.early_individual.name, j.id)
+                try:
+                    await config.early_individual.execute(j)
+                    j.updated_at = datetime.now(timezone.utc)
+                    await self.job_store.save(j)
+                except Exception as e:
+                    logger.warning("Stage %s failed for job %s: %s — continuing",
+                                   config.early_individual.name, j.id, e)
+
+            async def run_early_property(j: Job) -> None:
+                if config.early_property is None:
+                    return
+                logger.info("Running stage %s for job %s (parallel)", config.early_property.name, j.id)
+                try:
+                    await config.early_property.execute(j)
+                    j.updated_at = datetime.now(timezone.utc)
+                    await self.job_store.save(j)
+                except Exception as e:
+                    logger.warning("Stage %s failed for job %s: %s — continuing",
+                                   config.early_property.name, j.id, e)
+
+            await asyncio.gather(
+                run_entity_ruler(job),
+                run_llm_concept(job),
+                run_early_individual(job),
+                run_early_property(job),
+            )
 
             _log_activity(job, "orchestrator", "Parallel enrichment complete")
 
@@ -370,7 +437,7 @@ class PipelineOrchestrator:
                 job.updated_at = datetime.now(timezone.utc)
                 await self.job_store.save(job)
 
-            _log_activity(job, "orchestrator", f"Pipeline complete \u2014 {len(job.result.annotations)} annotations")
+            _log_activity(job, "orchestrator", f"Pipeline complete \u2014 {len(job.result.annotations)} annotations, {len(job.result.properties)} properties")
             job.status = JobStatus.COMPLETED
             job.updated_at = datetime.now(timezone.utc)
             await self.job_store.save(job)

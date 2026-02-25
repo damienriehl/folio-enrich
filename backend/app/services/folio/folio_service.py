@@ -39,6 +39,30 @@ class LabelInfo:
     matched_label: str  # The actual label text that matched
 
 
+@dataclass
+class FOLIOProperty:
+    iri: str
+    label: str  # raw label from ontology (may have prefix)
+    clean_label: str  # label with prefix stripped
+    preferred_label: str
+    alt_labels: list[str]
+    clean_alt_labels: list[str]
+    definition: str
+    examples: list[str] | None = None
+    domain_iris: list[str] | None = None
+    range_iris: list[str] | None = None
+    inverse_of: str | None = None
+    sub_property_of: list[str] | None = None
+
+
+@dataclass
+class PropertyLabelInfo:
+    """A property label entry tracking whether it's preferred or alternative."""
+    prop: FOLIOProperty
+    label_type: str  # "preferred" or "alternative"
+    matched_label: str
+
+
 class FolioService:
     """Singleton wrapper around folio-python for ontology access."""
 
@@ -47,6 +71,7 @@ class FolioService:
     def __init__(self) -> None:
         self._folio = None
         self._labels_cache: dict[str, LabelInfo] | None = None
+        self._property_labels_cache: dict[str, PropertyLabelInfo] | None = None
         self._branch_map: dict[str, str] | None = None
 
     @classmethod
@@ -210,6 +235,104 @@ class FolioService:
         self._labels_cache = labels
         logger.info("Indexed %d FOLIO labels", len(labels))
         return labels
+
+    @staticmethod
+    def _strip_prefix(label: str) -> str:
+        """Strip namespace prefixes like 'folio:', 'utbms:', 'oasis:' from a label."""
+        for prefix in ("folio:", "utbms:", "oasis:"):
+            if label.startswith(prefix):
+                return label[len(prefix):]
+        return label
+
+    def get_all_property_labels(self) -> dict[str, PropertyLabelInfo]:
+        """Return a mapping of all property labels to PropertyLabelInfo.
+
+        Preferred labels take priority. Deprecated properties are excluded.
+        Labels are lowercased keys with prefixes stripped.
+        """
+        if self._property_labels_cache is not None:
+            return self._property_labels_cache
+
+        folio = self._get_folio()
+        labels: dict[str, PropertyLabelInfo] = {}
+
+        for prop in folio.object_properties:
+            try:
+                fp = self._to_folio_property(prop)
+
+                # Skip deprecated properties
+                if "DEPRECATED" in fp.label or fp.label.startswith("ZZZ:"):
+                    continue
+
+                # Index clean preferred label
+                if fp.clean_label:
+                    key = fp.clean_label.lower()
+                    labels[key] = PropertyLabelInfo(
+                        prop=fp,
+                        label_type="preferred",
+                        matched_label=fp.clean_label,
+                    )
+
+                # Index clean alt labels (only if not already preferred)
+                for alt in fp.clean_alt_labels:
+                    if alt:
+                        akey = alt.lower()
+                        if akey not in labels or labels[akey].label_type != "preferred":
+                            labels[akey] = PropertyLabelInfo(
+                                prop=fp,
+                                label_type="alternative",
+                                matched_label=alt,
+                            )
+            except Exception:
+                continue
+
+        self._property_labels_cache = labels
+        logger.info("Indexed %d FOLIO property labels", len(labels))
+        return labels
+
+    def get_property(self, iri: str) -> FOLIOProperty | None:
+        """Look up a property by IRI."""
+        folio = self._get_folio()
+        for prop in folio.object_properties:
+            if getattr(prop, "iri", "") == iri:
+                return self._to_folio_property(prop)
+        return None
+
+    def _to_folio_property(self, prop) -> FOLIOProperty:
+        """Convert an OWLObjectProperty to our FOLIOProperty dataclass."""
+        raw_label = getattr(prop, "preferred_label", None) or getattr(prop, "label", "") or ""
+        clean_label = self._strip_prefix(raw_label)
+
+        # Convert camelCase to spaces (e.g. "hasFigure" → "has Figure")
+        # but only for structural labels — leave verbs like "reversed" as-is
+        if clean_label and clean_label[0].islower() and any(c.isupper() for c in clean_label[1:]):
+            import re
+            clean_label = re.sub(r"([a-z])([A-Z])", r"\1 \2", clean_label).lower()
+
+        raw_alts = getattr(prop, "alternative_labels", []) or []
+        clean_alts = [self._strip_prefix(a) for a in raw_alts if a]
+
+        definition = getattr(prop, "definition", "") or ""
+        examples = getattr(prop, "examples", []) or []
+        domain = getattr(prop, "domain", []) or []
+        range_ = getattr(prop, "range", []) or []
+        inverse_of = getattr(prop, "inverse_of", None)
+        sub_prop = getattr(prop, "sub_property_of", []) or []
+
+        return FOLIOProperty(
+            iri=getattr(prop, "iri", "") or "",
+            label=raw_label,
+            clean_label=clean_label,
+            preferred_label=raw_label,
+            alt_labels=list(raw_alts),
+            clean_alt_labels=clean_alts,
+            definition=definition,
+            examples=list(examples) if examples else None,
+            domain_iris=list(domain) if domain else None,
+            range_iris=list(range_) if range_ else None,
+            inverse_of=inverse_of,
+            sub_property_of=list(sub_prop) if sub_prop else None,
+        )
 
     def _to_folio_concept(self, concept) -> FOLIOConcept:
         # preferred_label may be None; fall back to label

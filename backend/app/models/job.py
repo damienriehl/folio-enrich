@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from app.models.annotation import Annotation
+from app.models.annotation import Annotation, Individual, PropertyAnnotation
 from app.models.document import CanonicalText, DocumentInput
 
 
@@ -19,6 +19,8 @@ class JobStatus(str, enum.Enum):
     RESOLVING = "resolving"
     MATCHING = "matching"
     JUDGING = "judging"
+    EXTRACTING_INDIVIDUALS = "extracting_individuals"
+    EXTRACTING_PROPERTIES = "extracting_properties"
     EXPORTING = "exporting"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -27,6 +29,8 @@ class JobStatus(str, enum.Enum):
 class JobResult(BaseModel):
     canonical_text: CanonicalText | None = None
     annotations: list[Annotation] = Field(default_factory=list)
+    individuals: list[Individual] = Field(default_factory=list)
+    properties: list[PropertyAnnotation] = Field(default_factory=list)
     metadata: dict = Field(default_factory=dict)
 
 

@@ -63,6 +63,18 @@ class Settings(BaseSettings):
     # Contextual reranking
     contextual_rerank_enabled: bool = True
 
+    # Individual extraction
+    individual_extraction_enabled: bool = True
+    individual_regex_only: bool = False  # Skip LLM, only library/regex extractors
+    llm_individual_provider: str = ""
+    llm_individual_model: str = ""
+
+    # Property extraction
+    property_extraction_enabled: bool = True
+    property_regex_only: bool = False  # Skip LLM, only Aho-Corasick matching
+    llm_property_provider: str = ""
+    llm_property_model: str = ""
+
     # Candidates
     max_candidates: int = 5
 

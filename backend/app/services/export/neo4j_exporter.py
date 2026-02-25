@@ -56,6 +56,62 @@ class Neo4jExporter(ExporterBase):
                     ann.span.start, ann.span.end,
                 ])
 
+        # Individual nodes and relationships
+        for ind in job.result.individuals:
+            ind_id = f"ind_{ind.id[:8]}"
+            nodes_writer.writerow([
+                ind_id,
+                ind.name,
+                "",
+                "",
+                "Individual",
+            ])
+            # Link individual to document
+            rels_writer.writerow([
+                doc_id, ind_id, "CONTAINS_INDIVIDUAL",
+                f"{ind.confidence:.4f}",
+                ind.span.start, ind.span.end,
+            ])
+            # Link individual to its class concepts
+            for cl in ind.class_links:
+                concept_iri = cl.folio_iri
+                if concept_iri and concept_iri in seen_concepts:
+                    rels_writer.writerow([
+                        ind_id, concept_iri, "INSTANCE_OF",
+                        f"{cl.confidence:.4f}",
+                        "", "",
+                    ])
+
+        # Property nodes and relationships
+        for prop in job.result.properties:
+            prop_id = f"prop_{prop.id[:8]}"
+            nodes_writer.writerow([
+                prop_id,
+                prop.folio_label or prop.property_text,
+                prop.folio_iri or "",
+                "",
+                "Property",
+            ])
+            # Link property to document
+            rels_writer.writerow([
+                doc_id, prop_id, "CONTAINS_PROPERTY",
+                f"{prop.confidence:.4f}",
+                prop.span.start, prop.span.end,
+            ])
+            # Link property to domain/range concepts
+            for domain_iri in prop.domain_iris:
+                if domain_iri in seen_concepts:
+                    rels_writer.writerow([
+                        prop_id, domain_iri, "HAS_DOMAIN",
+                        "", "", "",
+                    ])
+            for range_iri in prop.range_iris:
+                if range_iri in seen_concepts:
+                    rels_writer.writerow([
+                        prop_id, range_iri, "HAS_RANGE",
+                        "", "", "",
+                    ])
+
         return (
             "# NODES\n" + nodes_buf.getvalue() +
             "\n# RELATIONSHIPS\n" + rels_buf.getvalue()

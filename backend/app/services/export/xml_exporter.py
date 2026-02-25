@@ -53,5 +53,56 @@ class XMLExporter(ExporterBase):
                 ET.SubElement(c_elem, "confidence").text = str(concept.confidence)
                 ET.SubElement(c_elem, "source").text = concept.source
 
+        # Individuals
+        inds_elem = ET.SubElement(root, "individuals")
+        for ind in job.result.individuals:
+            ind_elem = ET.SubElement(inds_elem, "individual")
+            ind_elem.set("id", ind.id)
+            ind_elem.set("type", ind.individual_type)
+            ET.SubElement(ind_elem, "name").text = ind.name
+            ET.SubElement(ind_elem, "mention_text").text = ind.mention_text
+            span_elem = ET.SubElement(ind_elem, "span")
+            span_elem.set("start", str(ind.span.start))
+            span_elem.set("end", str(ind.span.end))
+            span_elem.text = ind.span.text
+            ET.SubElement(ind_elem, "confidence").text = str(ind.confidence)
+            ET.SubElement(ind_elem, "source").text = ind.source
+            if ind.normalized_form:
+                ET.SubElement(ind_elem, "normalized_form").text = ind.normalized_form
+            if ind.url:
+                ET.SubElement(ind_elem, "url").text = ind.url
+            for cl in ind.class_links:
+                cl_elem = ET.SubElement(ind_elem, "class_link")
+                if cl.folio_iri:
+                    ET.SubElement(cl_elem, "iri").text = cl.folio_iri
+                if cl.folio_label:
+                    ET.SubElement(cl_elem, "label").text = cl.folio_label
+                ET.SubElement(cl_elem, "confidence").text = str(cl.confidence)
+
+        # Properties
+        props_elem = ET.SubElement(root, "properties")
+        for prop in job.result.properties:
+            prop_elem = ET.SubElement(props_elem, "property")
+            prop_elem.set("id", prop.id)
+            ET.SubElement(prop_elem, "property_text").text = prop.property_text
+            if prop.folio_iri:
+                ET.SubElement(prop_elem, "iri").text = prop.folio_iri
+            if prop.folio_label:
+                ET.SubElement(prop_elem, "label").text = prop.folio_label
+            span_elem = ET.SubElement(prop_elem, "span")
+            span_elem.set("start", str(prop.span.start))
+            span_elem.set("end", str(prop.span.end))
+            span_elem.text = prop.span.text
+            ET.SubElement(prop_elem, "confidence").text = str(prop.confidence)
+            ET.SubElement(prop_elem, "source").text = prop.source
+            if prop.domain_iris:
+                for d in prop.domain_iris:
+                    ET.SubElement(prop_elem, "domain").text = d
+            if prop.range_iris:
+                for r in prop.range_iris:
+                    ET.SubElement(prop_elem, "range").text = r
+            if prop.inverse_of_iri:
+                ET.SubElement(prop_elem, "inverse_of").text = prop.inverse_of_iri
+
         ET.indent(root)
         return ET.tostring(root, encoding="unicode", xml_declaration=True)

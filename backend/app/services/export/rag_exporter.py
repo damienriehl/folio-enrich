@@ -39,6 +39,37 @@ class RAGExporter(ExporterBase):
                         ],
                     })
 
+            # Find individuals within this chunk
+            chunk_individuals = []
+            for ind in job.result.individuals:
+                if ind.span.start >= chunk.start_offset and ind.span.end <= chunk.end_offset:
+                    chunk_individuals.append({
+                        "name": ind.name,
+                        "mention_text": ind.mention_text,
+                        "individual_type": ind.individual_type,
+                        "class_links": [
+                            {
+                                "folio_label": cl.folio_label,
+                                "folio_iri": cl.folio_iri,
+                            }
+                            for cl in ind.class_links
+                        ],
+                        "confidence": ind.confidence,
+                        "source": ind.source,
+                    })
+
+            # Find properties within this chunk
+            chunk_properties = []
+            for prop in job.result.properties:
+                if prop.span.start >= chunk.start_offset and prop.span.end <= chunk.end_offset:
+                    chunk_properties.append({
+                        "property_text": prop.property_text,
+                        "folio_iri": prop.folio_iri,
+                        "folio_label": prop.folio_label,
+                        "confidence": prop.confidence,
+                        "source": prop.source,
+                    })
+
             chunks.append({
                 "chunk_index": chunk.chunk_index,
                 "text": chunk.text,
@@ -54,6 +85,8 @@ class RAGExporter(ExporterBase):
                     for c in a["concepts"]
                 ],
                 "annotations": chunk_annotations,
+                "individuals": chunk_individuals,
+                "properties": chunk_properties,
                 "metadata": {
                     "document_type": job.result.metadata.get("document_type", ""),
                     "job_id": str(job.id),

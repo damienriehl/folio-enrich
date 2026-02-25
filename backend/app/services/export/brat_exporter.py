@@ -39,4 +39,34 @@ class BratExporter(ExporterBase):
 
             t_idx += 1
 
+        # Individual annotations
+        for ind in job.result.individuals:
+            label = ind.individual_type.upper().replace(" ", "_")
+            if ind.class_links and ind.class_links[0].folio_label:
+                label = ind.class_links[0].folio_label.replace(" ", "_")
+
+            lines.append(f"T{t_idx}\t{label} {ind.span.start} {ind.span.end}\t{ind.mention_text}")
+
+            if ind.name != ind.mention_text:
+                lines.append(f"A{a_idx}\tCanonicalName T{t_idx} {ind.name}")
+                a_idx += 1
+
+            for cl in ind.class_links:
+                if cl.folio_iri:
+                    lines.append(f"A{a_idx}\tFOLIO_IRI T{t_idx} {cl.folio_iri}")
+                    a_idx += 1
+
+            t_idx += 1
+
+        # Property annotations
+        for prop in job.result.properties:
+            label = (prop.folio_label or "PROPERTY").replace(" ", "_")
+            lines.append(f"T{t_idx}\t{label} {prop.span.start} {prop.span.end}\t{prop.property_text}")
+
+            if prop.folio_iri:
+                lines.append(f"A{a_idx}\tFOLIO_IRI T{t_idx} {prop.folio_iri}")
+                a_idx += 1
+
+            t_idx += 1
+
         return "\n".join(lines)
