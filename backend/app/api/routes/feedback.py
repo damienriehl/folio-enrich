@@ -32,10 +32,74 @@ class FeedbackRequest(BaseModel):
     comment: str = ""
 
 
+VALID_RATINGS = ("up", "down", "dismissed")
+
+
+async def upsert_feedback_for_annotation(
+    job_id: str,
+    annotation,
+    rating: str,
+    stage: str | None = None,
+    comment: str = "",
+) -> str:
+    """Create or update a feedback entry for an annotation. Returns entry ID.
+
+    Shared by the feedback API and the reject/restore endpoints so that
+    every user action lands in the feedback/insights system.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    concept = annotation.concepts[0] if annotation.concepts else None
+
+    existing = await _feedback_store.find_by_annotation(job_id, annotation.id)
+    if existing:
+        existing.rating = rating
+        if stage:
+            existing.stage = stage
+        if comment:
+            existing.comment = comment
+        existing.created_at = now
+        await _feedback_store.save(existing)
+        return existing.id
+
+    entry = FeedbackEntry(
+        id=str(uuid4()),
+        job_id=job_id,
+        annotation_id=annotation.id,
+        rating=rating,
+        stage=stage,
+        comment=comment,
+        annotation_text=annotation.span.text,
+        sentence_text=annotation.span.sentence_text,
+        folio_iri=concept.folio_iri if concept else None,
+        folio_label=concept.folio_label if concept else None,
+        lineage=[e.model_dump() for e in annotation.lineage],
+        created_at=now,
+    )
+    await _feedback_store.save(entry)
+
+    # Also update inline feedback on the annotation
+    annotation.feedback = [FeedbackItem(
+        id=entry.id,
+        rating=rating,
+        stage=stage,
+        comment=comment,
+        created_at=now,
+    )]
+
+    return entry.id
+
+
+async def remove_feedback_for_annotation(job_id: str, annotation_id: str) -> None:
+    """Delete the feedback entry for an annotation (used on restore)."""
+    existing = await _feedback_store.find_by_annotation(job_id, annotation_id)
+    if existing:
+        await _feedback_store.delete(existing.id)
+
+
 @router.post("", status_code=201)
 async def submit_feedback(req: FeedbackRequest) -> dict:
-    if req.rating not in ("up", "down"):
-        raise HTTPException(status_code=422, detail="rating must be 'up' or 'down'")
+    if req.rating not in VALID_RATINGS:
+        raise HTTPException(status_code=422, detail=f"rating must be one of {VALID_RATINGS}")
 
     # Load job and find annotation
     try:
@@ -55,54 +119,13 @@ async def submit_feedback(req: FeedbackRequest) -> dict:
     if annotation is None:
         raise HTTPException(status_code=404, detail="Annotation not found")
 
-    now = datetime.now(timezone.utc).isoformat()
-    concept = annotation.concepts[0] if annotation.concepts else None
-
-    # Upsert: one feedback entry per annotation — update if exists, create if not
-    existing = await _feedback_store.find_by_annotation(req.job_id, req.annotation_id)
-    if existing:
-        # Update existing entry
-        existing.rating = req.rating
-        if req.stage:
-            existing.stage = req.stage
-        if req.comment:
-            existing.comment = req.comment
-        existing.created_at = now
-        await _feedback_store.save(existing)
-        entry_id = existing.id
-    else:
-        # Create new entry with lineage snapshot
-        feedback_item = FeedbackItem(
-            rating=req.rating,
-            stage=req.stage,
-            comment=req.comment,
-            created_at=now,
-        )
-        entry = FeedbackEntry(
-            id=feedback_item.id,
-            job_id=req.job_id,
-            annotation_id=req.annotation_id,
-            rating=req.rating,
-            stage=req.stage,
-            comment=req.comment,
-            annotation_text=annotation.span.text,
-            sentence_text=annotation.span.sentence_text,
-            folio_iri=concept.folio_iri if concept else None,
-            folio_label=concept.folio_label if concept else None,
-            lineage=[e.model_dump() for e in annotation.lineage],
-            created_at=now,
-        )
-        await _feedback_store.save(entry)
-        entry_id = entry.id
-
-    # Also update inline feedback on the annotation (replace, not append)
-    annotation.feedback = [FeedbackItem(
-        id=entry_id,
+    entry_id = await upsert_feedback_for_annotation(
+        job_id=req.job_id,
+        annotation=annotation,
         rating=req.rating,
         stage=req.stage,
         comment=req.comment,
-        created_at=now,
-    )]
+    )
     await _job_store.save(job)
 
     return {"id": entry_id, "status": "saved"}
@@ -110,56 +133,12 @@ async def submit_feedback(req: FeedbackRequest) -> dict:
 
 @router.get("/insights", response_model=InsightsSummary)
 async def get_insights() -> InsightsSummary:
-    summary = await _feedback_store.get_insights()
-    # Enrich with dismiss metrics from all jobs
-    await _enrich_dismiss_metrics(summary)
-    return summary
+    return await _feedback_store.get_insights()
 
 
 @router.get("/insights/{job_id}", response_model=InsightsSummary)
 async def get_job_insights(job_id: str) -> InsightsSummary:
-    summary = await _feedback_store.get_insights(job_id=job_id)
-    # Enrich with dismiss metrics from the specific job
-    await _enrich_dismiss_metrics(summary, job_id=job_id)
-    return summary
-
-
-async def _enrich_dismiss_metrics(
-    summary: InsightsSummary, job_id: str | None = None
-) -> None:
-    """Add dismiss counts from job annotation states into the summary."""
-    from collections import Counter
-
-    jobs = []
-    if job_id:
-        try:
-            job = await _job_store.load(UUID(job_id))
-            if job:
-                jobs = [job]
-        except ValueError:
-            pass
-    else:
-        jobs = await _job_store.list_jobs()
-
-    dismissed_count = 0
-    concept_counter: Counter[str] = Counter()
-    concept_info: dict[str, dict] = {}
-
-    for job in jobs:
-        for ann in job.result.annotations:
-            if ann.state == "rejected":
-                dismissed_count += 1
-                if ann.concepts:
-                    label = ann.concepts[0].folio_label or ann.concepts[0].concept_text
-                    iri = ann.concepts[0].folio_iri
-                    concept_counter[label] += 1
-                    concept_info[label] = {"folio_label": label, "folio_iri": iri}
-
-    summary.total_dismissed = dismissed_count
-    summary.most_dismissed_concepts = [
-        {**concept_info[label], "dismissals": count}
-        for label, count in concept_counter.most_common(10)
-    ]
+    return await _feedback_store.get_insights(job_id=job_id)
 
 
 @router.get("/export")

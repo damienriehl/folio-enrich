@@ -871,13 +871,17 @@
   }
   .concept-tooltip .tooltip-feedback-btn:disabled { opacity: 0.5; cursor: default; }
 
-  /* Remove-tag button in tooltip — red-tinted at rest to signal destructive action */
+  /* Remove-tag action row in tooltip */
+  .tooltip-remove-row {
+    display: flex; gap: 4px; margin-top: 4px; padding-top: 4px;
+    border-top: 1px solid #f0f0f4;
+  }
+  .tooltip-remove-row .tooltip-dismiss-btn { flex: 1; justify-content: center; margin-left: 0; }
   .concept-tooltip .tooltip-dismiss-btn {
-    background: #fef2f2; border: 1px solid #fca5a5; border-radius: 4px; padding: 2px 6px;
+    background: #fef2f2; border: 1px solid #fca5a5; border-radius: 4px; padding: 3px 8px;
     cursor: pointer; font-size: 11px; display: inline-flex; align-items: center; gap: 3px;
     color: #b91c1c; transition: all 0.15s ease; line-height: 1;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;
-    margin-left: 4px;
   }
   .concept-tooltip .tooltip-dismiss-btn:hover {
     border-color: #ef4444; background: #fee2e2; color: #991b1b;
@@ -3196,7 +3200,7 @@ function showTooltip(event, el) {
   const dismissAction = isRejected
     ? `restoreAnnotation('${escapeAttr(annId)}')`
     : `dismissAnnotation('${escapeAttr(annId)}')`;
-  const dismissLabel = isRejected ? _restoreTagIcon + ' Restore tag' : _removeTagIcon + ' Remove tag';
+  const dismissLabel = isRejected ? _restoreTagIcon + ' Restore' : _removeTagIcon + ' Remove';
 
   // Count other non-rejected instances of the same concept for bulk remove option
   const annData = annId ? _annotationDataById[annId] : null;
@@ -3211,7 +3215,7 @@ function showTooltip(event, el) {
     }
   }
   const bulkRemoveBtn = sameConceptCount > 0
-    ? `<button class="tooltip-dismiss-btn" onclick="bulkDismiss('${escapeAttr(primaryIri)}')" title="Remove all instances of this concept">${_removeTagIcon} Remove all ${sameConceptCount + 1}</button>`
+    ? `<button class="tooltip-dismiss-btn" onclick="bulkDismiss('${escapeAttr(primaryIri)}')" title="Remove all instances of this concept">${_removeTagIcon} All ${sameConceptCount + 1}</button>`
     : '';
 
   tooltip.innerHTML = `
@@ -3223,10 +3227,12 @@ function showTooltip(event, el) {
         <div class="tooltip-feedback-row">
           <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" data-rating="up" onclick="submitFeedback(this, 'up')">&#x1F44D;</button>
           <button class="tooltip-feedback-btn${existingRating === 'down' ? ' active-down' : ''}" data-rating="down" onclick="submitFeedback(this, 'down')">&#x1F44E;</button>
-          <button class="tooltip-dismiss-btn${dismissClass}" onclick="${dismissAction}" title="${isRejected ? 'Restore this tag' : 'Remove this tag from the document'}">${dismissLabel}</button>
-          ${bulkRemoveBtn}
         </div>
       </div>
+    </div>
+    <div class="tooltip-remove-row">
+      <button class="tooltip-dismiss-btn${dismissClass}" onclick="${dismissAction}" title="${isRejected ? 'Restore this tag' : 'Remove this tag from the document'}">${dismissLabel}</button>
+      ${bulkRemoveBtn}
     </div>
     <div class="tooltip-note-slide${noteOpen}" id="tooltipNoteSlide">
       <div><textarea id="tooltipNoteInput" data-ann-id="${escapeAttr(annId)}" rows="1" placeholder="Add a note\u2026" onblur="syncTooltipNote(this)">${escapeHtml(existingNote)}</textarea></div>
@@ -3580,7 +3586,7 @@ function _showUndoToast(message, undoFn, bulkFn, bulkCount) {
 
   let html = `<span>${escapeHtml(message)}</span>`;
   if (undoFn) html += `<button onclick="document.getElementById('undoToast')._undoFn()">Undo</button>`;
-  if (bulkFn && bulkCount > 0) html += `<button onclick="document.getElementById('undoToast')._bulkFn()">Remove all ${bulkCount}</button>`;
+  if (bulkFn && bulkCount > 0) html += `<button onclick="document.getElementById('undoToast')._bulkFn()">All ${bulkCount + 1}</button>`;
   toast.innerHTML = html;
   if (undoFn) toast._undoFn = () => { undoFn(); _dismissUndoToast(); };
   if (bulkFn) toast._bulkFn = () => { bulkFn(); _dismissUndoToast(); };
@@ -4696,11 +4702,11 @@ function renderDetailDismissBtn(annId) {
   btn.dataset.annId = annId;
   const isRejected = !!_dismissedCache[annId];
   btn.className = 'detail-dismiss-btn' + (isRejected ? ' is-rejected' : '');
-  btn.innerHTML = isRejected ? _restoreTagIcon + ' Restore tag' : _removeTagIcon + ' Remove tag';
+  btn.innerHTML = isRejected ? _restoreTagIcon + ' Restore' : _removeTagIcon + ' Remove';
   btn.title = isRejected ? 'Restore this tag' : 'Remove this tag from the document';
   btn.onclick = isRejected ? () => restoreAnnotation(annId) : () => dismissAnnotation(annId);
 
-  // Show "Remove all N" button if other instances share the same IRI
+  // Show "Remove all" button if other instances share the same IRI
   if (bulkBtn) {
     const annData = _annotationDataById[annId];
     const primaryIri = annData?.concepts?.[0]?.folio_iri;
@@ -4716,7 +4722,7 @@ function renderDetailDismissBtn(annId) {
     if (sameCount > 0) {
       bulkBtn.style.display = '';
       bulkBtn.className = 'detail-dismiss-btn';
-      bulkBtn.innerHTML = _removeTagIcon + ` Remove all ${sameCount + 1}`;
+      bulkBtn.innerHTML = _removeTagIcon + ` All ${sameCount + 1}`;
       bulkBtn.title = 'Remove all instances of this concept';
       bulkBtn.onclick = () => bulkDismiss(primaryIri);
     } else {

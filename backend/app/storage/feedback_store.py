@@ -81,13 +81,14 @@ class FeedbackStore:
 
         thumbs_up = sum(1 for e in entries if e.rating == "up")
         thumbs_down = sum(1 for e in entries if e.rating == "down")
+        dismissed = sum(1 for e in entries if e.rating == "dismissed")
 
         # Aggregate by stage
         by_stage: dict[str, dict[str, int]] = {}
         for e in entries:
             stage_key = e.stage or "overall"
             if stage_key not in by_stage:
-                by_stage[stage_key] = {"up": 0, "down": 0}
+                by_stage[stage_key] = {"up": 0, "down": 0, "dismissed": 0}
             by_stage[stage_key][e.rating] = by_stage[stage_key].get(e.rating, 0) + 1
 
         # Most downvoted concepts
@@ -106,6 +107,22 @@ class FeedbackStore:
             for label, count in down_concepts.most_common(10)
         ]
 
+        # Most dismissed concepts (from feedback entries with rating="dismissed")
+        dismiss_concepts: Counter[str] = Counter()
+        dismiss_info: dict[str, dict] = {}
+        for e in entries:
+            if e.rating == "dismissed" and e.folio_label:
+                dismiss_concepts[e.folio_label] += 1
+                dismiss_info[e.folio_label] = {
+                    "folio_label": e.folio_label,
+                    "folio_iri": e.folio_iri,
+                }
+
+        most_dismissed = [
+            {**dismiss_info[label], "dismissals": count}
+            for label, count in dismiss_concepts.most_common(10)
+        ]
+
         # Recent feedback (last 20)
         recent = sorted(entries, key=lambda e: e.created_at, reverse=True)[:20]
 
@@ -113,7 +130,9 @@ class FeedbackStore:
             total_feedback=len(entries),
             thumbs_up=thumbs_up,
             thumbs_down=thumbs_down,
+            total_dismissed=dismissed,
             by_stage=by_stage,
             most_downvoted_concepts=most_downvoted,
+            most_dismissed_concepts=most_dismissed,
             recent_feedback=recent,
         )

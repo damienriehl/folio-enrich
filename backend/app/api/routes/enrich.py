@@ -231,6 +231,7 @@ async def reject_annotation(job_id: UUID, annotation_id: str) -> dict:
     """Dismiss an annotation as a false positive (set state to rejected)."""
     from datetime import datetime, timezone
     from app.models.annotation import StageEvent
+    from app.api.routes.feedback import upsert_feedback_for_annotation
 
     job = await _job_store.load(job_id)
     if job is None:
@@ -248,6 +249,15 @@ async def reject_annotation(job_id: UUID, annotation_id: str) -> dict:
                 action="user_rejected",
                 detail=f"Dismissed as false positive (was '{prev_state}')",
             ))
+
+            # Record in feedback/insights system
+            await upsert_feedback_for_annotation(
+                job_id=str(job_id),
+                annotation=ann,
+                rating="dismissed",
+                comment="Removed as false positive",
+            )
+
             await _job_store.save(job)
 
             # Count how many other annotations share the same primary IRI
@@ -276,6 +286,7 @@ async def reject_annotation(job_id: UUID, annotation_id: str) -> dict:
 async def restore_annotation(job_id: UUID, annotation_id: str) -> dict:
     """Restore a dismissed annotation (set state back to confirmed)."""
     from app.models.annotation import StageEvent
+    from app.api.routes.feedback import remove_feedback_for_annotation
 
     job = await _job_store.load(job_id)
     if job is None:
@@ -287,11 +298,16 @@ async def restore_annotation(job_id: UUID, annotation_id: str) -> dict:
                 return {"status": "not_rejected", "current_state": ann.state}
             ann.state = "confirmed"
             ann.dismissed_at = None
+            ann.feedback = []  # Clear dismiss feedback
             ann.lineage.append(StageEvent(
                 stage="user",
                 action="user_restored",
                 detail="Restored from dismissed state",
             ))
+
+            # Remove from feedback/insights system
+            await remove_feedback_for_annotation(str(job_id), annotation_id)
+
             await _job_store.save(job)
             return {"status": "restored", "annotation_id": annotation_id}
 
@@ -303,6 +319,7 @@ async def bulk_reject_annotations(job_id: UUID, req: BulkRejectRequest) -> dict:
     """Dismiss all annotations sharing the same primary FOLIO IRI."""
     from datetime import datetime, timezone
     from app.models.annotation import StageEvent
+    from app.api.routes.feedback import upsert_feedback_for_annotation
 
     job = await _job_store.load(job_id)
     if job is None:
@@ -323,6 +340,15 @@ async def bulk_reject_annotations(job_id: UUID, req: BulkRejectRequest) -> dict:
             action="user_rejected",
             detail=f"Bulk dismissed as false positive",
         ))
+
+        # Record each in feedback/insights system
+        await upsert_feedback_for_annotation(
+            job_id=str(job_id),
+            annotation=ann,
+            rating="dismissed",
+            comment="Bulk removed as false positive",
+        )
+
         rejected_ids.append(ann.id)
         updated += 1
 
