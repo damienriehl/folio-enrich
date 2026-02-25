@@ -666,6 +666,7 @@
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     color: #1a1a2e;
     white-space: nowrap;
+    max-width: 260px;
   }
 
   .concept-tooltip.visible { display: block; }
@@ -717,21 +718,29 @@
     box-shadow: 0 0 0 2px rgba(239,68,68,0.15); transform: none;
   }
   .concept-tooltip .tooltip-feedback-btn:disabled { opacity: 0.5; cursor: default; }
-  .concept-tooltip .tooltip-feedback-note {
-    width: 100%; margin-top: 8px; padding: 7px 10px; border: 1px solid #e2e3ea;
-    border-radius: 8px; font-size: 12px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    resize: vertical; min-height: 32px; max-height: 80px;
-    background: #ffffff; color: #1a1a2e; line-height: 1.4;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.04); transition: border-color 0.2s, box-shadow 0.2s;
+
+  /* Slide-open note field in tooltip */
+  .tooltip-note-slide {
+    display: grid; grid-template-rows: 0fr;
+    transition: grid-template-rows 0.2s ease-out, margin-top 0.2s ease-out;
+    margin-top: 0;
   }
-  .concept-tooltip .tooltip-feedback-note::placeholder { color: #b0b0c0; }
-  .concept-tooltip .tooltip-feedback-note:focus {
-    outline: none; border-color: #3b64e0;
-    box-shadow: 0 0 0 3px rgba(59,100,224,0.12);
+  .tooltip-note-slide.open { grid-template-rows: 1fr; margin-top: 4px; }
+  .tooltip-note-slide > div { overflow: hidden; }
+  .tooltip-note-slide textarea {
+    width: 100%; box-sizing: border-box; display: block;
+    padding: 3px 7px; border: none; border-top: 1px solid #e8e9ee;
+    border-radius: 0; font-size: 11px;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: transparent; color: #1a1a2e; line-height: 1.4;
+    transition: border-color 0.15s;
+    resize: none; overflow: hidden;
+    min-height: 22px; max-height: 80px;
+    white-space: pre-wrap; word-wrap: break-word;
+    field-sizing: content;
   }
-  .concept-tooltip .tooltip-feedback-saved {
-    font-size: 11px; color: #22c55e; margin-left: auto; font-weight: 500;
-  }
+  .tooltip-note-slide textarea::placeholder { color: #b0b0c0; font-style: italic; }
+  .tooltip-note-slide textarea:focus { outline: none; border-top-color: #3b64e0; }
 
   /* Lineage trail in tooltip */
   .concept-tooltip .tooltip-lineage { margin-top: 6px; padding-top: 0; border-top: none; }
@@ -2845,7 +2854,9 @@ function showTooltip(event, el) {
   // Check if this annotation already has feedback from this session
   const existingRating = _feedbackCache[annId] || null;
 
-  // Compact tooltip: branch · label · score + thumbs
+  // Compact tooltip: branch · label · score + thumbs · slide-open note
+  const existingNote = _noteCache[annId] || '';
+  const noteOpen = existingRating ? ' open' : '';
   tooltip.innerHTML = `
     <div class="tooltip-branch" style="color:${branchColor}">${escapeHtml(branch || 'Unknown')}</div>
     <div class="tooltip-label">${escapeHtml(label)}</div>
@@ -2857,6 +2868,9 @@ function showTooltip(event, el) {
           <button class="tooltip-feedback-btn${existingRating === 'down' ? ' active-down' : ''}" data-rating="down" onclick="submitFeedback(this, 'down')">&#x1F44E;</button>
         </div>
       </div>
+    </div>
+    <div class="tooltip-note-slide${noteOpen}" id="tooltipNoteSlide">
+      <div><textarea id="tooltipNoteInput" data-ann-id="${escapeAttr(annId)}" rows="1" placeholder="Add a note\u2026" onblur="syncTooltipNote(this)">${escapeHtml(existingNote)}</textarea></div>
     </div>
   `;
 
@@ -2906,6 +2920,23 @@ function showTooltip(event, el) {
   });
 }
 
+// Re-clamp tooltip position after content changes (e.g. note field slides open)
+function repositionTooltip() {
+  const tooltip = document.getElementById('tooltip');
+  if (!tooltip || !tooltip.classList.contains('visible')) return;
+  const tw = tooltip.offsetWidth;
+  const th = tooltip.offsetHeight;
+  let top = parseFloat(tooltip.style.top) || 0;
+  let left = parseFloat(tooltip.style.left) || 0;
+  // Clamp to viewport
+  if (left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8;
+  if (left < 8) left = 8;
+  if (top + th > window.innerHeight - 8) top = top - th - 16;
+  if (top < 8) top = 8;
+  tooltip.style.top = top + 'px';
+  tooltip.style.left = left + 'px';
+}
+
 // Full annotation data by ID (for tooltip access to backup concepts)
 const _annotationDataById = {};
 
@@ -2923,9 +2954,9 @@ async function submitFeedback(btn, rating) {
   const annId = feedbackDiv.dataset.annId;
   if (!annId || !currentJobId) return;
 
-  const noteEl = document.getElementById(`feedbackNote-${annId}`);
-  const comment = noteEl ? noteEl.value.trim() : '';
-  const statusEl = document.getElementById(`feedbackStatus-${annId}`);
+  // Read any existing note from the tooltip slide field
+  const tooltipNote = document.getElementById('tooltipNoteInput');
+  const comment = tooltipNote ? tooltipNote.value.trim() : (_noteCache[annId] || '');
 
   // Optimistic UI: show selection immediately
   feedbackDiv.querySelectorAll('.tooltip-feedback-btn').forEach(b => {
@@ -2933,7 +2964,18 @@ async function submitFeedback(btn, rating) {
   });
   btn.classList.add(rating === 'up' ? 'active-up' : 'active-down');
   _feedbackCache[annId] = rating;
-  if (statusEl) statusEl.textContent = 'Saving...';
+
+  // Slide open the note field
+  const noteSlide = document.getElementById('tooltipNoteSlide');
+  if (noteSlide && !noteSlide.classList.contains('open')) {
+    noteSlide.classList.add('open');
+    // Auto-grow fallback for browsers without field-sizing: content
+    if (tooltipNote && !tooltipNote._autoGrow) {
+      tooltipNote._autoGrow = true;
+      tooltipNote.addEventListener('input', autoGrowTooltipNote);
+    }
+    setTimeout(() => { if (tooltipNote) tooltipNote.focus(); }, 220);
+  }
 
   try {
     const resp = await fetch(`${API}/feedback`, {
@@ -2947,18 +2989,53 @@ async function submitFeedback(btn, rating) {
       }),
     });
 
-    if (resp.ok) {
-      if (statusEl) statusEl.textContent = 'Saved';
-    } else {
-      // Revert on error
+    if (!resp.ok) {
       btn.classList.remove('active-up', 'active-down');
       delete _feedbackCache[annId];
-      if (statusEl) statusEl.textContent = 'Error saving';
     }
   } catch (e) {
     btn.classList.remove('active-up', 'active-down');
     delete _feedbackCache[annId];
-    if (statusEl) statusEl.textContent = 'Error saving';
+  }
+}
+
+// Auto-grow textarea height on input (fallback for field-sizing: content)
+function autoGrowTooltipNote() {
+  const ta = document.getElementById('tooltipNoteInput');
+  if (!ta) return;
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 80) + 'px';
+}
+
+// Sync tooltip note → _noteCache → detail panel → backend
+async function syncTooltipNote(inputEl) {
+  const annId = inputEl.dataset.annId;
+  if (!annId) return;
+  const comment = inputEl.value.trim();
+  if (comment === (_noteCache[annId] || '')) return;
+
+  _noteCache[annId] = comment;
+
+  // Sync to detail panel feedback note textarea if visible
+  const detailNote = document.getElementById('detailFeedbackNote');
+  if (detailNote) detailNote.value = comment;
+
+  const rating = _feedbackCache[annId];
+  if (!rating || !currentJobId) return;
+
+  try {
+    await fetch(`${API}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_id: currentJobId,
+        annotation_id: annId,
+        rating: rating,
+        comment: comment,
+      }),
+    });
+  } catch (e) {
+    // silent
   }
 }
 
@@ -2978,16 +3055,22 @@ function _seedFeedbackCaches(annotations) {
 
 async function submitNote(annId) {
   if (!annId || !currentJobId) return;
-  const noteEl = document.getElementById(`feedbackNote-${annId}`);
+  // Read from the detail panel feedback note textarea
+  const noteEl = document.getElementById('detailFeedbackNote');
   if (!noteEl) return;
   const comment = noteEl.value.trim();
-  if (!comment || comment === _noteCache[annId]) return;
+  if (comment === (_noteCache[annId] || '')) return;
+
+  _noteCache[annId] = comment;
+
+  // Sync to tooltip note if open
+  const tooltipNote = document.getElementById('tooltipNoteInput');
+  if (tooltipNote && tooltipNote.dataset.annId === annId) {
+    tooltipNote.value = comment;
+  }
 
   const rating = _feedbackCache[annId];
   if (!rating) return; // No rating yet — note will be sent with the next thumb click
-
-  const statusEl = document.getElementById(`feedbackStatus-${annId}`);
-  if (statusEl) statusEl.textContent = 'Saving...';
 
   try {
     const resp = await fetch(`${API}/feedback`, {
@@ -3002,12 +3085,9 @@ async function submitNote(annId) {
     });
     if (resp.ok) {
       _noteCache[annId] = comment;
-      if (statusEl) statusEl.textContent = 'Saved';
-    } else {
-      if (statusEl) statusEl.textContent = 'Error';
     }
   } catch (e) {
-    if (statusEl) statusEl.textContent = 'Error';
+    // silent
   }
 }
 
