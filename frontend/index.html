@@ -434,31 +434,12 @@
   .hierarchy-alts-toggle .alts-chevron { font-size: 9px; transition: transform 0.15s; }
   .hierarchy-alts-toggle.active .alts-chevron { transform: rotate(180deg); }
 
-  /* Alternative nodes in hierarchy tree */
-  .ancestry-alts-divider {
-    font-size: 10px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.5px; color: #9090a0;
-    margin: 8px 0 4px 0; padding-top: 6px;
-    border-top: 1px dashed #e2e4ea;
-  }
-  .ancestry-alt-group {
-    margin-top: 4px;
-  }
-  .ancestry-alt-branch-tag {
-    display: inline-block; font-size: 9px; font-weight: 600;
-    padding: 1px 6px; border-radius: 8px; margin-left: 4px;
-    white-space: nowrap; vertical-align: middle;
-  }
+  /* Alternative concept nodes in merged hierarchy tree */
   .ancestry-node.alt-node {
-    cursor: pointer; opacity: 0.85;
+    cursor: pointer;
   }
   .ancestry-node.alt-node:hover {
-    background: #eef0ff; opacity: 1;
-  }
-  .ancestry-node.alt-node .ancestry-bullet-char { font-size: 10px; }
-  .ancestry-alt-label { font-weight: 500; }
-  .ancestry-alt-hint {
-    font-size: 10px; color: #9090a0; margin-left: 4px; font-style: italic;
+    background: #eef0ff;
   }
 
   /* Detail info */
@@ -593,6 +574,7 @@
 
   .form-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     align-items: center;
   }
@@ -1671,11 +1653,15 @@
       </div>
 
       <!-- Upload & Enrich -->
-      <div class="form-row" style="margin-bottom:8px">
-        <button class="primary" id="enrichBtn" onclick="submitEnrichment()">Enrich Document</button>
-        <button class="secondary" onclick="clearAll()">Clear</button>
-        <button id="showThinkingBtn" onclick="toggleShowThinking()" style="margin-left:auto;background:var(--surface2);border:none;color:var(--text-dim)" title="Show LLM chain-of-thought reasoning in lineage"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:transparent"></span>Show Thinking</button>
-        <button id="debugModeBtn" onclick="toggleDebugMode()" style="background:var(--surface2);border:none;color:var(--text-dim)" title="Truncate input to ~500 words for faster pipeline testing"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:transparent"></span>Debug Mode</button>
+      <div class="form-row" style="margin-bottom:8px;justify-content:space-between">
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="primary" id="enrichBtn" onclick="submitEnrichment()">Enrich Document</button>
+          <button class="secondary" onclick="clearAll()">Clear</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="showThinkingBtn" onclick="toggleShowThinking()" style="background:var(--surface2);border:none;color:var(--text-dim)" title="Show LLM chain-of-thought reasoning in lineage"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:transparent"></span>Show Thinking</button>
+          <button id="debugModeBtn" onclick="toggleDebugMode()" style="background:var(--surface2);border:none;color:var(--text-dim)" title="Truncate input to ~500 words for faster pipeline testing"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:transparent"></span>Debug Mode</button>
+        </div>
       </div>
 
       <!-- File upload -->
@@ -3583,19 +3569,47 @@ async function loadConceptDetail(iriHash, annId) {
 const _ancestryCollapsed = {};
 // Toggle: show alternatives inline in hierarchy tree
 let _showAltsInHierarchy = false;
+// Loading state for fetching alternative details
+let _altsFetching = false;
 
 function toggleAncestryNode(pathKey, event) {
   if (event) event.stopPropagation();
   _ancestryCollapsed[pathKey] = !_ancestryCollapsed[pathKey];
-  // Re-render with current detail data
   if (_currentDetailIriHash && _conceptDetailCache[_currentDetailIriHash]) {
     renderAncestryTree(_conceptDetailCache[_currentDetailIriHash]);
   }
 }
 
-function toggleAltsInHierarchy(event) {
+async function toggleAltsInHierarchy(event) {
   if (event) event.stopPropagation();
   _showAltsInHierarchy = !_showAltsInHierarchy;
+
+  if (_showAltsInHierarchy && _currentDetailAnnId) {
+    // Fetch hierarchy details for each alternative in parallel
+    const annData = _annotationDataById[_currentDetailAnnId];
+    const alts = (annData && annData.concepts) ? annData.concepts.slice(1) : [];
+    const missing = alts.filter(a => {
+      const h = a.folio_iri ? a.folio_iri.split('/').pop() : null;
+      return h && !_conceptDetailCache[h];
+    });
+
+    if (missing.length > 0) {
+      _altsFetching = true;
+      // Re-render immediately to show loading state
+      if (_currentDetailIriHash && _conceptDetailCache[_currentDetailIriHash]) {
+        renderAncestryTree(_conceptDetailCache[_currentDetailIriHash]);
+      }
+      await Promise.all(missing.map(async (alt) => {
+        const h = alt.folio_iri.split('/').pop();
+        try {
+          const resp = await fetch(`${API}/concepts/${h}`);
+          if (resp.ok) _conceptDetailCache[h] = await resp.json();
+        } catch { /* skip */ }
+      }));
+      _altsFetching = false;
+    }
+  }
+
   if (_currentDetailIriHash && _conceptDetailCache[_currentDetailIriHash]) {
     renderAncestryTree(_conceptDetailCache[_currentDetailIriHash]);
   }
@@ -3606,22 +3620,14 @@ function promoteFromHierarchy(annId, conceptIndex, event) {
   promoteConcept(annId, conceptIndex);
 }
 
+// ---- Render entry point ----
+
 function renderAncestryTree(detail) {
   const container = document.getElementById('detailAncestry');
   const path = detail.hierarchy_path || [];
   if (path.length === 0) { container.innerHTML = ''; return; }
 
-  const branchColor = detail.branch_color || BRANCH_COLORS[detail.branch] || '#6b6b80';
-
-  // Confidence badge for the current concept (from annotation data if available)
-  let confPct = null;
   const annData = _currentDetailAnnId ? _annotationDataById[_currentDetailAnnId] : null;
-  if (annData && annData.concepts && annData.concepts[0]) {
-    const c = annData.concepts[0].confidence;
-    confPct = c > 1 ? c : c * 100;
-  }
-
-  // Count alternatives
   const alts = (annData && annData.concepts) ? annData.concepts.slice(1) : [];
   const altCount = alts.length;
 
@@ -3635,52 +3641,51 @@ function renderAncestryTree(detail) {
   }
   html += '</div>';
 
-  html += '<div class="ancestry-tree">';
-
-  // path[0] = branch root, path[1..n-1] = intermediates, path[n] = current
-  const root = path[0];
-  const descendants = path.slice(1); // everything below the root
-  const rootKey = `anc::${root.iri_hash}`;
-  const isRootCollapsed = !!_ancestryCollapsed[rootKey];
-
-  // --- Branch header (matches folio-mapper SelectionTree branch header) ---
-  html += `<div class="ancestry-branch-header" style="border-left-color:${branchColor};background:${branchColor}15;color:${branchColor}">`;
-  html += `<button class="ancestry-toggle" style="color:${branchColor}" onclick="toggleAncestryNode('${escapeAttr(rootKey)}', event)">${isRootCollapsed ? '\u25B6' : '\u25BC'}</button>`;
-  html += `<span>${escapeHtml(root.label).toUpperCase()}</span>`;
-  html += '</div>';
-
-  // --- Descendant nodes (recursive nesting) ---
-  if (!isRootCollapsed && descendants.length > 0) {
-    html += renderAncestryNodes(descendants, 0, detail, branchColor, confPct, rootKey);
-  }
-
-  html += '</div>';
-
-  // --- Inline alternatives (when toggled on) ---
   if (_showAltsInHierarchy && altCount > 0 && _currentDetailAnnId) {
-    html += '<div class="ancestry-alts-divider">Alternatives</div>';
-    html += '<div class="ancestry-alt-group">';
-    alts.forEach((alt, idx) => {
-      const altBranch = (alt.branches && alt.branches.length > 0) ? alt.branches[0] : '';
-      const altColor = BRANCH_COLORS[altBranch] || '#6b6b80';
-      const altConf = alt.confidence > 1 ? alt.confidence : alt.confidence * 100;
-      const confBg = altConf >= 80 ? '#dcfce7' : altConf >= 50 ? '#fef3c7' : '#fee2e2';
-      const confFg = altConf >= 80 ? '#166534' : altConf >= 50 ? '#92400e' : '#991b1b';
-      html += `<div class="ancestry-node alt-node" onclick="promoteFromHierarchy('${escapeAttr(_currentDetailAnnId)}', ${idx + 1}, event)" title="Click to promote to primary">`;
-      html += `<span class="ancestry-toggle-spacer"></span>`;
-      html += `<span class="ancestry-bullet-char" style="color:${altColor}">&#9675;</span>`;
-      html += `<span class="ancestry-alt-label">${escapeHtml(alt.folio_label || alt.concept_text)}</span>`;
-      html += `<span class="ancestry-alt-branch-tag" style="background:${altColor}20;color:${altColor}">${escapeHtml(altBranch || '?')}</span>`;
-      html += `<span class="ancestry-conf-badge" style="background:${confBg};color:${confFg}">${altConf.toFixed(0)}</span>`;
-      html += '</div>';
-    });
-    html += '</div>';
+    if (_altsFetching) {
+      html += '<div class="ancestry-tree"><div style="color:#6b6b80;font-size:12px;padding:8px 0"><span class="spinner"></span> Loading alternatives\u2026</div></div>';
+    } else {
+      html += renderMergedAncestryTree(detail, annData);
+    }
+  } else {
+    html += renderSingleAncestryTree(detail, annData);
   }
 
   container.innerHTML = html;
 }
 
-function renderAncestryNodes(nodes, startIdx, detail, branchColor, confPct, parentKey) {
+// ---- Single-concept tree (unchanged original behavior) ----
+
+function renderSingleAncestryTree(detail, annData) {
+  const path = detail.hierarchy_path || [];
+  const branchColor = detail.branch_color || BRANCH_COLORS[detail.branch] || '#6b6b80';
+
+  let confPct = null;
+  if (annData && annData.concepts && annData.concepts[0]) {
+    const c = annData.concepts[0].confidence;
+    confPct = c > 1 ? c : c * 100;
+  }
+
+  const root = path[0];
+  const descendants = path.slice(1);
+  const rootKey = `anc::${root.iri_hash}`;
+  const isRootCollapsed = !!_ancestryCollapsed[rootKey];
+
+  let html = '<div class="ancestry-tree">';
+  html += `<div class="ancestry-branch-header" style="border-left-color:${branchColor};background:${branchColor}15;color:${branchColor}">`;
+  html += `<button class="ancestry-toggle" style="color:${branchColor}" onclick="toggleAncestryNode('${escapeAttr(rootKey)}', event)">${isRootCollapsed ? '\u25B6' : '\u25BC'}</button>`;
+  html += `<span>${escapeHtml(root.label).toUpperCase()}</span>`;
+  html += '</div>';
+
+  if (!isRootCollapsed && descendants.length > 0) {
+    html += renderSingleAncestryNodes(descendants, 0, detail, branchColor, confPct, rootKey);
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function renderSingleAncestryNodes(nodes, startIdx, detail, branchColor, confPct, parentKey) {
   if (startIdx >= nodes.length) return '';
 
   const entry = nodes[startIdx];
@@ -3692,7 +3697,6 @@ function renderAncestryNodes(nodes, startIdx, detail, branchColor, confPct, pare
   let html = '<div class="ancestry-children">';
 
   if (isCurrent) {
-    // Leaf / current node: bullet + bold label + confidence badge
     const confBg = confPct != null ? (confPct >= 80 ? '#dcfce7' : confPct >= 50 ? '#fef3c7' : '#fee2e2') : '';
     const confFg = confPct != null ? (confPct >= 80 ? '#166534' : confPct >= 50 ? '#92400e' : '#991b1b') : '';
     html += `<div class="ancestry-node current">`;
@@ -3704,29 +3708,175 @@ function renderAncestryNodes(nodes, startIdx, detail, branchColor, confPct, pare
     }
     html += '</div>';
   } else if (hasChildren) {
-    // Intermediate node: collapsible chevron + label (no bullet)
     html += `<div class="ancestry-node clickable" onclick="loadConceptDetail('${escapeAttr(entry.iri_hash)}')">`;
     html += `<button class="ancestry-toggle" onclick="toggleAncestryNode('${escapeAttr(nodeKey)}', event)">${isCollapsed ? '\u25B6' : '\u25BC'}</button>`;
     html += `<span>${escapeHtml(entry.label)}</span>`;
     html += '</div>';
-
     if (!isCollapsed) {
-      html += renderAncestryNodes(nodes, startIdx + 1, detail, branchColor, confPct, nodeKey);
+      html += renderSingleAncestryNodes(nodes, startIdx + 1, detail, branchColor, confPct, nodeKey);
     }
   } else {
-    // Leaf ancestor (last before current, but not current) — clickable, no bullet
     html += `<div class="ancestry-node clickable" onclick="loadConceptDetail('${escapeAttr(entry.iri_hash)}')">`;
     html += `<span class="ancestry-toggle-spacer"></span>`;
     html += `<span>${escapeHtml(entry.label)}</span>`;
     html += '</div>';
   }
 
-  // If this node has children and isn't collapsed, render the NEXT node in the chain
-  // (but only for non-intermediate case — intermediate already handles recursion above)
   if (!hasChildren && !isCurrent && startIdx + 1 < nodes.length) {
-    html += renderAncestryNodes(nodes, startIdx + 1, detail, branchColor, confPct, parentKey);
+    html += renderSingleAncestryNodes(nodes, startIdx + 1, detail, branchColor, confPct, parentKey);
   }
 
+  html += '</div>';
+  return html;
+}
+
+// ---- Merged multi-concept tree (primary + alternatives) ----
+
+function buildMergedTree(primaryDetail, annData) {
+  // Tree structure: Map of branch iri_hash → { label, color, conceptCount, root }
+  // Each node: { iri_hash, label, children: Map<iri_hash, node>, concepts: [] }
+  const branches = new Map();
+
+  function insertPath(detail, isPrimary, conceptIndex, confidence) {
+    const path = detail.hierarchy_path || [];
+    if (path.length === 0) return;
+
+    const branchColor = detail.branch_color || BRANCH_COLORS[detail.branch] || '#6b6b80';
+    const rootEntry = path[0];
+
+    if (!branches.has(rootEntry.iri_hash)) {
+      branches.set(rootEntry.iri_hash, {
+        iri_hash: rootEntry.iri_hash,
+        label: rootEntry.label,
+        color: branchColor,
+        conceptCount: 0,
+        children: new Map()
+      });
+    }
+    const branch = branches.get(rootEntry.iri_hash);
+    branch.conceptCount++;
+
+    let currentChildren = branch.children;
+    for (let i = 1; i < path.length; i++) {
+      const entry = path[i];
+      if (!currentChildren.has(entry.iri_hash)) {
+        currentChildren.set(entry.iri_hash, {
+          iri_hash: entry.iri_hash,
+          label: entry.label,
+          children: new Map(),
+          concepts: []
+        });
+      }
+      const node = currentChildren.get(entry.iri_hash);
+      if (i === path.length - 1) {
+        node.concepts.push({ isPrimary, conceptIndex, confidence, branchColor });
+      }
+      currentChildren = node.children;
+    }
+  }
+
+  // Insert primary
+  const primaryConf = (annData.concepts && annData.concepts[0]) ? annData.concepts[0].confidence : null;
+  insertPath(primaryDetail, true, 0, primaryConf);
+
+  // Insert alternatives
+  annData.concepts.slice(1).forEach((alt, idx) => {
+    const iriHash = alt.folio_iri ? alt.folio_iri.split('/').pop() : null;
+    if (!iriHash || !_conceptDetailCache[iriHash]) return;
+    insertPath(_conceptDetailCache[iriHash], false, idx + 1, alt.confidence);
+  });
+
+  return branches;
+}
+
+function renderMergedAncestryTree(primaryDetail, annData) {
+  const branches = buildMergedTree(primaryDetail, annData);
+  const annId = _currentDetailAnnId;
+
+  let html = '<div class="ancestry-tree">';
+
+  for (const [branchIriHash, branch] of branches) {
+    const rootKey = `mt::${branchIriHash}`;
+    const isCollapsed = !!_ancestryCollapsed[rootKey];
+
+    html += `<div class="ancestry-branch-header" style="border-left-color:${branch.color};background:${branch.color}15;color:${branch.color}">`;
+    html += `<button class="ancestry-toggle" style="color:${branch.color}" onclick="toggleAncestryNode('${escapeAttr(rootKey)}', event)">${isCollapsed ? '\u25B6' : '\u25BC'}</button>`;
+    html += `<span>${escapeHtml(branch.label).toUpperCase()}</span>`;
+    if (branch.conceptCount > 1) {
+      html += `<span class="ancestry-branch-count">(${branch.conceptCount})</span>`;
+    }
+    html += '</div>';
+
+    if (!isCollapsed) {
+      html += renderMergedTreeNodes(branch.children, rootKey, annId);
+    }
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function renderMergedTreeNodes(children, parentKey, annId) {
+  let html = '';
+  for (const [iriHash, node] of children) {
+    const nodeKey = `${parentKey}::${iriHash}`;
+    const isCollapsed = !!_ancestryCollapsed[nodeKey];
+    const hasChildren = node.children.size > 0;
+    const hasConcepts = node.concepts.length > 0;
+
+    html += '<div class="ancestry-children">';
+
+    if (hasConcepts && !hasChildren) {
+      // Pure leaf — render each concept as a bullet row
+      for (const concept of node.concepts) {
+        html += renderConceptLeaf(node, concept, annId);
+      }
+    } else if (hasConcepts && hasChildren) {
+      // Node is both a concept AND has children — show concept row(s) then children
+      for (const concept of node.concepts) {
+        html += renderConceptLeaf(node, concept, annId);
+      }
+      if (!isCollapsed) {
+        html += renderMergedTreeNodes(node.children, nodeKey, annId);
+      }
+    } else {
+      // Intermediate node — collapsible
+      html += `<div class="ancestry-node clickable" onclick="loadConceptDetail('${escapeAttr(iriHash)}')">`;
+      html += `<button class="ancestry-toggle" onclick="toggleAncestryNode('${escapeAttr(nodeKey)}', event)">${isCollapsed ? '\u25B6' : '\u25BC'}</button>`;
+      html += `<span>${escapeHtml(node.label)}</span>`;
+      html += '</div>';
+
+      if (!isCollapsed) {
+        html += renderMergedTreeNodes(node.children, nodeKey, annId);
+      }
+    }
+
+    html += '</div>';
+  }
+  return html;
+}
+
+function renderConceptLeaf(node, concept, annId) {
+  const confPct = concept.confidence != null ? (concept.confidence > 1 ? concept.confidence : concept.confidence * 100) : null;
+  const confBg = confPct != null ? (confPct >= 80 ? '#dcfce7' : confPct >= 50 ? '#fef3c7' : '#fee2e2') : '';
+  const confFg = confPct != null ? (confPct >= 80 ? '#166534' : confPct >= 50 ? '#92400e' : '#991b1b') : '';
+
+  let html = '';
+  if (concept.isPrimary) {
+    html += `<div class="ancestry-node current">`;
+    html += `<span class="ancestry-toggle-spacer"></span>`;
+    html += `<span class="ancestry-bullet-char" style="color:${concept.branchColor}">\u25CF</span>`;
+    html += `<span>${escapeHtml(node.label)}</span>`;
+  } else {
+    html += `<div class="ancestry-node alt-node" onclick="promoteFromHierarchy('${escapeAttr(annId)}', ${concept.conceptIndex}, event)" title="Click to promote to primary">`;
+    html += `<span class="ancestry-toggle-spacer"></span>`;
+    html += `<span class="ancestry-bullet-char" style="color:${concept.branchColor}">\u25CF</span>`;
+    html += `<span>${escapeHtml(node.label)}</span>`;
+  }
+
+  if (confPct != null) {
+    html += `<span class="ancestry-conf-badge" style="background:${confBg};color:${confFg}">${confPct.toFixed(0)}</span>`;
+  }
   html += '</div>';
   return html;
 }
