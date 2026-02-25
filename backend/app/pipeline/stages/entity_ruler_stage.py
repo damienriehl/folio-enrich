@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 # Multi-word preferred labels are almost certainly correct
 # Single-word alt labels (e.g., "grant" → Donation) are very unreliable
 _CONFIDENCE = {
-    ("preferred", True): 0.95,   # multi-word preferred label
-    ("preferred", False): 0.80,  # single-word preferred label
+    ("preferred", True): 0.90,   # multi-word preferred label
+    ("preferred", False): 0.72,  # single-word preferred label
     ("alternative", True): 0.65, # multi-word alternative label
     ("alternative", False): 0.35,  # single-word alternative label — high false-positive rate
 }

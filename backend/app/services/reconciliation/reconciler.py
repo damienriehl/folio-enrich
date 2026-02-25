@@ -24,6 +24,12 @@ def _definition_overlap_score(context: str, definition: str) -> float:
 
 EMBEDDING_AUTO_RESOLVE_THRESHOLD = 0.85
 
+
+def _diminishing_boost(base: float, max_boost: float = 0.05) -> float:
+    """Apply a diminishing confidence boost: high scores barely change, low scores get meaningful lift."""
+    return max_boost * (1.0 - base)
+
+
 # Ruler-only concepts need at least this confidence to be accepted
 # This filters out low-confidence single-word alt-label matches (conf=0.35)
 # while keeping preferred labels (conf=0.80) and multi-word matches (conf>=0.65)
@@ -58,11 +64,10 @@ class Reconciler:
             in_llm = key in llm_by_text
 
             if in_ruler and in_llm:
-                # Both agree: accept with boosted confidence
+                # Both agree: accept with diminishing boost
                 concept = llm_by_text[key]
-                concept.confidence = min(
-                    1.0, max(ruler_by_text[key].confidence, llm_by_text[key].confidence) + 0.05
-                )
+                base = max(ruler_by_text[key].confidence, llm_by_text[key].confidence)
+                concept.confidence = min(1.0, base + _diminishing_boost(base))
                 concept.source = "reconciled"
                 results.append(ReconciliationResult(concept=concept, category="both_agree"))
 
@@ -122,7 +127,8 @@ class Reconciler:
 
                 if rc.folio_iri and lc.folio_iri and rc.folio_iri == lc.folio_iri:
                     concept = lc
-                    concept.confidence = min(1.0, max(rc.confidence, lc.confidence) + 0.05)
+                    base = max(rc.confidence, lc.confidence)
+                    concept.confidence = min(1.0, base + _diminishing_boost(base))
                     concept.source = "reconciled"
                     results.append(ReconciliationResult(concept=concept, category="both_agree"))
                 elif rc.folio_iri and lc.folio_iri:
@@ -130,12 +136,14 @@ class Reconciler:
                 elif rc.folio_iri and not lc.folio_iri:
                     # Ruler has a direct IRI lookup; preserve it
                     concept = rc
-                    concept.confidence = min(1.0, max(rc.confidence, lc.confidence) + 0.05)
+                    base = max(rc.confidence, lc.confidence)
+                    concept.confidence = min(1.0, base + _diminishing_boost(base))
                     concept.source = "reconciled"
                     results.append(ReconciliationResult(concept=concept, category="both_agree"))
                 else:
                     concept = lc
-                    concept.confidence = min(1.0, max(rc.confidence, lc.confidence) + 0.05)
+                    base = max(rc.confidence, lc.confidence)
+                    concept.confidence = min(1.0, base + _diminishing_boost(base))
                     concept.source = "reconciled"
                     results.append(ReconciliationResult(concept=concept, category="both_agree"))
 

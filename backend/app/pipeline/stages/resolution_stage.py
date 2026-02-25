@@ -143,7 +143,7 @@ class ResolutionStage(PipelineStage):
                 resolved = self.resolver.resolve(
                     concept_text=concept_data.get("concept_text", ""),
                     branches=concept_data.get("branches", []),
-                    confidence=concept_data.get("confidence", 1.0),
+                    confidence=concept_data.get("confidence", 0.5),
                     source="entity_ruler",
                     folio_iri=concept_data.get("folio_iri"),
                 )

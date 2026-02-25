@@ -105,7 +105,8 @@ class TestIRIPreservation:
         assert len(results) == 1
         assert results[0].category == "both_agree"
         assert results[0].concept.folio_iri == "iri_correct"
-        assert results[0].concept.confidence == min(1.0, 0.90 + 0.05)
+        # Diminishing boost: base=0.90, boost=0.05*(1-0.90)=0.005
+        assert abs(results[0].concept.confidence - 0.905) < 1e-9
 
     def test_llm_used_when_neither_has_iri(self):
         """When neither side has an IRI, LLM version should be used (existing behavior)."""
@@ -122,8 +123,8 @@ class TestIRIPreservation:
         assert len(results) == 1
         assert results[0].category == "both_agree"
         assert results[0].concept.source == "reconciled"
-        # LLM version used — confidence is max(0.80, 0.85) + 0.05
-        assert results[0].concept.confidence == min(1.0, 0.85 + 0.05)
+        # LLM version used — diminishing boost: base=0.85, boost=0.05*(1-0.85)=0.0075
+        assert abs(results[0].concept.confidence - 0.8575) < 1e-9
 
     def test_llm_iri_used_when_ruler_has_none(self):
         """When LLM has an IRI but ruler doesn't, LLM version should be used."""

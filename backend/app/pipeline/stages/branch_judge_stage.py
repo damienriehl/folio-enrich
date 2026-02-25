@@ -58,10 +58,10 @@ class BranchJudgeStage(PipelineStage):
                 if isinstance(result, dict):
                     branch = result.get("branch", "")
                     concept["branches"] = [branch] if branch else []
-                    concept["confidence"] = max(
-                        concept.get("confidence", 0),
-                        result.get("confidence", 0),
-                    )
+                    # Weighted blend: 70% pipeline score + 30% judge score
+                    existing_conf = concept.get("confidence", 0)
+                    judge_conf = result.get("confidence", 0)
+                    concept["confidence"] = existing_conf * 0.7 + judge_conf * 0.3
                     # Judge validates → confirmed; no branch found → rejected
                     concept["state"] = "confirmed" if branch else "rejected"
                     # Record lineage event

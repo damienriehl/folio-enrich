@@ -82,10 +82,12 @@ class ConceptResolver:
             self._cache[cache_key] = None
             return None
 
+        # Use search score when available; preserve caller confidence for IRI fast-path
+        final_confidence = score if score > 0 else confidence
         resolved = ResolvedConcept(
             concept_text=concept_text,
             folio_concept=best_concept,
-            confidence=max(confidence, score),
+            confidence=final_confidence,
             branches=resolved_branches,
             source=source,
             branch_color=branch_color,
@@ -121,7 +123,7 @@ class ConceptResolver:
             resolved_list.append(ResolvedConcept(
                 concept_text=concept_text,
                 folio_concept=fc,
-                confidence=max(confidence, score),
+                confidence=score,
                 branches=resolved_branches,
                 source=source,
                 branch_color=branch_color,
