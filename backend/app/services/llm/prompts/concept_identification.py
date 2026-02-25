@@ -8,7 +8,11 @@ _CONCEPT_IDENTIFICATION_TEMPLATE = """You are a legal concept annotator. Given a
 For each concept found, provide:
 1. **concept_text**: The exact text span as it appears in the document
 2. **branch_hints**: A list of FOLIO ontology branches (1-3, most likely first) this concept belongs to
-3. **confidence**: Your confidence (0.0-1.0) that this is a legal concept
+3. **confidence**: Your confidence (0.0-1.0) that this is a legal concept, calibrated as follows:
+   - 0.95 = unambiguous legal term of art (e.g., "habeas corpus", "res judicata")
+   - 0.70 = context-dependent legal term (e.g., "consideration" in a contract context)
+   - 0.50 = ambiguous term that could be legal or general (e.g., "party", "motion")
+   - 0.30 = weak signal, only legal in very specific contexts (e.g., "interest", "relief")
 
 FOLIO ontology branches (with representative concepts and definitions):
 {branch_info}

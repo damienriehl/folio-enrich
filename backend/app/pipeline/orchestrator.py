@@ -119,7 +119,7 @@ def build_pipeline_config(
 
     config.post_parallel = [
         ReconciliationStage(embedding_service=embedding_service),
-        ResolutionStage(),
+        ResolutionStage(embedding_service=embedding_service),
     ]
 
     if branch_judge_llm is not None:
@@ -169,7 +169,7 @@ def build_stages(
         stages.append(LLMConceptStage(concept_llm))
 
     stages.append(ReconciliationStage(embedding_service=embedding_service))
-    stages.append(ResolutionStage())
+    stages.append(ResolutionStage(embedding_service=embedding_service))
 
     if branch_judge_llm is not None:
         stages.append(BranchJudgeStage(branch_judge_llm))

@@ -146,22 +146,28 @@ def _compute_relevance_score(
     query_lower = query_full.lower().strip()
     label_lower = label.lower()
 
-    # Exact match
+    # Exact match — graduated by word count
     if query_lower == label_lower:
-        return 99.0
+        word_count = len(query_lower.split())
+        if word_count >= 3:
+            return 97.0
+        elif word_count == 2:
+            return 92.0
+        else:
+            return 82.0
 
     label_content = _content_words(label)
 
     # --- Label scoring ---
     label_score = 0.0
     if len(query_lower) >= 4 and query_lower in label_lower:
-        label_score = 92.0
+        label_score = 85.0
     elif (
         len(label_lower) >= 4
         and label_lower in query_lower
         and len(label_lower) / len(query_lower) > 0.3
     ):
-        label_score = 88.0
+        label_score = 78.0
     overlap = _word_overlap(query_content, label_content)
     if overlap > 0:
         label_score = max(label_score, overlap * 88)

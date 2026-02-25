@@ -75,26 +75,39 @@ class TestWordOverlap:
 
 
 class TestComputeRelevanceScore:
-    def test_exact_match_returns_99(self):
-        score = _compute_relevance_score(
+    def test_exact_match_graduated_by_word_count(self):
+        # 3+ words → 97
+        score3 = _compute_relevance_score(
             {"breach", "contract"}, "Breach of Contract",
             "Breach of Contract", None, [],
         )
-        assert score == 99.0
+        assert score3 == 97.0
+        # 2 words → 92
+        score2 = _compute_relevance_score(
+            {"dog", "bite"}, "Dog Bite",
+            "Dog Bite", None, [],
+        )
+        assert score2 == 92.0
+        # 1 word → 82
+        score1 = _compute_relevance_score(
+            {"court"}, "Court",
+            "Court", None, [],
+        )
+        assert score1 == 82.0
 
-    def test_query_in_label_returns_92(self):
+    def test_query_in_label_returns_85(self):
         score = _compute_relevance_score(
             {"dog", "bite"}, "Dog Bite",
             "Dog Bite Strict Liability", None, [],
         )
-        assert score >= 92.0
+        assert score >= 85.0
 
-    def test_label_in_query_returns_88(self):
+    def test_label_in_query_returns_78(self):
         score = _compute_relevance_score(
             {"criminal", "defense", "attorney"}, "criminal defense attorney",
             "Criminal Defense", None, [],
         )
-        assert score >= 88.0
+        assert score >= 78.0
 
     def test_word_overlap_scoring(self):
         score = _compute_relevance_score(
@@ -244,7 +257,7 @@ class TestMultiStrategySearch:
         results = multi_strategy_search(mock_folio, "Breach of Contract", top_n=5)
         assert len(results) > 0
         assert results[0]["iri_hash"] == "HASH001"
-        assert results[0]["score"] == 99.0
+        assert results[0]["score"] == 97.0  # 3+ word exact match
 
     def test_returns_dicts_with_expected_keys(self, mock_folio):
         results = multi_strategy_search(mock_folio, "criminal", top_n=5)

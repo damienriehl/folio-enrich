@@ -18,8 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 class ResolutionStage(PipelineStage):
-    def __init__(self, resolver: ConceptResolver | None = None) -> None:
+    def __init__(self, resolver: ConceptResolver | None = None, embedding_service=None) -> None:
         self.resolver = resolver or ConceptResolver()
+        self._embedding_service = embedding_service
 
     @property
     def name(self) -> str:
@@ -106,6 +107,51 @@ class ResolutionStage(PipelineStage):
                 new_branches.append(b)
         resolved_dict["branches"] = new_branches
 
+    def _apply_embedding_context_scores(
+        self, resolved_concepts: list[dict], full_text: str
+    ) -> None:
+        """Blend embedding-based context similarity into confidence scores.
+
+        For each concept, compute similarity between the sentence context and
+        the FOLIO concept definition. Final score = 60% search + 40% context.
+        No-op when EmbeddingService is unavailable.
+        """
+        if self._embedding_service is None:
+            return
+        try:
+            if self._embedding_service.index_size == 0:
+                return
+        except Exception:
+            return
+
+        for rd in resolved_concepts:
+            definition = rd.get("folio_definition") or ""
+            if not definition:
+                continue
+
+            # Find sentence context for this concept
+            concept_text = rd.get("concept_text", "")
+            idx = full_text.lower().find(concept_text.lower())
+            if idx >= 0:
+                start = max(0, full_text.rfind(".", 0, idx) + 1)
+                end = full_text.find(".", idx + len(concept_text))
+                if end == -1:
+                    end = len(full_text)
+                else:
+                    end += 1
+                sentence = full_text[start:end].strip()
+            else:
+                sentence = concept_text
+
+            try:
+                sim = self._embedding_service.similarity(sentence, definition)
+                sim = max(0.0, min(1.0, sim))  # clamp
+            except Exception:
+                continue
+
+            search_score = rd.get("confidence", 0.5)
+            rd["confidence"] = round(search_score * 0.6 + sim * 0.4, 4)
+
     async def execute(self, job: Job) -> Job:
         job.status = JobStatus.RESOLVING
 
@@ -174,6 +220,13 @@ class ResolutionStage(PipelineStage):
                         self._resolve_virtual_branches(rd, resolved.folio_concept.branch)
                         self._attach_backup_candidates(rd, concept_data)
                         resolved_concepts.append(rd)
+
+        # Apply embedding-based context scoring when available
+        full_text = ""
+        if job.result.canonical_text:
+            full_text = job.result.canonical_text.full_text
+        if full_text:
+            self._apply_embedding_context_scores(resolved_concepts, full_text)
 
         job.result.metadata["resolved_concepts"] = resolved_concepts
 
