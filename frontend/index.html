@@ -168,10 +168,18 @@
     grid-template-columns: minmax(300px, 0.8fr) minmax(350px, 1.2fr) minmax(280px, 1fr);
     gap: 0;
     height: calc(100vh - 48px);
+    transition: grid-template-columns 0.3s ease;
   }
+  main.no-transition { transition: none !important; }
 
-  main.detail-hidden { grid-template-columns: minmax(350px, 1fr) minmax(400px, 1.5fr); }
-  main.detail-hidden .panel-detail { display: none; }
+  /* Detail hidden: third column collapses to 0fr (animatable) */
+  main.detail-hidden { grid-template-columns: minmax(350px, 1fr) minmax(400px, 1.5fr) 0fr; }
+  main.detail-hidden .panel-detail { overflow: hidden; min-width: 0; visibility: hidden; }
+
+  /* Left collapsed (detail visible) */
+  main.left-collapsed:not(.detail-hidden) { grid-template-columns: 48px minmax(350px, 1.2fr) minmax(280px, 1fr); }
+  /* Left collapsed + detail hidden */
+  main.left-collapsed.detail-hidden { grid-template-columns: 48px minmax(350px, 1fr) 0fr; }
 
   .panel {
     display: flex;
@@ -179,7 +187,94 @@
     overflow: hidden;
   }
 
-  .panel-left { border-right: 1px solid var(--border); }
+  .panel-left {
+    border-right: 1px solid var(--border);
+    position: relative;
+    min-width: 0;
+  }
+
+  /* Fade left-panel contents when collapsed */
+  .left-collapsed .panel-left > .panel-header,
+  .left-collapsed .panel-left > .pipeline-progress,
+  .left-collapsed .panel-left > .panel-body {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .panel-left > .panel-header,
+  .panel-left > .pipeline-progress,
+  .panel-left > .panel-body {
+    transition: opacity 0.2s ease 0.1s;
+  }
+
+  /* Collapse strip — visible only when left panel is collapsed */
+  .left-collapse-strip {
+    position: absolute;
+    inset: 0;
+    width: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    z-index: 5;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease, background 0.15s ease;
+    background: transparent;
+  }
+  .left-collapse-strip:hover { background: var(--surface2); }
+  .left-collapsed .left-collapse-strip { opacity: 1; visibility: visible; }
+
+  .strip-chevron {
+    font-size: 14px;
+    color: var(--text-dim);
+    transition: transform 0.15s ease;
+  }
+  .left-collapse-strip:hover .strip-chevron { transform: translateX(2px); color: var(--text); }
+
+  .strip-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-dim);
+  }
+  .left-collapse-strip:hover .strip-label { color: var(--text); }
+
+  /* Edge handle — thin interactive strip on right border of the left panel (VS Code / Figma pattern) */
+  .left-edge-handle {
+    position: absolute;
+    top: 0;
+    right: -1px;
+    width: 6px;
+    height: 100%;
+    z-index: 10;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: width 0.15s ease, background 0.15s ease;
+  }
+  .left-edge-handle:hover {
+    width: 12px;
+    background: var(--accent);
+    opacity: 0.5;
+  }
+  .left-edge-handle:hover .edge-chevron { opacity: 1; }
+  .edge-chevron {
+    font-size: 10px;
+    color: #fff;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+    line-height: 1;
+  }
+  /* Hide edge handle when panel is collapsed (strip takes over) */
+  .left-collapsed .left-edge-handle { display: none; }
 
   .panel-header {
     padding: 10px 16px;
@@ -317,6 +412,53 @@
   .ancestry-conf-badge {
     display: inline-block; font-size: 11px; font-weight: 600;
     padding: 1px 8px; border-radius: 10px; margin-left: auto; flex-shrink: 0;
+  }
+
+  /* Hierarchy title row with Alternatives toggle */
+  .hierarchy-title-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #e2e4ea;
+  }
+  .hierarchy-title-row .detail-section-title {
+    margin-bottom: 0; padding-bottom: 0; border-bottom: none;
+  }
+  .hierarchy-alts-toggle {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 500; color: #6b6b80;
+    background: none; border: 1px solid #e2e4ea; border-radius: 12px;
+    padding: 2px 10px 2px 8px; cursor: pointer; font-family: inherit;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .hierarchy-alts-toggle:hover { background: #f0f2f8; border-color: #d0d4e4; color: #3b64e0; }
+  .hierarchy-alts-toggle.active { background: #eef0ff; border-color: #b0bdee; color: #3b64e0; }
+  .hierarchy-alts-toggle .alts-chevron { font-size: 9px; transition: transform 0.15s; }
+  .hierarchy-alts-toggle.active .alts-chevron { transform: rotate(180deg); }
+
+  /* Alternative nodes in hierarchy tree */
+  .ancestry-alts-divider {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: #9090a0;
+    margin: 8px 0 4px 0; padding-top: 6px;
+    border-top: 1px dashed #e2e4ea;
+  }
+  .ancestry-alt-group {
+    margin-top: 4px;
+  }
+  .ancestry-alt-branch-tag {
+    display: inline-block; font-size: 9px; font-weight: 600;
+    padding: 1px 6px; border-radius: 8px; margin-left: 4px;
+    white-space: nowrap; vertical-align: middle;
+  }
+  .ancestry-node.alt-node {
+    cursor: pointer; opacity: 0.85;
+  }
+  .ancestry-node.alt-node:hover {
+    background: #eef0ff; opacity: 1;
+  }
+  .ancestry-node.alt-node .ancestry-bullet-char { font-size: 10px; }
+  .ancestry-alt-label { font-weight: 500; }
+  .ancestry-alt-hint {
+    font-size: 10px; color: #9090a0; margin-left: 4px; font-style: italic;
   }
 
   /* Detail info */
@@ -1494,6 +1636,13 @@
 <main class="detail-hidden" id="mainLayout">
   <!-- Left panel: Input -->
   <div class="panel panel-left">
+    <div class="left-collapse-strip" onclick="expandLeftPanel()" title="Show document input">
+      <span class="strip-chevron">&#9654;</span>
+      <span class="strip-label">Input</span>
+    </div>
+    <div class="left-edge-handle" onclick="collapseLeftPanel()" title="Collapse input panel">
+      <span class="edge-chevron">&#9664;</span>
+    </div>
     <div class="panel-header">
       <h2>Document Input</h2>
     </div>
@@ -1909,6 +2058,11 @@ const SAMPLES = {
 // ==============================================
 
 async function init() {
+  const main = document.getElementById('mainLayout');
+
+  // Suppress transitions on initial load to prevent animation flash
+  main.classList.add('no-transition');
+
   // Restore UI state immediately (before any async calls)
   if (showThinking) applyShowThinkingStyle(document.getElementById('showThinkingBtn'), true);
   if (debugMode) applyDebugBtnStyle(document.getElementById('debugModeBtn'), true);
@@ -1916,8 +2070,23 @@ async function init() {
   // Restore detail panel visibility from localStorage
   const detailVisible = localStorage.getItem('detailPanelVisible');
   if (detailVisible === 'true') {
-    document.getElementById('mainLayout').classList.remove('detail-hidden');
+    main.classList.remove('detail-hidden');
   }
+
+  // Restore left panel collapsed state from localStorage
+  const leftCollapsed = localStorage.getItem('leftPanelCollapsed');
+  if (leftCollapsed === 'true') {
+    main.classList.add('left-collapsed');
+    // If detail is open and left was collapsed, that's the persisted state (no override)
+    _leftManualOverride = false;
+  }
+
+  // Re-enable transitions after first paint
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      main.classList.remove('no-transition');
+    });
+  });
 
   if (!restoreState()) {
     renderProgressStages('pending');
@@ -3221,6 +3390,16 @@ async function promoteConcept(annId, conceptIndex) {
     rerenderAnnotatedText();
     renderConceptsList(accumulatedAnnotations);
 
+    // Refresh the detail panel to show the new primary in the hierarchy
+    const newAnn = _annotationDataById[annId];
+    if (newAnn && newAnn.concepts && newAnn.concepts[0]) {
+      const newIriHash = newAnn.concepts[0].folio_iri ? newAnn.concepts[0].folio_iri.split('/').pop() : null;
+      if (newIriHash) {
+        delete _conceptDetailCache[newIriHash]; // force fresh fetch
+        loadConceptDetail(newIriHash, annId);
+      }
+    }
+
     // Check if other annotations share the old primary IRI and offer cascade
     if (oldPrimaryIri && result.promoted_iri) {
       const othersWithSameIri = accumulatedAnnotations.filter(a =>
@@ -3278,23 +3457,62 @@ let _currentDetailIriHash = null;
 let _currentDetailAnnId = null;
 let _graphCy = null;  // Cytoscape instance
 let _graphDirection = 'TB';  // 'TB' or 'LR'
+let _leftManualOverride = false;  // user manually re-expanded left while detail open
 
 function toggleDetailPanel() {
   const main = document.getElementById('mainLayout');
-  main.classList.toggle('detail-hidden');
-  localStorage.setItem('detailPanelVisible', main.classList.contains('detail-hidden') ? 'false' : 'true');
+  if (main.classList.contains('detail-hidden')) {
+    showDetailPanel();
+  } else {
+    closeDetailPanel();
+  }
 }
 
 function closeDetailPanel() {
   const main = document.getElementById('mainLayout');
   main.classList.add('detail-hidden');
   localStorage.setItem('detailPanelVisible', 'false');
+  // Auto-expand left panel when detail closes
+  main.classList.remove('left-collapsed');
+  localStorage.setItem('leftPanelCollapsed', 'false');
+  _leftManualOverride = false;
 }
 
 function showDetailPanel() {
   const main = document.getElementById('mainLayout');
   main.classList.remove('detail-hidden');
   localStorage.setItem('detailPanelVisible', 'true');
+  // Auto-collapse left panel (unless user manually overrode)
+  if (!_leftManualOverride) {
+    main.classList.add('left-collapsed');
+    localStorage.setItem('leftPanelCollapsed', 'true');
+  }
+}
+
+function collapseLeftPanel() {
+  const main = document.getElementById('mainLayout');
+  main.classList.add('left-collapsed');
+  localStorage.setItem('leftPanelCollapsed', 'true');
+  _leftManualOverride = false;
+}
+
+function expandLeftPanel() {
+  const main = document.getElementById('mainLayout');
+  main.classList.remove('left-collapsed');
+  localStorage.setItem('leftPanelCollapsed', 'false');
+  // If detail panel is open, mark as manual override so auto-collapse won't re-trigger
+  if (!main.classList.contains('detail-hidden')) {
+    _leftManualOverride = true;
+  }
+}
+
+function toggleLeftPanel() {
+  const main = document.getElementById('mainLayout');
+  if (main.classList.contains('left-collapsed')) {
+    expandLeftPanel();
+  } else {
+    collapseLeftPanel();
+  }
 }
 
 function resetDetailPanel() {
@@ -3320,6 +3538,8 @@ async function loadConceptDetail(iriHash, annId) {
   content.style.display = 'none';
 
   _currentDetailIriHash = iriHash;
+  // Reset alternatives toggle when switching to a different annotation
+  if ((annId || null) !== _currentDetailAnnId) _showAltsInHierarchy = false;
   _currentDetailAnnId = annId || null;
 
   try {
@@ -3361,6 +3581,8 @@ async function loadConceptDetail(iriHash, annId) {
 
 // Collapse state for ancestry tree nodes (path key → collapsed boolean)
 const _ancestryCollapsed = {};
+// Toggle: show alternatives inline in hierarchy tree
+let _showAltsInHierarchy = false;
 
 function toggleAncestryNode(pathKey, event) {
   if (event) event.stopPropagation();
@@ -3369,6 +3591,19 @@ function toggleAncestryNode(pathKey, event) {
   if (_currentDetailIriHash && _conceptDetailCache[_currentDetailIriHash]) {
     renderAncestryTree(_conceptDetailCache[_currentDetailIriHash]);
   }
+}
+
+function toggleAltsInHierarchy(event) {
+  if (event) event.stopPropagation();
+  _showAltsInHierarchy = !_showAltsInHierarchy;
+  if (_currentDetailIriHash && _conceptDetailCache[_currentDetailIriHash]) {
+    renderAncestryTree(_conceptDetailCache[_currentDetailIriHash]);
+  }
+}
+
+function promoteFromHierarchy(annId, conceptIndex, event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  promoteConcept(annId, conceptIndex);
 }
 
 function renderAncestryTree(detail) {
@@ -3380,21 +3615,33 @@ function renderAncestryTree(detail) {
 
   // Confidence badge for the current concept (from annotation data if available)
   let confPct = null;
-  if (_currentDetailAnnId) {
-    const annData = _annotationDataById[_currentDetailAnnId];
-    if (annData && annData.concepts && annData.concepts[0]) {
-      const c = annData.concepts[0].confidence;
-      confPct = c > 1 ? c : c * 100;
-    }
+  const annData = _currentDetailAnnId ? _annotationDataById[_currentDetailAnnId] : null;
+  if (annData && annData.concepts && annData.concepts[0]) {
+    const c = annData.concepts[0].confidence;
+    confPct = c > 1 ? c : c * 100;
   }
+
+  // Count alternatives
+  const alts = (annData && annData.concepts) ? annData.concepts.slice(1) : [];
+  const altCount = alts.length;
+
+  // --- Title row with Alternatives toggle ---
+  let html = '<div class="hierarchy-title-row">';
+  html += '<div class="detail-section-title">Hierarchy</div>';
+  if (altCount > 0 && _currentDetailAnnId) {
+    html += `<button class="hierarchy-alts-toggle${_showAltsInHierarchy ? ' active' : ''}" onclick="toggleAltsInHierarchy(event)" title="${_showAltsInHierarchy ? 'Hide' : 'Show'} alternative concepts">`;
+    html += `Alternatives (${altCount}) <span class="alts-chevron">&#9662;</span>`;
+    html += '</button>';
+  }
+  html += '</div>';
+
+  html += '<div class="ancestry-tree">';
 
   // path[0] = branch root, path[1..n-1] = intermediates, path[n] = current
   const root = path[0];
   const descendants = path.slice(1); // everything below the root
   const rootKey = `anc::${root.iri_hash}`;
   const isRootCollapsed = !!_ancestryCollapsed[rootKey];
-
-  let html = '<div class="detail-section-title">Hierarchy</div><div class="ancestry-tree">';
 
   // --- Branch header (matches folio-mapper SelectionTree branch header) ---
   html += `<div class="ancestry-branch-header" style="border-left-color:${branchColor};background:${branchColor}15;color:${branchColor}">`;
@@ -3408,6 +3655,28 @@ function renderAncestryTree(detail) {
   }
 
   html += '</div>';
+
+  // --- Inline alternatives (when toggled on) ---
+  if (_showAltsInHierarchy && altCount > 0 && _currentDetailAnnId) {
+    html += '<div class="ancestry-alts-divider">Alternatives</div>';
+    html += '<div class="ancestry-alt-group">';
+    alts.forEach((alt, idx) => {
+      const altBranch = (alt.branches && alt.branches.length > 0) ? alt.branches[0] : '';
+      const altColor = BRANCH_COLORS[altBranch] || '#6b6b80';
+      const altConf = alt.confidence > 1 ? alt.confidence : alt.confidence * 100;
+      const confBg = altConf >= 80 ? '#dcfce7' : altConf >= 50 ? '#fef3c7' : '#fee2e2';
+      const confFg = altConf >= 80 ? '#166534' : altConf >= 50 ? '#92400e' : '#991b1b';
+      html += `<div class="ancestry-node alt-node" onclick="promoteFromHierarchy('${escapeAttr(_currentDetailAnnId)}', ${idx + 1}, event)" title="Click to promote to primary">`;
+      html += `<span class="ancestry-toggle-spacer"></span>`;
+      html += `<span class="ancestry-bullet-char" style="color:${altColor}">&#9675;</span>`;
+      html += `<span class="ancestry-alt-label">${escapeHtml(alt.folio_label || alt.concept_text)}</span>`;
+      html += `<span class="ancestry-alt-branch-tag" style="background:${altColor}20;color:${altColor}">${escapeHtml(altBranch || '?')}</span>`;
+      html += `<span class="ancestry-conf-badge" style="background:${confBg};color:${confFg}">${altConf.toFixed(0)}</span>`;
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
   container.innerHTML = html;
 }
 
@@ -3493,32 +3762,10 @@ function renderDetailInfo(detail) {
 }
 
 function renderDetailAlternatives(annId) {
+  // Alternatives are now shown inline in the Hierarchy section via the toggle button.
+  // Clear the old standalone container.
   const container = document.getElementById('detailAlternatives');
-  if (!annId) { container.innerHTML = ''; return; }
-
-  const annData = _annotationDataById[annId];
-  const alts = (annData && annData.concepts) ? annData.concepts.slice(1) : [];
-  if (alts.length === 0) { container.innerHTML = ''; return; }
-
-  let html = `<div class="detail-section-title">Alternatives (${alts.length})</div>`;
-  html += '<div style="display:flex;flex-direction:column;gap:6px">';
-  alts.forEach((alt, idx) => {
-    const altBranch = (alt.branches && alt.branches.length > 0) ? alt.branches[0] : '';
-    const altColor = BRANCH_COLORS[altBranch] || '#6b6b80';
-    const altConf = alt.confidence > 1 ? alt.confidence : alt.confidence * 100;
-    const altTier = altConf >= 80 ? 'conf-high' : altConf >= 50 ? 'conf-mid' : 'conf-low';
-    html += `<div class="tooltip-alt-card">
-      <div class="tooltip-alt-card-header">
-        <span class="tooltip-alt-card-label">${escapeHtml(alt.folio_label || alt.concept_text)}</span>
-        <span class="tooltip-alt-card-branch" style="background:${altColor}20;color:${altColor}">${escapeHtml(altBranch || 'Unknown')}</span>
-      </div>
-      <div class="tooltip-alt-card-conf ${altTier}">${altConf.toFixed(0)}% confidence</div>
-      ${alt.folio_definition ? `<div class="tooltip-alt-card-def">${escapeHtml(alt.folio_definition)}</div>` : ''}
-      <button class="tooltip-alt-promote-btn" onclick="promoteConcept('${escapeAttr(annId)}', ${idx + 1})">Promote to primary</button>
-    </div>`;
-  });
-  html += '</div>';
-  container.innerHTML = html;
+  container.innerHTML = '';
 }
 
 async function renderDetailLineage(annId) {
