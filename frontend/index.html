@@ -1322,6 +1322,48 @@
     color: #1a1a2e;
   }
 
+  /* Cascade promote modal */
+  .cascade-select-all {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4a4a60;
+    padding: 6px 0;
+    border-bottom: 1px solid #e8e8ee;
+    margin-bottom: 4px;
+    cursor: pointer;
+  }
+  .cascade-checklist {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .cascade-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 4px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .cascade-row:hover { background: #f0f0f5; }
+  .cascade-row input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+  .cascade-row .cascade-text { font-weight: 600; color: #1a1a2e; }
+  .cascade-row .cascade-context { color: #6b6b80; }
+
+  @keyframes cascade-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(59,100,224,0.4); }
+    50% { box-shadow: 0 0 0 4px rgba(59,100,224,0.15); }
+  }
+  .cascade-highlight {
+    outline: 2px solid #3b64e0 !important;
+    border-radius: 2px;
+    animation: cascade-pulse 0.8s ease-in-out infinite;
+  }
+
   /* Synthetic generator */
   .doc-type-tree { font-size: 12px; }
 
@@ -1861,6 +1903,22 @@
     <div class="modal-actions">
       <button class="secondary" onclick="closeSynthetic()">Cancel</button>
       <button class="primary" id="generateBtn" onclick="generateSynthetic()">Generate &amp; Annotate</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cascade Promote Modal -->
+<div class="modal-overlay" id="cascadeModal">
+  <div class="modal" style="max-width:600px">
+    <h3 id="cascadeTitle">Update related annotations</h3>
+    <p id="cascadeDesc" style="font-size:12px;color:#6b6b80;margin-bottom:12px"></p>
+    <label class="cascade-select-all">
+      <input type="checkbox" id="cascadeSelectAll" checked> <span>Select all</span>
+    </label>
+    <div id="cascadeList" class="cascade-checklist"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeCascadeModal()">Cancel</button>
+      <button class="primary" id="cascadeApplyBtn" onclick="applyCascadeSelections()">Apply</button>
     </div>
   </div>
 </div>
@@ -3414,10 +3472,8 @@ async function promoteConcept(annId, conceptIndex) {
         a.concepts[0].folio_iri === oldPrimaryIri &&
         a.concepts.some(c => c.folio_iri === result.promoted_iri)
       );
-      if (othersWithSameIri.length > 0 && confirm(
-        `${othersWithSameIri.length} other annotation${othersWithSameIri.length > 1 ? 's' : ''} also use "${oldPrimaryIri.split('/').pop()}". Promote "${result.promoted_iri.split('/').pop()}" on all of them?`
-      )) {
-        await cascadePromote(oldPrimaryIri, result.promoted_iri);
+      if (othersWithSameIri.length > 0) {
+        showCascadeModal(othersWithSameIri, oldPrimaryIri, result.promoted_iri);
       }
     }
   } catch (e) {
@@ -3425,13 +3481,15 @@ async function promoteConcept(annId, conceptIndex) {
   }
 }
 
-async function cascadePromote(oldIri, newIri) {
+async function cascadePromote(oldIri, newIri, annotationIds) {
   if (!currentJobId) return;
   try {
+    const body = { old_iri: oldIri, new_iri: newIri };
+    if (annotationIds) body.annotation_ids = annotationIds;
     const resp = await fetch(`${API}/enrich/${currentJobId}/cascade-promote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ old_iri: oldIri, new_iri: newIri }),
+      body: JSON.stringify(body),
     });
     if (!resp.ok) return;
 
@@ -3444,6 +3502,90 @@ async function cascadePromote(oldIri, newIri) {
     renderConceptsList(accumulatedAnnotations);
   } catch (e) {
     console.error('Cascade promotion failed:', e);
+  }
+}
+
+// ---- Cascade promote modal ----
+let _cascadeState = {};
+
+function showCascadeModal(annotations, oldIri, newIri) {
+  const oldLabel = oldIri.split('/').pop();
+  const newLabel = newIri.split('/').pop();
+  _cascadeState = { oldIri, newIri, annotations };
+
+  document.getElementById('cascadeTitle').textContent = 'Update related annotations';
+  document.getElementById('cascadeDesc').textContent =
+    `You promoted "${newLabel}" over "${oldLabel}". ${annotations.length} other annotation${annotations.length > 1 ? 's' : ''} also use "${oldLabel}" and can be updated:`;
+
+  const list = document.getElementById('cascadeList');
+  list.innerHTML = annotations.map(ann => {
+    const text = ann.span ? ann.span.text : '';
+    const sentence = ann.span && ann.span.sentence_text ? ann.span.sentence_text : '';
+    // Highlight matched text within sentence context
+    let contextHtml;
+    if (sentence && sentence.includes(text)) {
+      const idx = sentence.indexOf(text);
+      contextHtml = escapeHtml(sentence.slice(0, idx))
+        + `<span class="cascade-text">${escapeHtml(text)}</span>`
+        + escapeHtml(sentence.slice(idx + text.length));
+    } else {
+      contextHtml = `<span class="cascade-text">${escapeHtml(text)}</span>` + (sentence ? ` <span class="cascade-context">${escapeHtml(sentence)}</span>` : '');
+    }
+    return `<label class="cascade-row" data-ann-ref="${escapeAttr(ann.id)}"
+        onmouseenter="highlightCascadeSpan('${escapeAttr(ann.id)}', true)"
+        onmouseleave="highlightCascadeSpan('${escapeAttr(ann.id)}', false)">
+      <input type="checkbox" class="cascade-check" value="${escapeAttr(ann.id)}" checked>
+      <span class="cascade-context">${contextHtml}</span>
+    </label>`;
+  }).join('');
+
+  const selectAll = document.getElementById('cascadeSelectAll');
+  selectAll.checked = true;
+  selectAll.onchange = () => {
+    list.querySelectorAll('.cascade-check').forEach(cb => cb.checked = selectAll.checked);
+    updateCascadeCount();
+  };
+  list.querySelectorAll('.cascade-check').forEach(cb => cb.onchange = () => {
+    const checks = list.querySelectorAll('.cascade-check');
+    selectAll.checked = [...checks].every(c => c.checked);
+    updateCascadeCount();
+  });
+
+  updateCascadeCount();
+  document.getElementById('cascadeModal').classList.add('visible');
+  document.addEventListener('keydown', cascadeKeyHandler);
+}
+
+function updateCascadeCount() {
+  const n = document.querySelectorAll('#cascadeList .cascade-check:checked').length;
+  document.getElementById('cascadeApplyBtn').textContent = `Apply (${n})`;
+  document.getElementById('cascadeApplyBtn').disabled = n === 0;
+}
+
+function closeCascadeModal() {
+  document.getElementById('cascadeModal').classList.remove('visible');
+  document.removeEventListener('keydown', cascadeKeyHandler);
+  // Remove any lingering highlights
+  document.querySelectorAll('.cascade-highlight').forEach(el => el.classList.remove('cascade-highlight'));
+}
+
+function cascadeKeyHandler(e) {
+  if (e.key === 'Escape') { closeCascadeModal(); e.preventDefault(); }
+  if (e.key === 'Enter') { applyCascadeSelections(); e.preventDefault(); }
+}
+
+async function applyCascadeSelections() {
+  const checked = [...document.querySelectorAll('#cascadeList .cascade-check:checked')].map(cb => cb.value);
+  closeCascadeModal();
+  if (checked.length === 0) return;
+  await cascadePromote(_cascadeState.oldIri, _cascadeState.newIri, checked);
+}
+
+function highlightCascadeSpan(annId, on) {
+  const span = document.querySelector(`.annotation-span[data-ann-id="${annId}"]`);
+  if (span) {
+    if (on) { span.classList.add('cascade-highlight'); span.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    else span.classList.remove('cascade-highlight');
   }
 }
 

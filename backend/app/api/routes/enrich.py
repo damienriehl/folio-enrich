@@ -131,6 +131,7 @@ class PromoteRequest(BaseModel):
 class CascadePromoteRequest(BaseModel):
     old_iri: str
     new_iri: str
+    annotation_ids: list[str] | None = None
 
 
 @router.post("/{job_id}/annotations/{annotation_id}/promote")
@@ -183,9 +184,13 @@ async def cascade_promote(job_id: UUID, req: CascadePromoteRequest) -> dict:
 
     from app.models.annotation import StageEvent
 
+    id_filter = set(req.annotation_ids) if req.annotation_ids is not None else None
+
     updated = 0
     for ann in job.result.annotations:
         if not ann.concepts or ann.concepts[0].folio_iri != req.old_iri:
+            continue
+        if id_filter is not None and ann.id not in id_filter:
             continue
         # Find backup with new_iri
         backup_idx = None
