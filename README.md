@@ -4,8 +4,9 @@
 
 Legal documents contain thousands of concepts buried in dense prose: causes of action, contract terms, regulatory frameworks,  events. FOLIO Enrich reads your documents, identifies those concepts, maps each one to the [FOLIO ontology](https://github.com/FOLIO-Ontology/FOLIO) (18,000+ standardized legal concepts), scores its confidence, and exports structured results in 13 formats — all through a single API call.
 
-**Upload a complaint, a contract, or a regulatory filing. Seconds later, receive a structured annotation layer that machines can search, filter, sort, and analyze.
-**
+Upload complaints, contracts, or regulatory filings. 
+
+Seconds later, receive a structured annotation layer that machines can search, filter, sort, and analyze.
 
 ---
 
