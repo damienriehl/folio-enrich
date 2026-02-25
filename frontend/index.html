@@ -353,7 +353,8 @@
   .panel-detail .panel-body { background: var(--bg); color: var(--text); }
   .panel-detail .panel-body::-webkit-scrollbar-thumb { background: #c0c0cc; }
   .panel-detail .panel-body::-webkit-scrollbar-thumb:hover { background: #9090a0; }
-  .panel-detail .panel-header { background: var(--surface); border-bottom: 1px solid var(--border); }
+  .panel-detail .panel-header { background: var(--surface); border-bottom: 1px solid var(--border); position: relative; }
+  .panel-detail .panel-header button { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); }
 
   .detail-section { margin-bottom: 16px; }
   .detail-section-title {
@@ -396,7 +397,13 @@
   }
   .ancestry-node.clickable { cursor: pointer; }
   .ancestry-node.clickable:hover { background: #f0f0f5; }
-  .ancestry-node.current { font-weight: 600; }
+  .ancestry-node.current {
+    font-weight: 600;
+    background: var(--current-node-bg, #eef3ff);
+    border-left: 3px solid var(--current-node-accent, #3b64e0);
+    border-radius: 2px 4px 4px 2px;
+    padding-left: 4px;
+  }
 
   .ancestry-node .ancestry-toggle {
     flex-shrink: 0; background: none; border: none; padding: 0;
@@ -434,13 +441,26 @@
   .hierarchy-alts-toggle .alts-chevron { font-size: 9px; transition: transform 0.15s; }
   .hierarchy-alts-toggle.active .alts-chevron { transform: rotate(180deg); }
 
-  /* Alternative concept nodes in merged hierarchy tree */
+  /* Alternative (candidate) concept nodes in merged hierarchy tree */
   .ancestry-node.alt-node {
-    cursor: pointer;
+    cursor: pointer; color: #50506a; font-weight: 400;
+  }
+  .ancestry-node.alt-node .ancestry-bullet-char {
+    font-size: 11px; /* slightly larger so hollow ring reads clearly */
+  }
+  .ancestry-node.alt-node .ancestry-conf-badge {
+    background: transparent !important; color: inherit !important;
+    border: 1px solid currentColor; opacity: 0.7;
+  }
+  .ancestry-node.alt-node .alt-promote-icon {
+    margin-left: 2px; font-size: 11px; color: #3b64e0;
+    opacity: 0; transition: opacity 0.15s;
   }
   .ancestry-node.alt-node:hover {
-    background: #eef0ff;
+    background: #eef0ff; color: #1a1a2e;
   }
+  .ancestry-node.alt-node:hover .ancestry-conf-badge { opacity: 1; }
+  .ancestry-node.alt-node:hover .alt-promote-icon { opacity: 1; }
 
   /* Detail info */
   .detail-name-row {
@@ -3699,7 +3719,7 @@ function renderSingleAncestryNodes(nodes, startIdx, detail, branchColor, confPct
   if (isCurrent) {
     const confBg = confPct != null ? (confPct >= 80 ? '#dcfce7' : confPct >= 50 ? '#fef3c7' : '#fee2e2') : '';
     const confFg = confPct != null ? (confPct >= 80 ? '#166534' : confPct >= 50 ? '#92400e' : '#991b1b') : '';
-    html += `<div class="ancestry-node current">`;
+    html += `<div class="ancestry-node current" style="--current-node-accent:${branchColor};--current-node-bg:${branchColor}10">`;
     html += `<span class="ancestry-toggle-spacer"></span>`;
     html += `<span class="ancestry-bullet-char" style="color:${branchColor}">\u25CF</span>`;
     html += `<span>${escapeHtml(entry.label)}</span>`;
@@ -3863,20 +3883,26 @@ function renderConceptLeaf(node, concept, annId) {
 
   let html = '';
   if (concept.isPrimary) {
-    html += `<div class="ancestry-node current">`;
+    // Primary: filled bullet, bold, solid badge, highlighted row (branch-tinted)
+    html += `<div class="ancestry-node current" style="--current-node-accent:${concept.branchColor};--current-node-bg:${concept.branchColor}10">`;
     html += `<span class="ancestry-toggle-spacer"></span>`;
     html += `<span class="ancestry-bullet-char" style="color:${concept.branchColor}">\u25CF</span>`;
     html += `<span>${escapeHtml(node.label)}</span>`;
+    if (confPct != null) {
+      html += `<span class="ancestry-conf-badge" style="background:${confBg};color:${confFg}">${confPct.toFixed(0)}</span>`;
+    }
   } else {
+    // Alternative: hollow bullet, muted, outline badge, hover-reveal promote icon
     html += `<div class="ancestry-node alt-node" onclick="promoteFromHierarchy('${escapeAttr(annId)}', ${concept.conceptIndex}, event)" title="Click to promote to primary">`;
     html += `<span class="ancestry-toggle-spacer"></span>`;
-    html += `<span class="ancestry-bullet-char" style="color:${concept.branchColor}">\u25CF</span>`;
+    html += `<span class="ancestry-bullet-char" style="color:${concept.branchColor}">\u25CB</span>`;
     html += `<span>${escapeHtml(node.label)}</span>`;
+    html += `<span class="alt-promote-icon">\u21C5</span>`;
+    if (confPct != null) {
+      html += `<span class="ancestry-conf-badge" style="color:${confFg}">${confPct.toFixed(0)}</span>`;
+    }
   }
 
-  if (confPct != null) {
-    html += `<span class="ancestry-conf-badge" style="background:${confBg};color:${confFg}">${confPct.toFixed(0)}</span>`;
-  }
   html += '</div>';
   return html;
 }
