@@ -17,6 +17,7 @@ from app.pipeline.stages.string_match_stage import StringMatchStage
 from app.pipeline.stages.branch_judge_stage import BranchJudgeStage
 from app.pipeline.stages.metadata_stage import MetadataStage
 from app.pipeline.stages.dependency_stage import DependencyStage
+from app.pipeline.stages.rerank_stage import ContextualRerankStage
 from app.services.llm.base import LLMProvider
 from app.storage.job_store import JobStore
 
@@ -122,6 +123,9 @@ def build_pipeline_config(
         ResolutionStage(embedding_service=embedding_service),
     ]
 
+    if concept_llm is not None:
+        config.post_parallel.append(ContextualRerankStage(concept_llm))
+
     if branch_judge_llm is not None:
         config.post_parallel.append(BranchJudgeStage(branch_judge_llm))
 
@@ -170,6 +174,9 @@ def build_stages(
 
     stages.append(ReconciliationStage(embedding_service=embedding_service))
     stages.append(ResolutionStage(embedding_service=embedding_service))
+
+    if concept_llm is not None:
+        stages.append(ContextualRerankStage(concept_llm))
 
     if branch_judge_llm is not None:
         stages.append(BranchJudgeStage(branch_judge_llm))

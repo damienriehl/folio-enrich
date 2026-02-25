@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     embedding_disabled: bool = False
     semantic_similarity_threshold: float = 0.80
 
+    # Contextual reranking
+    contextual_rerank_enabled: bool = True
+
     # Candidates
     max_candidates: int = 5
 
