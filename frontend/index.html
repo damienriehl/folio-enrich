@@ -3184,11 +3184,11 @@ function showTooltip(event, el) {
   // Compact tooltip: branch · label · score + thumbs + dismiss · slide-open note
   const existingNote = _noteCache[annId] || '';
   const noteOpen = existingRating ? ' open' : '';
-  const dismissLabel = isRejected ? '&#x21A9; Restore' : '&#x2715; Dismiss';
   const dismissClass = isRejected ? ' is-rejected' : '';
   const dismissAction = isRejected
     ? `restoreAnnotation('${escapeAttr(annId)}')`
     : `dismissAnnotation('${escapeAttr(annId)}')`;
+  const dismissLabel = isRejected ? _restoreTagIcon + ' Restore tag' : _removeTagIcon + ' Remove tag';
   tooltip.innerHTML = `
     <div class="tooltip-branch" style="color:${branchColor}">${escapeHtml(branch || 'Unknown')}</div>
     <div class="tooltip-label">${escapeHtml(label)}</div>
@@ -3198,7 +3198,7 @@ function showTooltip(event, el) {
         <div class="tooltip-feedback-row">
           <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" data-rating="up" onclick="submitFeedback(this, 'up')">&#x1F44D;</button>
           <button class="tooltip-feedback-btn${existingRating === 'down' ? ' active-down' : ''}" data-rating="down" onclick="submitFeedback(this, 'down')">&#x1F44E;</button>
-          <button class="tooltip-dismiss-btn${dismissClass}" onclick="${dismissAction}">${dismissLabel}</button>
+          <button class="tooltip-dismiss-btn${dismissClass}" onclick="${dismissAction}" title="${isRejected ? 'Restore this tag' : 'Remove this tag from the document'}">${dismissLabel}</button>
         </div>
       </div>
     </div>
@@ -3426,6 +3426,10 @@ async function submitNote(annId) {
 
 // ========== Dismiss / Restore annotations ==========
 
+// SVG icons for remove/restore — broken-link (unlink) and link (re-link)
+const _removeTagIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11l-1.5 1.5a2.83 2.83 0 0 1-4-4L3 7"/><path d="M9 5l1.5-1.5a2.83 2.83 0 0 1 4 4L13 9"/><line x1="3" y1="13" x2="6" y2="10"/><line x1="10" y1="6" x2="13" y2="3"/></svg>`;
+const _restoreTagIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11l-1.5 1.5a2.83 2.83 0 0 1-4-4L3 7"/><path d="M9 5l1.5-1.5a2.83 2.83 0 0 1 4 4L13 9"/><line x1="6" y1="10" x2="10" y2="6"/></svg>`;
+
 // Track dismissed state locally for instant UI updates
 const _dismissedCache = {};
 
@@ -3537,7 +3541,8 @@ function _updateDetailDismissBtn(annId) {
   if (!btn || btn.dataset.annId !== annId) return;
   const isRejected = !!_dismissedCache[annId];
   btn.className = 'detail-dismiss-btn' + (isRejected ? ' is-rejected' : '');
-  btn.innerHTML = isRejected ? '&#x21A9; Restore' : '&#x2715; Dismiss';
+  btn.innerHTML = isRejected ? _restoreTagIcon + ' Restore tag' : _removeTagIcon + ' Remove tag';
+  btn.title = isRejected ? 'Restore this tag' : 'Remove this tag from the document';
   btn.onclick = isRejected ? () => restoreAnnotation(annId) : () => dismissAnnotation(annId);
 }
 
