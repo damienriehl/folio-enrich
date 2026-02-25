@@ -74,25 +74,58 @@ class AhoCorasickMatcher:
         return self._resolve_overlaps(raw_matches)
 
     def _resolve_overlaps(self, matches: list[MatchResult]) -> list[MatchResult]:
-        """Resolve overlapping spans: longer match wins; equal length → keep first."""
+        """Resolve overlapping spans with containment awareness.
+
+        - Contained spans (A fully inside B): keep both
+        - Partial overlaps (spans cross boundaries): longer wins
+        - Identical spans: keep first
+        """
         if not matches:
             return []
 
-        # Sort by start position, then by length descending
+        # Sort by start asc, length desc (longer spans first at same start)
         matches.sort(key=lambda m: (m.start, -(m.end - m.start)))
 
         resolved: list[MatchResult] = []
-        last_end = -1
 
         for match in matches:
-            if match.start >= last_end:
-                resolved.append(match)
-                last_end = match.end
-            elif (match.end - match.start) > (resolved[-1].end - resolved[-1].start):
-                # Longer match replaces shorter overlapping match
-                resolved[-1] = match
-                last_end = match.end
+            dominated = False
+            for i, kept in enumerate(resolved):
+                # Check if spans overlap at all
+                if match.start >= kept.end or match.end <= kept.start:
+                    continue  # no overlap
 
+                # Identical span — skip duplicate
+                if match.start == kept.start and match.end == kept.end:
+                    dominated = True
+                    break
+
+                # Check containment: match is fully inside kept
+                if match.start >= kept.start and match.end <= kept.end:
+                    # Contained — allow it (both survive)
+                    continue
+
+                # Check containment: kept is fully inside match
+                if kept.start >= match.start and kept.end <= match.end:
+                    # Match contains kept — allow it (both survive)
+                    continue
+
+                # Partial overlap — longer wins
+                match_len = match.end - match.start
+                kept_len = kept.end - kept.start
+                if match_len > kept_len:
+                    resolved[i] = match
+                    dominated = True
+                    break
+                else:
+                    dominated = True
+                    break
+
+            if not dominated:
+                resolved.append(match)
+
+        # Sort results by start position for stable output
+        resolved.sort(key=lambda m: (m.start, -(m.end - m.start)))
         return resolved
 
     @property

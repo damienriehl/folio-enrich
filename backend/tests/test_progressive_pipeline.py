@@ -109,8 +109,8 @@ class TestEntityRulerAnnotations:
         assert ann.id  # has a valid id
 
     @pytest.mark.asyncio
-    async def test_resolves_overlapping_spans(self):
-        """Overlapping spans should keep the longer match."""
+    async def test_resolves_overlapping_spans_containment(self):
+        """Contained spans should both be kept (contract inside breach of contract)."""
         mock_ruler = MagicMock()
         mock_ruler.find_matches.return_value = [
             EntityRulerMatch(
@@ -139,9 +139,11 @@ class TestEntityRulerAnnotations:
 
         result = await stage.execute(job)
 
-        # Only the longer "breach of contract" should survive
-        assert len(result.result.annotations) == 1
-        assert result.result.annotations[0].span.text == "breach of contract"
+        # Both should survive — contract is contained within breach of contract
+        assert len(result.result.annotations) == 2
+        texts = {a.span.text for a in result.result.annotations}
+        assert "breach of contract" in texts
+        assert "contract" in texts
 
 
 # ── ReconciliationStage updates annotation states ─────────────────

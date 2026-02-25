@@ -64,9 +64,10 @@ class ReconciliationStage(PipelineStage):
         job.result.metadata["reconciled_concepts"] = reconciled
 
         # Update preliminary annotation states based on reconciliation results
-        reconciled_by_text = {}
+        reconciled_by_key: dict[tuple[str, str], str] = {}
         for r in results:
-            reconciled_by_text[r.concept.concept_text.lower()] = r.category
+            rkey = (r.concept.concept_text.lower(), r.concept.folio_iri or "")
+            reconciled_by_key[rkey] = r.category
 
         _CATEGORY_DETAIL = {
             "both_agree": "Both EntityRuler and LLM agree",
@@ -78,7 +79,8 @@ class ReconciliationStage(PipelineStage):
             if ann.state != "preliminary":
                 continue
             concept_text = ann.concepts[0].concept_text.lower() if ann.concepts else ""
-            category = reconciled_by_text.get(concept_text)
+            concept_iri = ann.concepts[0].folio_iri or "" if ann.concepts else ""
+            category = reconciled_by_key.get((concept_text, concept_iri))
             if category in ("both_agree", "conflict_resolved"):
                 ann.state = "confirmed"
                 record_lineage(ann, "reconciliation", "confirmed",

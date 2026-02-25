@@ -203,7 +203,8 @@ class TestPropertyDeduplicator:
         result = deduplicate_properties(props)
         assert len(result) == 2
 
-    def test_overlapping_longer_wins(self):
+    def test_contained_property_both_kept(self):
+        """Contained property spans should both survive."""
         from app.services.property.property_deduplicator import deduplicate_properties
         props = [
             PropertyAnnotation(
@@ -218,8 +219,10 @@ class TestPropertyDeduplicator:
             ),
         ]
         result = deduplicate_properties(props)
-        assert len(result) == 1
-        assert result[0].property_text == "appeared before"
+        assert len(result) == 2
+        texts = {r.property_text for r in result}
+        assert "appeared" in texts
+        assert "appeared before" in texts
 
     def test_same_span_higher_confidence_wins(self):
         from app.services.property.property_deduplicator import deduplicate_properties

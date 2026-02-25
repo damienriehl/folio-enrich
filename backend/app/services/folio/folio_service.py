@@ -71,6 +71,7 @@ class FolioService:
     def __init__(self) -> None:
         self._folio = None
         self._labels_cache: dict[str, LabelInfo] | None = None
+        self._labels_multi_cache: dict[str, list[LabelInfo]] | None = None
         self._property_labels_cache: dict[str, PropertyLabelInfo] | None = None
         self._branch_map: dict[str, str] | None = None
 
@@ -234,6 +235,69 @@ class FolioService:
 
         self._labels_cache = labels
         logger.info("Indexed %d FOLIO labels", len(labels))
+        return labels
+
+    def get_all_labels_multi(self) -> dict[str, list[LabelInfo]]:
+        """Return a mapping of label text to ALL matching concepts.
+
+        Unlike get_all_labels() which keeps only one concept per label,
+        this returns every concept that has the label (as preferred, alt, or hidden).
+        Within each list, preferred labels sort first; entries are deduplicated by IRI.
+        """
+        if self._labels_multi_cache is not None:
+            return self._labels_multi_cache
+
+        folio = self._get_folio()
+        labels: dict[str, list[LabelInfo]] = {}
+
+        for concept in folio.classes:
+            try:
+                fc = self._to_folio_concept(concept)
+
+                if fc.branch in EXCLUDED_BRANCHES:
+                    continue
+
+                # Index preferred label
+                pref = fc.preferred_label
+                if pref:
+                    key = pref.lower()
+                    labels.setdefault(key, []).append(LabelInfo(
+                        concept=fc, label_type="preferred", matched_label=pref,
+                    ))
+
+                # Index alternative labels
+                for alt in fc.alternative_labels:
+                    if alt:
+                        key = alt.lower()
+                        labels.setdefault(key, []).append(LabelInfo(
+                            concept=fc, label_type="alternative", matched_label=alt,
+                        ))
+
+                # Index hidden label
+                if fc.hidden_label:
+                    key = fc.hidden_label.lower()
+                    labels.setdefault(key, []).append(LabelInfo(
+                        concept=fc, label_type="hidden", matched_label=fc.hidden_label,
+                    ))
+            except Exception:
+                continue
+
+        # Deduplicate by IRI within each label key; sort preferred first
+        _type_order = {"preferred": 0, "alternative": 1, "hidden": 2}
+        for key, entries in labels.items():
+            seen_iris: set[str] = set()
+            deduped: list[LabelInfo] = []
+            # Sort so preferred comes first, then dedup by IRI
+            entries.sort(key=lambda e: _type_order.get(e.label_type, 9))
+            for entry in entries:
+                if entry.concept.iri not in seen_iris:
+                    seen_iris.add(entry.concept.iri)
+                    deduped.append(entry)
+            labels[key] = deduped
+
+        self._labels_multi_cache = labels
+        total_entries = sum(len(v) for v in labels.values())
+        logger.info("Indexed %d FOLIO multi-labels (%d total entries)", len(labels), total_entries)
         return labels
 
     @staticmethod

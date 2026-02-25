@@ -47,16 +47,22 @@ class EntityRulerStage(PipelineStage):
             all_labels = folio_service.get_all_labels()
             if all_labels:
                 self.ruler.load_patterns(all_labels)
-                # Build IRI→branch map for populating branches on matches
-                for label_info in all_labels.values():
-                    fc = label_info.concept
+                logger.info("EntityRuler loaded %d FOLIO patterns", len(all_labels))
+            else:
+                logger.warning("No FOLIO labels found — EntityRuler will be empty")
+
+            # Build IRI→branch and IRI→concept maps from multi-label data
+            # so we know about ALL concepts including multi-branch entries
+            all_labels_multi = folio_service.get_all_labels_multi()
+            self._label_to_concepts: dict[str, list] = {}
+            for label_key, entries in all_labels_multi.items():
+                for entry in entries:
+                    fc = entry.concept
                     if fc.iri:
                         if fc.branch:
                             self._iri_to_branch[fc.iri] = fc.branch
                         self._iri_to_concept[fc.iri] = fc
-                logger.info("EntityRuler loaded %d FOLIO patterns", len(all_labels))
-            else:
-                logger.warning("No FOLIO labels found — EntityRuler will be empty")
+                self._label_to_concepts[label_key] = entries
         except Exception:
             logger.warning("Failed to load FOLIO patterns into EntityRuler", exc_info=True)
         self._patterns_loaded = True
@@ -75,29 +81,55 @@ class EntityRulerStage(PipelineStage):
         matches = self.ruler.find_matches(full_text)
 
         ruler_concepts = []
-        for match in matches:
-            confidence = _match_confidence(match)
-            branch = self._iri_to_branch.get(match.entity_id, "")
-            fc = self._iri_to_concept.get(match.entity_id)
-            ruler_concepts.append(
-                ConceptMatch(
-                    concept_text=match.text,
-                    folio_iri=match.entity_id,
-                    folio_label=fc.preferred_label if fc else None,
-                    folio_definition=fc.definition if fc else None,
-                    folio_alt_labels=fc.alternative_labels if fc and fc.alternative_labels else None,
-                    branches=[branch] if branch else [],
-                    branch_color=get_branch_color(branch) if branch else None,
-                    confidence=confidence,
-                    source="entity_ruler",
-                    match_type=match.match_type,
-                ).model_dump()
-            )
-
-        # Store match_type metadata separately for reconciliation
         match_types = {}
+        label_to_concepts = getattr(self, "_label_to_concepts", {})
+
         for match in matches:
-            match_types[match.text.lower()] = {
+            label_key = match.text.lower()
+            # Emit ALL concepts that share this label (multi-branch support)
+            multi_entries = label_to_concepts.get(label_key, [])
+            if multi_entries:
+                for entry in multi_entries:
+                    fc = entry.concept
+                    branch = fc.branch or ""
+                    is_multi_word = len(match.text.split()) > 1
+                    conf = _CONFIDENCE.get((entry.label_type, is_multi_word), 0.50)
+                    ruler_concepts.append(
+                        ConceptMatch(
+                            concept_text=match.text,
+                            folio_iri=fc.iri,
+                            folio_label=fc.preferred_label,
+                            folio_definition=fc.definition,
+                            folio_alt_labels=fc.alternative_labels if fc.alternative_labels else None,
+                            branches=[branch] if branch else [],
+                            branch_color=get_branch_color(branch) if branch else None,
+                            confidence=conf,
+                            source="entity_ruler",
+                            match_type=entry.label_type,
+                        ).model_dump()
+                    )
+            else:
+                # Fallback: use the single match from the EntityRuler
+                confidence = _match_confidence(match)
+                branch = self._iri_to_branch.get(match.entity_id, "")
+                fc = self._iri_to_concept.get(match.entity_id)
+                ruler_concepts.append(
+                    ConceptMatch(
+                        concept_text=match.text,
+                        folio_iri=match.entity_id,
+                        folio_label=fc.preferred_label if fc else None,
+                        folio_definition=fc.definition if fc else None,
+                        folio_alt_labels=fc.alternative_labels if fc and fc.alternative_labels else None,
+                        branches=[branch] if branch else [],
+                        branch_color=get_branch_color(branch) if branch else None,
+                        confidence=confidence,
+                        source="entity_ruler",
+                        match_type=match.match_type,
+                    ).model_dump()
+                )
+
+            # Store match_type metadata — one entry per match text
+            match_types[label_key] = {
                 "match_type": match.match_type,
                 "is_multi_word": len(match.text.split()) > 1,
                 "confidence": _match_confidence(match),
@@ -156,14 +188,33 @@ class EntityRulerStage(PipelineStage):
             )
             preliminary_annotations.append(ann)
 
-        # Resolve overlapping spans (prefer longer matches)
+        # Resolve overlapping spans: allow containment, resolve partial overlaps
         preliminary_annotations.sort(key=lambda a: (a.span.start, -(a.span.end - a.span.start)))
         deduped: list[Annotation] = []
-        last_end = -1
         for ann in preliminary_annotations:
-            if ann.span.start >= last_end:
+            dominated = False
+            for i, kept in enumerate(deduped):
+                if ann.span.start >= kept.span.end or ann.span.end <= kept.span.start:
+                    continue  # no overlap
+                # Identical span — skip
+                if ann.span.start == kept.span.start and ann.span.end == kept.span.end:
+                    dominated = True
+                    break
+                # Containment (either direction) — allow both
+                if (ann.span.start >= kept.span.start and ann.span.end <= kept.span.end):
+                    continue
+                if (kept.span.start >= ann.span.start and kept.span.end <= ann.span.end):
+                    continue
+                # Partial overlap — longer wins
+                ann_len = ann.span.end - ann.span.start
+                kept_len = kept.span.end - kept.span.start
+                if ann_len > kept_len:
+                    deduped[i] = ann
+                dominated = True
+                break
+            if not dominated:
                 deduped.append(ann)
-                last_end = ann.span.end
+        deduped.sort(key=lambda a: (a.span.start, -(a.span.end - a.span.start)))
 
         job.result.annotations = deduped
 

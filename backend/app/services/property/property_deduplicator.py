@@ -30,33 +30,43 @@ def deduplicate_properties(properties: list[PropertyAnnotation]) -> list[Propert
     kept: list[PropertyAnnotation] = []
 
     for prop in sorted_props:
-        if not kept:
-            kept.append(prop)
-            continue
+        dominated = False
+        for i, existing in enumerate(kept):
+            # No overlap
+            if prop.span.start >= existing.span.end or prop.span.end <= existing.span.start:
+                continue
 
-        last = kept[-1]
+            # Identical span — higher confidence wins
+            if prop.span.start == existing.span.start and prop.span.end == existing.span.end:
+                if prop.confidence > existing.confidence:
+                    kept[i] = prop
+                dominated = True
+                break
 
-        # Check overlap
-        if prop.span.start < last.span.end:
-            # Overlapping — decide winner
-            last_len = last.span.end - last.span.start
+            # Containment (either direction) — keep both
+            if (prop.span.start >= existing.span.start and prop.span.end <= existing.span.end):
+                continue
+            if (existing.span.start >= prop.span.start and existing.span.end <= prop.span.end):
+                continue
+
+            # Partial overlap — longer match wins
             prop_len = prop.span.end - prop.span.start
-
-            if prop_len > last_len:
-                # Longer match wins
-                last.lineage.append(StageEvent(
+            existing_len = existing.span.end - existing.span.start
+            if prop_len > existing_len:
+                existing.lineage.append(StageEvent(
                     stage="property_extraction",
                     action="merged",
                     detail=f"superseded by longer match: {prop.property_text}",
                     timestamp=datetime.now(timezone.utc).isoformat(),
                 ))
-                kept[-1] = prop
-            elif prop_len == last_len and prop.confidence > last.confidence:
-                # Same length, higher confidence wins
-                kept[-1] = prop
-            # else: existing match wins, skip this one
-        else:
+                kept[i] = prop
+            dominated = True
+            break
+
+        if not dominated:
             kept.append(prop)
+
+    kept.sort(key=lambda p: (p.span.start, -(p.span.end - p.span.start)))
 
     logger.info(
         "Property deduplication: %d → %d unique",

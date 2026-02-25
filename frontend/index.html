@@ -730,6 +730,22 @@
 
   .annotation-span:hover { background: rgba(59,100,224,0.25); }
 
+  /* Multi-branch dot indicators (rendered via JS after paint) */
+  .annotation-span .multi-branch-dots {
+    display: inline-flex;
+    gap: 2px;
+    position: absolute;
+    top: -6px;
+    right: -2px;
+    pointer-events: none;
+  }
+  .annotation-span .multi-branch-dots .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
   /* Annotation state styles */
   .annotation-span[data-state="preliminary"] {
     background: rgba(59,100,224,0.07);
@@ -1065,6 +1081,25 @@
   }
   .tooltip-note-slide textarea::placeholder { color: #b0b0c0; font-style: italic; }
   .tooltip-note-slide textarea:focus { outline: none; border-top-color: #3b64e0; }
+
+  /* Multi-branch graph overlay */
+  .multi-overlay { display: flex; flex-direction: column; align-items: center; gap: 0; min-width: 180px; }
+  .multi-pills-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .multi-pill {
+    border: 2px solid; border-radius: 8px; padding: 6px 10px; text-align: center;
+    cursor: pointer; transition: box-shadow 0.15s; min-width: 80px;
+  }
+  .multi-pill:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+  .multi-pill-branch { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .multi-pill-conf { font-size: 14px; font-weight: 700; margin: 2px 0; }
+  .multi-pill-actions { display: flex; gap: 4px; justify-content: center; align-items: center; }
+  .multi-pill-dismiss { background: none; border: none; cursor: pointer; color: #999; font-size: 12px; padding: 2px; }
+  .multi-pill-dismiss:hover { color: #c82828; }
+  .multi-svg { width: 100%; height: 16px; display: block; }
+  .multi-text-pill {
+    background: #f0f1f5; border-radius: 6px; padding: 4px 12px;
+    font-weight: 600; font-size: 13px; color: #1a1a2e;
+  }
 
   /* Lineage trail in tooltip */
   .concept-tooltip .tooltip-lineage { margin-top: 6px; padding-top: 0; border-top: none; }
@@ -3341,11 +3376,23 @@ function renderAnnotatedText(text, annotations, individuals, properties) {
     let html = segText;
     if (prop) html = _buildPropertySpan(prop, html);
     if (ind) html = _buildIndividualSpan(ind, html);
-    if (ann) html = _buildAnnotationSpan(ann, html, ind || prop ? true : false);
+    if (ann) html = _buildAnnotationSpan(ann, html, ind || prop ? true : false, coveringAnns);
     pieces.push(html);
   }
 
   container.innerHTML = pieces.join('');
+
+  // Add multi-branch dot indicators
+  container.querySelectorAll('.annotation-span[data-multi-count]').forEach(el => {
+    const count = parseInt(el.dataset.multiCount, 10);
+    if (count >= 2) {
+      const dotColors = (el.style.getPropertyValue('--multi-dots') || '').split(',').filter(Boolean);
+      if (dotColors.length >= 2) {
+        const dotsHtml = dotColors.map(c => `<span class="dot" style="background:${c.trim()}"></span>`).join('');
+        el.insertAdjacentHTML('beforeend', `<span class="multi-branch-dots">${dotsHtml}</span>`);
+      }
+    }
+  });
 
   // Add click handlers for annotation spans
   container.querySelectorAll('.annotation-span').forEach(el => {
@@ -3361,13 +3408,19 @@ function renderAnnotatedText(text, annotations, individuals, properties) {
   });
 }
 
-function _buildAnnotationSpan(ann, innerHtml, rawInner) {
+function _buildAnnotationSpan(ann, innerHtml, rawInner, allCoveringAnns) {
   const c = ann.concepts[0];
   const branch = (c.branches && c.branches.length > 0) ? c.branches[0] : (c.branch || '');
   const state = ann.state || c.state || 'confirmed';
   const altCount = ann.concepts.length - 1;
+  // Multi-branch: collect all annotation IDs and count
+  const multiAnns = allCoveringAnns || [ann];
+  const allAnnIds = multiAnns.map(a => a.id || '').filter(Boolean);
+  const multiCount = allAnnIds.length;
   const dataAttrs = [
     `data-ann-id="${escapeAttr(ann.id || '')}"`,
+    `data-ann-ids="${escapeAttr(allAnnIds.join(','))}"`,
+    `data-multi-count="${multiCount}"`,
     `data-iri="${escapeAttr(c.folio_iri || '')}"`,
     `data-label="${escapeAttr(c.folio_label || c.concept_text)}"`,
     `data-def="${escapeAttr(c.folio_definition || '')}"`,
@@ -3383,6 +3436,25 @@ function _buildAnnotationSpan(ann, innerHtml, rawInner) {
     if (confVal < 0.5) confStyle = 'opacity:0.55;border-bottom-style:dotted;';
     else if (confVal < 0.8) confStyle = 'opacity:0.75;border-bottom-style:dashed;';
   }
+
+  // Multi-branch: stacked border colors and dot indicators
+  if (multiCount >= 2) {
+    const branchColors = multiAnns.map(a => {
+      const ac = a.concepts[0];
+      const ab = (ac.branches && ac.branches.length > 0) ? ac.branches[0] : (ac.branch || '');
+      return BRANCH_COLORS[ab] || '#6b6b80';
+    });
+    // Stacked bottom border via gradient
+    const gradStops = branchColors.map((col, i) => {
+      const pct1 = (i / branchColors.length * 100).toFixed(1);
+      const pct2 = ((i + 1) / branchColors.length * 100).toFixed(1);
+      return `${col} ${pct1}%, ${col} ${pct2}%`;
+    }).join(', ');
+    confStyle += `border-bottom:3px solid;border-image:linear-gradient(to right, ${gradStops}) 1;`;
+    // Dot indicator colors encoded as CSS custom property
+    confStyle += `--multi-dots:${branchColors.join(',')};`;
+  }
+
   return `<span class="annotation-span" ${dataAttrs}${confStyle ? ` style="${confStyle}"` : ''}>${innerHtml}</span>`;
 }
 
@@ -3456,8 +3528,13 @@ function showIndividualTooltip(event, el) {
     urlLine = `<div style="font-size:10px;margin-top:2px"><a href="${escapeAttr(ind.url)}" target="_blank" style="color:#3b64e0">View source</a></div>`;
   }
 
+  // Show class chips on line 1 if available; fall back to type badge only when no class links
+  const headerLine = classChips
+    ? classChips
+    : `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px" class="ind-type-badge ${typeClass}">${typeBadge}</div>`;
+
   tooltip.innerHTML = `
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px" class="ind-type-badge ${typeClass}">${typeBadge}</div>
+    ${headerLine}
     <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-top:2px">${escapeHtml(name)}</div>
     <div class="tooltip-main-row">
       <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}</span>
@@ -3465,7 +3542,6 @@ function showIndividualTooltip(event, el) {
     </div>
     ${normalizedLine}
     ${urlLine}
-    ${classChips}
   `;
   tooltip.classList.add('visible');
 
@@ -3561,6 +3637,14 @@ function showTooltip(event, el) {
   const branch = el.dataset.branch;
   const conf = parseFloat(el.dataset.confidence);
   const annId = el.dataset.annId;
+  const multiCount = parseInt(el.dataset.multiCount || '1', 10);
+  const allAnnIds = (el.dataset.annIds || annId || '').split(',').filter(Boolean);
+
+  // Multi-branch: show graph overlay instead of standard tooltip
+  if (multiCount >= 2 && allAnnIds.length >= 2) {
+    _showMultiBranchOverlay(tooltip, el, allAnnIds);
+    return;
+  }
 
   const branchColor = BRANCH_COLORS[branch] || '#6b6b80';
   const confPct = conf > 1 ? conf : conf * 100;
@@ -3637,6 +3721,82 @@ function showTooltip(event, el) {
     console.warn('showTooltip: no iri_hash found for annotation', annId, 'annData:', annData, 'data-iri:', el.dataset.iri);
   }
 
+  _positionTooltip(tooltip, el);
+}
+
+/** Multi-branch graph overlay: shows each branch as a pill connected to the text pill */
+function _showMultiBranchOverlay(tooltip, el, annIds) {
+  const matchedText = el.textContent.replace(/\s+/g, ' ').trim();
+
+  // Build pills for each branch annotation
+  let pillsHtml = '';
+  let svgLines = '';
+  const pillCount = annIds.length;
+
+  for (let i = 0; i < annIds.length; i++) {
+    const aid = annIds[i];
+    const aData = _annotationDataById[aid];
+    if (!aData || !aData.concepts || !aData.concepts[0]) continue;
+    const ac = aData.concepts[0];
+    const ab = (ac.branches && ac.branches.length > 0) ? ac.branches[0] : '';
+    const aColor = BRANCH_COLORS[ab] || '#6b6b80';
+    const aConf = typeof ac.confidence === 'number' ? (ac.confidence > 1 ? ac.confidence : ac.confidence * 100) : 0;
+    const existingRating = _feedbackCache[aid] || null;
+
+    pillsHtml += `
+      <div class="multi-pill" style="border-color:${aColor};background:${aColor}12" data-pill-idx="${i}">
+        <div class="multi-pill-branch" style="color:${aColor}">${escapeHtml(ab || 'Unknown')}</div>
+        <div class="multi-pill-conf">${aConf.toFixed(0)}%</div>
+        <div class="multi-pill-actions">
+          <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" onclick="submitFeedback(this, 'up')" data-rating="up" data-ann-id="${escapeAttr(aid)}">&#x1F44D;</button>
+          <button class="tooltip-feedback-btn${existingRating === 'down' ? ' active-down' : ''}" onclick="submitFeedback(this, 'down')" data-rating="down" data-ann-id="${escapeAttr(aid)}">&#x1F44E;</button>
+          <button class="multi-pill-dismiss" onclick="dismissAnnotation('${escapeAttr(aid)}')" title="Remove this branch">${_removeTagIcon}</button>
+        </div>
+      </div>`;
+
+    // SVG line from pill center to text pill center (computed after render)
+    const pillX = (i + 0.5) / pillCount * 100;
+    svgLines += `<line class="multi-line" x1="${pillX}%" y1="100%" x2="50%" y2="0%" stroke="${aColor}" stroke-width="1.5" stroke-opacity="0.5"/>`;
+  }
+
+  tooltip.innerHTML = `
+    <div class="multi-overlay">
+      <div class="multi-pills-row">${pillsHtml}</div>
+      <svg class="multi-svg" preserveAspectRatio="none">${svgLines}</svg>
+      <div class="multi-text-pill">${escapeHtml(matchedText)}</div>
+    </div>
+  `;
+  tooltip.classList.add('visible');
+
+  // Load detail for the first (highest confidence) annotation
+  const firstAid = annIds[0];
+  const firstData = _annotationDataById[firstAid];
+  if (firstData && firstData.concepts && firstData.concepts[0]) {
+    const c0 = firstData.concepts[0];
+    const iriHash = c0.iri_hash || (c0.folio_iri ? c0.folio_iri.split('/').pop() : null);
+    if (iriHash) loadConceptDetail(iriHash, firstAid);
+  }
+
+  // Make each pill clickable to load its concept in the detail panel
+  tooltip.querySelectorAll('.multi-pill').forEach(pill => {
+    pill.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return; // don't intercept button clicks
+      const idx = parseInt(pill.dataset.pillIdx, 10);
+      const aid = annIds[idx];
+      const aData = _annotationDataById[aid];
+      if (aData && aData.concepts && aData.concepts[0]) {
+        const ac = aData.concepts[0];
+        const iriHash = ac.iri_hash || (ac.folio_iri ? ac.folio_iri.split('/').pop() : null);
+        if (iriHash) loadConceptDetail(iriHash, aid);
+      }
+    });
+  });
+
+  _positionTooltip(tooltip, el);
+}
+
+/** Shared tooltip positioning logic */
+function _positionTooltip(tooltip, el) {
   // Position tooltip — constrain to the annotated text panel so it doesn't cover the detail pane
   const rect = el.getBoundingClientRect();
   const panelRight = el.closest('.panel-right');

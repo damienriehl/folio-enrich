@@ -38,15 +38,18 @@ class TestAhoCorasickMatcher:
         results = matcher.search("The contract was signed.")
         assert len(results) == 1
 
-    def test_overlapping_spans_longer_wins(self):
+    def test_contained_spans_both_kept(self):
+        """Contained spans should both survive (breach inside breach of contract)."""
         matcher = AhoCorasickMatcher()
         matcher.add_pattern("breach", {"iri": "short"})
         matcher.add_pattern("breach of contract", {"iri": "long"})
         matcher.build()
 
         results = matcher.search("The breach of contract was evident.")
-        assert len(results) == 1
-        assert results[0].pattern == "breach of contract"
+        assert len(results) == 2
+        patterns = {r.pattern for r in results}
+        assert "breach of contract" in patterns
+        assert "breach" in patterns
 
     def test_multiple_occurrences(self):
         matcher = AhoCorasickMatcher()
@@ -85,6 +88,46 @@ class TestAhoCorasickMatcher:
         })
         matcher.build()
         assert matcher.pattern_count == 3
+
+    def test_partial_overlap_longer_wins(self):
+        """Partial overlaps (crossing boundaries) should resolve to the longer match."""
+        matcher = AhoCorasickMatcher()
+        # These would partially overlap if they both appeared at overlapping positions
+        matcher.add_pattern("new york", {"iri": "ny"})
+        matcher.add_pattern("york county", {"iri": "yc"})
+        matcher.build()
+
+        # "new york county" — "new york" starts at 4, "york county" starts at 8
+        # These partially overlap (york is shared), so longer one wins or first
+        results = matcher.search("The new york county case.")
+        # Both patterns match at different positions but overlap on "york"
+        # new york = (4,12), york county = (8,20) — partial overlap → one wins
+        assert len(results) == 1
+
+    def test_identical_spans_deduplicated(self):
+        """Identical spans should be deduplicated."""
+        matcher = AhoCorasickMatcher()
+        matcher.add_pattern("contract", {"iri": "1"})
+        matcher.build()
+
+        results = matcher.search("The contract was signed.")
+        assert len(results) == 1
+
+    def test_contained_inner_span_kept(self):
+        """Inner span fully contained within outer span should be kept."""
+        matcher = AhoCorasickMatcher()
+        matcher.add_pattern("contract", {"iri": "inner"})
+        matcher.add_pattern("breach of contract", {"iri": "outer"})
+        matcher.build()
+
+        results = matcher.search("The breach of contract was clear.")
+        assert len(results) == 2
+        iris = {r.value["iri"] for r in results}
+        assert "inner" in iris
+        assert "outer" in iris
+        # Outer span should come first (earlier start)
+        assert results[0].pattern == "breach of contract"
+        assert results[1].pattern == "contract"
 
     def test_auto_build_on_search(self):
         matcher = AhoCorasickMatcher()

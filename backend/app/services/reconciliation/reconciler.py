@@ -42,6 +42,20 @@ class ReconciliationResult:
     category: str  # "both_agree", "ruler_only", "llm_only", "conflict_resolved"
 
 
+def _build_text_and_key_maps(concepts: list[ConceptMatch]) -> tuple[
+    dict[tuple[str, str], ConceptMatch],
+    dict[str, list[ConceptMatch]],
+]:
+    """Build (text,IRI)-keyed map and text-only grouped map from concepts."""
+    by_key: dict[tuple[str, str], ConceptMatch] = {}
+    by_text: dict[str, list[ConceptMatch]] = {}
+    for c in concepts:
+        k = (c.concept_text.lower(), c.folio_iri or "")
+        by_key[k] = c
+        by_text.setdefault(c.concept_text.lower(), []).append(c)
+    return by_key, by_text
+
+
 class Reconciler:
     """Merge EntityRuler and LLM concept identification results."""
 
@@ -53,44 +67,82 @@ class Reconciler:
         ruler_concepts: list[ConceptMatch],
         llm_concepts: list[ConceptMatch],
     ) -> list[ReconciliationResult]:
-        ruler_by_text = {c.concept_text.lower(): c for c in ruler_concepts}
-        llm_by_text = {c.concept_text.lower(): c for c in llm_concepts}
+        ruler_by_key, ruler_by_text = _build_text_and_key_maps(ruler_concepts)
+        llm_by_key, llm_by_text = _build_text_and_key_maps(llm_concepts)
 
-        all_keys = set(ruler_by_text.keys()) | set(llm_by_text.keys())
         results: list[ReconciliationResult] = []
+        handled_ruler_keys: set[tuple[str, str]] = set()
+        handled_llm_keys: set[tuple[str, str]] = set()
 
+        # Pass 1: Exact (text, IRI) matching — both sides have matching IRI
+        all_keys = set(ruler_by_key.keys()) | set(llm_by_key.keys())
         for key in all_keys:
-            in_ruler = key in ruler_by_text
-            in_llm = key in llm_by_text
+            text, iri = key
+            in_ruler = key in ruler_by_key
+            in_llm = key in llm_by_key
 
             if in_ruler and in_llm:
-                # Both agree: accept with diminishing boost
-                concept = llm_by_text[key]
-                base = max(ruler_by_text[key].confidence, llm_by_text[key].confidence)
+                concept = llm_by_key[key]
+                base = max(ruler_by_key[key].confidence, llm_by_key[key].confidence)
                 concept.confidence = min(1.0, base + _diminishing_boost(base))
                 concept.source = "reconciled"
                 results.append(ReconciliationResult(concept=concept, category="both_agree"))
+                handled_ruler_keys.add(key)
+                handled_llm_keys.add(key)
 
-            elif in_ruler and not in_llm:
-                # EntityRuler only: accept based on confidence threshold
-                # Multi-word preferred (0.95) and single-word preferred (0.80) pass
-                # Multi-word alt (0.65) passes
-                # Single-word alt (0.35) is rejected — too many false positives
-                concept = ruler_by_text[key]
-                if concept.confidence >= RULER_ONLY_MIN_CONFIDENCE:
-                    concept.source = "entity_ruler"
-                    results.append(ReconciliationResult(concept=concept, category="ruler_only"))
-                else:
-                    logger.debug(
-                        "Filtered ruler-only concept '%s' (confidence=%.2f < %.2f threshold)",
-                        key, concept.confidence, RULER_ONLY_MIN_CONFIDENCE,
-                    )
+        # Pass 2: Cross-match empty-IRI concepts by text alone
+        for key, concept in ruler_by_key.items():
+            if key in handled_ruler_keys:
+                continue
+            text, iri = key
+            if not iri:
+                # Empty-IRI ruler concept — try to match any LLM concept with same text
+                for lc in llm_by_text.get(text, []):
+                    lkey = (text, lc.folio_iri or "")
+                    if lkey not in handled_llm_keys:
+                        base = max(concept.confidence, lc.confidence)
+                        lc.confidence = min(1.0, base + _diminishing_boost(base))
+                        lc.source = "reconciled"
+                        results.append(ReconciliationResult(concept=lc, category="both_agree"))
+                        handled_ruler_keys.add(key)
+                        handled_llm_keys.add(lkey)
+                        break
 
-            elif in_llm and not in_ruler:
-                # LLM only: accept, mark as contextual
-                concept = llm_by_text[key]
-                concept.source = "llm"
-                results.append(ReconciliationResult(concept=concept, category="llm_only"))
+        for key, concept in llm_by_key.items():
+            if key in handled_llm_keys:
+                continue
+            text, iri = key
+            if not iri:
+                # Empty-IRI LLM concept — try to match any ruler concept with same text
+                for rc in ruler_by_text.get(text, []):
+                    rkey = (text, rc.folio_iri or "")
+                    if rkey not in handled_ruler_keys:
+                        base = max(concept.confidence, rc.confidence)
+                        rc.confidence = min(1.0, base + _diminishing_boost(base))
+                        rc.source = "reconciled"
+                        results.append(ReconciliationResult(concept=rc, category="both_agree"))
+                        handled_llm_keys.add(key)
+                        handled_ruler_keys.add(rkey)
+                        break
+
+        # Pass 3: Remaining unmatched concepts
+        for key, concept in ruler_by_key.items():
+            if key in handled_ruler_keys:
+                continue
+            if concept.confidence >= RULER_ONLY_MIN_CONFIDENCE:
+                concept.source = "entity_ruler"
+                results.append(ReconciliationResult(concept=concept, category="ruler_only"))
+            else:
+                logger.debug(
+                    "Filtered ruler-only concept '%s' (confidence=%.2f < %.2f threshold)",
+                    key, concept.confidence, RULER_ONLY_MIN_CONFIDENCE,
+                )
+
+        for key, concept in llm_by_key.items():
+            if key in handled_llm_keys:
+                continue
+            concept.source = "llm"
+            results.append(ReconciliationResult(concept=concept, category="llm_only"))
 
         return results
 
@@ -109,72 +161,116 @@ class Reconciler:
         if self._embedding_service is None or self._embedding_service.index_size == 0:
             return self.reconcile(ruler_concepts, llm_concepts)
 
-        ruler_by_text = {c.concept_text.lower(): c for c in ruler_concepts}
-        llm_by_text = {c.concept_text.lower(): c for c in llm_concepts}
-        all_keys = set(ruler_by_text.keys()) | set(llm_by_text.keys())
-        results: list[ReconciliationResult] = []
+        ruler_by_key, ruler_by_text = _build_text_and_key_maps(ruler_concepts)
+        llm_by_key, llm_by_text = _build_text_and_key_maps(llm_concepts)
 
-        # First pass: categorize keys and collect IRI conflicts for batch resolution
+        results: list[ReconciliationResult] = []
+        handled_ruler_keys: set[tuple[str, str]] = set()
+        handled_llm_keys: set[tuple[str, str]] = set()
         conflicts: list[tuple[str, ConceptMatch, ConceptMatch]] = []
 
+        # Pass 1: Exact (text, IRI) matching
+        all_keys = set(ruler_by_key.keys()) | set(llm_by_key.keys())
         for key in all_keys:
-            in_ruler = key in ruler_by_text
-            in_llm = key in llm_by_text
+            text, iri = key
+            in_ruler = key in ruler_by_key
+            in_llm = key in llm_by_key
 
             if in_ruler and in_llm:
-                rc = ruler_by_text[key]
-                lc = llm_by_text[key]
-
+                rc = ruler_by_key[key]
+                lc = llm_by_key[key]
                 if rc.folio_iri and lc.folio_iri and rc.folio_iri == lc.folio_iri:
                     concept = lc
                     base = max(rc.confidence, lc.confidence)
                     concept.confidence = min(1.0, base + _diminishing_boost(base))
                     concept.source = "reconciled"
                     results.append(ReconciliationResult(concept=concept, category="both_agree"))
-                elif rc.folio_iri and lc.folio_iri:
-                    conflicts.append((key, rc, lc))
-                elif rc.folio_iri and not lc.folio_iri:
-                    # Ruler has a direct IRI lookup; preserve it
-                    concept = rc
-                    base = max(rc.confidence, lc.confidence)
-                    concept.confidence = min(1.0, base + _diminishing_boost(base))
-                    concept.source = "reconciled"
-                    results.append(ReconciliationResult(concept=concept, category="both_agree"))
                 else:
                     concept = lc
                     base = max(rc.confidence, lc.confidence)
                     concept.confidence = min(1.0, base + _diminishing_boost(base))
                     concept.source = "reconciled"
                     results.append(ReconciliationResult(concept=concept, category="both_agree"))
+                handled_ruler_keys.add(key)
+                handled_llm_keys.add(key)
 
-            elif in_ruler and not in_llm:
-                concept = ruler_by_text[key]
-                if concept.confidence >= RULER_ONLY_MIN_CONFIDENCE:
-                    concept.source = "entity_ruler"
-                    results.append(ReconciliationResult(concept=concept, category="ruler_only"))
-                else:
-                    logger.debug(
-                        "Filtered ruler-only concept '%s' (confidence=%.2f < %.2f threshold)",
-                        key, concept.confidence, RULER_ONLY_MIN_CONFIDENCE,
-                    )
+        # Pass 2: Cross-match empty-IRI concepts by text, handling IRI asymmetry
+        for key, concept in ruler_by_key.items():
+            if key in handled_ruler_keys:
+                continue
+            text, iri = key
+            for lc in llm_by_text.get(text, []):
+                lkey = (text, lc.folio_iri or "")
+                if lkey in handled_llm_keys:
+                    continue
 
-            elif in_llm and not in_ruler:
-                concept = llm_by_text[key]
-                concept.source = "llm"
-                results.append(ReconciliationResult(concept=concept, category="llm_only"))
+                rc = concept
+                # One or both have no IRI — merge
+                if not rc.folio_iri or not lc.folio_iri:
+                    winner = rc if rc.folio_iri else lc
+                    base = max(rc.confidence, lc.confidence)
+                    winner.confidence = min(1.0, base + _diminishing_boost(base))
+                    winner.source = "reconciled"
+                    results.append(ReconciliationResult(concept=winner, category="both_agree"))
+                    handled_ruler_keys.add(key)
+                    handled_llm_keys.add(lkey)
+                    break
+                # Both have IRIs but they differ — IRI conflict for embedding triage
+                elif rc.folio_iri != lc.folio_iri:
+                    conflicts.append((text, rc, lc))
+                    handled_ruler_keys.add(key)
+                    handled_llm_keys.add(lkey)
+                    break
+
+        for key, concept in llm_by_key.items():
+            if key in handled_llm_keys:
+                continue
+            text, iri = key
+            if not iri:
+                for rc in ruler_by_text.get(text, []):
+                    rkey = (text, rc.folio_iri or "")
+                    if rkey in handled_ruler_keys:
+                        continue
+                    winner = rc if rc.folio_iri else concept
+                    base = max(concept.confidence, rc.confidence)
+                    winner.confidence = min(1.0, base + _diminishing_boost(base))
+                    winner.source = "reconciled"
+                    results.append(ReconciliationResult(concept=winner, category="both_agree"))
+                    handled_llm_keys.add(key)
+                    handled_ruler_keys.add(rkey)
+                    break
+
+        # Pass 3: Remaining unmatched
+        for key, concept in ruler_by_key.items():
+            if key in handled_ruler_keys:
+                continue
+            if concept.confidence >= RULER_ONLY_MIN_CONFIDENCE:
+                concept.source = "entity_ruler"
+                results.append(ReconciliationResult(concept=concept, category="ruler_only"))
+            else:
+                logger.debug(
+                    "Filtered ruler-only concept '%s' (confidence=%.2f < %.2f threshold)",
+                    key, concept.confidence, RULER_ONLY_MIN_CONFIDENCE,
+                )
+
+        for key, concept in llm_by_key.items():
+            if key in handled_llm_keys:
+                continue
+            concept.source = "llm"
+            results.append(ReconciliationResult(concept=concept, category="llm_only"))
 
         # Batch resolve IRI conflicts via embedding similarity
         if conflicts:
             pairs = []
-            for key, rc, lc in conflicts:
+            for text, rc, lc in conflicts:
                 ruler_label = rc.folio_label or rc.concept_text
                 llm_label = lc.folio_label or lc.concept_text
-                pairs.append((key, ruler_label))
-                pairs.append((key, llm_label))
+                pairs.append((text, ruler_label))
+                pairs.append((text, llm_label))
 
             sims = self._embedding_service.similarity_batch(pairs)
 
-            for i, (key, rc, lc) in enumerate(conflicts):
+            for i, (text, rc, lc) in enumerate(conflicts):
                 ruler_sim = sims[i * 2]
                 llm_sim = sims[i * 2 + 1]
 
@@ -192,8 +288,8 @@ class Reconciler:
                     rc_defn = rc.folio_definition or ""
                     lc_defn = lc.folio_definition or ""
                     if rc_defn or lc_defn:
-                        rc_overlap = _definition_overlap_score(key, rc_defn)
-                        lc_overlap = _definition_overlap_score(key, lc_defn)
+                        rc_overlap = _definition_overlap_score(text, rc_defn)
+                        lc_overlap = _definition_overlap_score(text, lc_defn)
                         if rc_overlap > lc_overlap and rc_overlap > 0:
                             rc.source = "reconciled"
                             results.append(ReconciliationResult(concept=rc, category="conflict_resolved"))
