@@ -1841,12 +1841,13 @@
       <div id="detailLoading" class="detail-loading" style="display:none"><span class="spinner"></span> Loading concept...</div>
       <div id="detailContent" style="display:none">
         <div id="detailAncestry" class="detail-section"></div>
+        <div id="detailSource" class="detail-section"></div>
         <div id="detailInfo" class="detail-section"></div>
         <div id="detailAlternatives" class="detail-section"></div>
-        <div id="detailLineage" class="detail-section"></div>
         <div id="detailDag" class="detail-section"></div>
         <div id="detailSiblings" class="detail-section"></div>
         <div id="detailRelated" class="detail-section"></div>
+        <div id="detailLineage" class="detail-section"></div>
         <div id="detailNotes" class="detail-section"></div>
         <div id="detailGraphBtn" class="detail-section"></div>
       </div>
@@ -3432,6 +3433,8 @@ async function promoteConcept(annId, conceptIndex) {
   const annData = _annotationDataById[annId];
   if (!annData) return;
   const oldPrimaryIri = annData.concepts[0] ? annData.concepts[0].folio_iri : null;
+  const oldPrimaryLabel = annData.concepts[0] ? annData.concepts[0].folio_label : null;
+  const promotedLabel = annData.concepts[conceptIndex] ? annData.concepts[conceptIndex].folio_label : null;
 
   try {
     const resp = await fetch(`${API}/enrich/${currentJobId}/annotations/${annId}/promote`, {
@@ -3473,7 +3476,9 @@ async function promoteConcept(annId, conceptIndex) {
         a.concepts.some(c => c.folio_iri === result.promoted_iri)
       );
       if (othersWithSameIri.length > 0) {
-        showCascadeModal(othersWithSameIri, oldPrimaryIri, result.promoted_iri);
+        showCascadeModal(othersWithSameIri, oldPrimaryIri, result.promoted_iri,
+          oldPrimaryLabel || oldPrimaryIri.split('/').pop(),
+          promotedLabel || result.promoted_iri.split('/').pop());
       }
     }
   } catch (e) {
@@ -3508,14 +3513,13 @@ async function cascadePromote(oldIri, newIri, annotationIds) {
 // ---- Cascade promote modal ----
 let _cascadeState = {};
 
-function showCascadeModal(annotations, oldIri, newIri) {
-  const oldLabel = oldIri.split('/').pop();
-  const newLabel = newIri.split('/').pop();
+function showCascadeModal(annotations, oldIri, newIri, oldLabel, newLabel) {
   _cascadeState = { oldIri, newIri, annotations };
 
   document.getElementById('cascadeTitle').textContent = 'Update related annotations';
-  document.getElementById('cascadeDesc').textContent =
-    `You promoted "${newLabel}" over "${oldLabel}". ${annotations.length} other annotation${annotations.length > 1 ? 's' : ''} also use "${oldLabel}" and can be updated:`;
+  const n = annotations.length;
+  document.getElementById('cascadeDesc').innerHTML =
+    `You promoted <strong>${escapeHtml(newLabel)}</strong> over <strong>${escapeHtml(oldLabel)}</strong>.<br>${n} other annotation${n > 1 ? 's' : ''} also use <strong>${escapeHtml(oldLabel)}</strong>. Update them?`;
 
   const list = document.getElementById('cascadeList');
   list.innerHTML = annotations.map(ann => {
@@ -4087,10 +4091,12 @@ function renderDetailAlternatives(annId) {
 }
 
 async function renderDetailLineage(annId) {
-  const container = document.getElementById('detailLineage');
-  if (!annId || !currentJobId) { container.innerHTML = ''; return; }
+  const srcContainer = document.getElementById('detailSource');
+  const stagesContainer = document.getElementById('detailLineage');
+  if (!annId || !currentJobId) { srcContainer.innerHTML = ''; stagesContainer.innerHTML = ''; return; }
 
-  container.innerHTML = '<div class="detail-section-title">Pipeline Lineage</div><div style="color:#6b6b80;font-size:12px"><span class="spinner"></span> Loading...</div>';
+  srcContainer.innerHTML = '<div style="color:#6b6b80;font-size:12px"><span class="spinner"></span> Loading...</div>';
+  stagesContainer.innerHTML = '';
 
   try {
     const resp = await fetch(`${API}/enrich/${currentJobId}/annotations/${annId}/lineage`);
@@ -4103,9 +4109,8 @@ async function renderDetailLineage(annId) {
     const candidateLabel = (annData && annData.concepts && annData.concepts.length > 0)
       ? (annData.concepts[0].folio_label || annData.concepts[0].concept_text || '') : '';
 
-    let html = '<div class="detail-section-title">Pipeline Lineage</div>';
-
-    // Context block
+    // Source context block (rendered near top, below tree)
+    let srcHtml = '';
     if (sentenceText || candidateLabel) {
       let lines = '';
       if (spanText && sentenceText) {
@@ -4120,9 +4125,12 @@ async function renderDetailLineage(annId) {
       if (candidateLabel) {
         lines += `<div class="ctx-line"><span class="ctx-line-label">Match:</span> <span class="ctx-match-value">${escapeHtml(candidateLabel)}</span></div>`;
       }
-      html += `<div class="lineage-context-block">${lines}</div>`;
+      srcHtml = `<div class="lineage-context-block">${lines}</div>`;
     }
+    srcContainer.innerHTML = srcHtml;
 
+    // Pipeline Lineage stage rows (rendered lower, between Related and Notes)
+    let stagesHtml = '<div class="detail-section-title">Pipeline Lineage</div>';
     if (data.lineage && data.lineage.length > 0) {
       const stageLabels = {
         entity_ruler: 'Entity Ruler', semantic_ruler: 'Semantic Ruler',
@@ -4130,9 +4138,9 @@ async function renderDetailLineage(annId) {
         resolution: 'Resolution', branch_judge: 'Branch Judge',
         string_matching: 'String Matching',
       };
-      html += '<ul style="list-style:none;padding:0;font-size:11px;color:#6b6b80">';
+      stagesHtml += '<ul style="list-style:none;padding:0;font-size:11px;color:#6b6b80">';
       data.lineage.forEach(e => {
-        html += `<li style="padding:3px 0;border-bottom:1px solid #f0f0f4;display:flex;gap:6px">
+        stagesHtml += `<li style="padding:3px 0;border-bottom:1px solid #f0f0f4;display:flex;gap:6px">
           <span class="lineage-stage-name" style="font-weight:600;color:#1a1a2e;min-width:100px;font-size:11px">${escapeHtml(stageLabels[e.stage] || e.stage)}</span>
           <span class="lineage-action" style="color:#3b64e0;min-width:90px;font-size:10px;font-weight:600">${escapeHtml((e.action || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))}</span>
           ${e.confidence != null ? `<span style="font-weight:600;color:#555;font-size:10px;background:#f0f0f4;padding:0 4px;border-radius:3px">${(e.confidence * 100).toFixed(0)}%</span>` : ''}
@@ -4140,13 +4148,14 @@ async function renderDetailLineage(annId) {
           ${e.reasoning ? `<span class="lineage-reasoning">${escapeHtml(e.reasoning)}</span>` : ''}
         </li>`;
       });
-      html += '</ul>';
+      stagesHtml += '</ul>';
     } else {
-      html += '<div style="color:#a0a0b0;font-size:12px">No lineage recorded</div>';
+      stagesHtml += '<div style="color:#a0a0b0;font-size:12px">No lineage recorded</div>';
     }
-    container.innerHTML = html;
+    stagesContainer.innerHTML = stagesHtml;
   } catch (e) {
-    container.innerHTML = '<div class="detail-section-title">Pipeline Lineage</div><div style="color:#991b1b;font-size:12px">Failed to load lineage</div>';
+    srcContainer.innerHTML = '';
+    stagesContainer.innerHTML = '<div class="detail-section-title">Pipeline Lineage</div><div style="color:#991b1b;font-size:12px">Failed to load lineage</div>';
   }
 }
 
