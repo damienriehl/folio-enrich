@@ -496,6 +496,14 @@
   .dag-pill:hover { opacity: 0.8; }
   .dag-label { font-size: 11px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
   .dag-edge { fill: none; stroke: #b0b0c0; stroke-width: 1.5; }
+  .dag-toggle-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 600; color: #6b6b80; cursor: pointer;
+    padding: 4px 2px; user-select: none; background: none; border: none;
+    margin-right: 10px;
+  }
+  .dag-toggle-btn:hover { color: #3b64e0; }
+  .dag-toggles-row { display: flex; flex-wrap: wrap; gap: 0; margin-bottom: 4px; }
 
   /* Concept pills */
   .concept-pill-list { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1919,6 +1927,7 @@
     <div class="panel-header">
       <h2>Concept Detail</h2>
       <div style="display:flex;align-items:center;gap:6px">
+        <button class="detail-dismiss-btn" id="detailBulkDismissBtn" style="display:none"></button>
         <button class="detail-dismiss-btn" id="detailDismissBtn" style="display:none"></button>
         <button class="small secondary" onclick="closeDetailPanel()" title="Close detail panel" style="padding:2px 8px;font-size:14px;line-height:1">&times;</button>
       </div>
@@ -1932,7 +1941,6 @@
         <div id="detailInfo" class="detail-section"></div>
         <div id="detailAlternatives" class="detail-section"></div>
         <div id="detailDag" class="detail-section"></div>
-        <div id="detailSiblings" class="detail-section"></div>
         <div id="detailRelated" class="detail-section"></div>
         <div id="detailLineage" class="detail-section"></div>
         <div id="detailNotes" class="detail-section"></div>
@@ -3189,6 +3197,23 @@ function showTooltip(event, el) {
     ? `restoreAnnotation('${escapeAttr(annId)}')`
     : `dismissAnnotation('${escapeAttr(annId)}')`;
   const dismissLabel = isRejected ? _restoreTagIcon + ' Restore tag' : _removeTagIcon + ' Remove tag';
+
+  // Count other non-rejected instances of the same concept for bulk remove option
+  const annData = annId ? _annotationDataById[annId] : null;
+  const primaryIri = annData?.concepts?.[0]?.folio_iri;
+  let sameConceptCount = 0;
+  if (primaryIri && !isRejected) {
+    for (const id in _annotationDataById) {
+      if (id === annId) continue;
+      const a = _annotationDataById[id];
+      if (a.state === 'rejected' || _dismissedCache[id]) continue;
+      if (a.concepts?.[0]?.folio_iri === primaryIri) sameConceptCount++;
+    }
+  }
+  const bulkRemoveBtn = sameConceptCount > 0
+    ? `<button class="tooltip-dismiss-btn" onclick="bulkDismiss('${escapeAttr(primaryIri)}')" title="Remove all instances of this concept">${_removeTagIcon} Remove all ${sameConceptCount + 1}</button>`
+    : '';
+
   tooltip.innerHTML = `
     <div class="tooltip-branch" style="color:${branchColor}">${escapeHtml(branch || 'Unknown')}</div>
     <div class="tooltip-label">${escapeHtml(label)}</div>
@@ -3199,6 +3224,7 @@ function showTooltip(event, el) {
           <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" data-rating="up" onclick="submitFeedback(this, 'up')">&#x1F44D;</button>
           <button class="tooltip-feedback-btn${existingRating === 'down' ? ' active-down' : ''}" data-rating="down" onclick="submitFeedback(this, 'down')">&#x1F44E;</button>
           <button class="tooltip-dismiss-btn${dismissClass}" onclick="${dismissAction}" title="${isRejected ? 'Restore this tag' : 'Remove this tag from the document'}">${dismissLabel}</button>
+          ${bulkRemoveBtn}
         </div>
       </div>
     </div>
@@ -3210,7 +3236,7 @@ function showTooltip(event, el) {
   tooltip.classList.add('visible');
 
   // Also load the detail panel
-  const annData = annId ? _annotationDataById[annId] : null;
+  // (reuse annData from above)
   // Derive iri_hash: prefer explicit field, fall back to extracting from folio_iri or data-iri attr
   let iriHash = null;
   if (annData && annData.concepts && annData.concepts[0]) {
@@ -3460,12 +3486,12 @@ async function dismissAnnotation(annId) {
     // Update detail panel dismiss button if visible
     _updateDetailDismissBtn(annId);
 
-    // Show undo toast — offer bulk dismiss if other instances exist
+    // Show undo toast — offer bulk removal if other instances exist
     const bulkMsg = data.same_concept_count > 0
       ? ` (${data.same_concept_count} more instance${data.same_concept_count > 1 ? 's' : ''})`
       : '';
     _showUndoToast(
-      `Tag dismissed${bulkMsg}`,
+      `Tag removed${bulkMsg}`,
       () => restoreAnnotation(annId),
       data.same_concept_count > 0 ? () => bulkDismiss(data.folio_iri) : null,
       data.same_concept_count
@@ -3518,7 +3544,7 @@ async function bulkDismiss(folioIri) {
       _updateAnnotationSpanState(id, 'rejected');
     });
 
-    _showUndoToast(`${data.updated_count} tag${data.updated_count > 1 ? 's' : ''} dismissed`, null, null, 0);
+    _showUndoToast(`${data.updated_count} tag${data.updated_count > 1 ? 's' : ''} removed`, null, null, 0);
   } catch (e) {
     // silent
   }
@@ -3539,11 +3565,8 @@ function _updateAnnotationSpanState(annId, newState) {
 function _updateDetailDismissBtn(annId) {
   const btn = document.getElementById('detailDismissBtn');
   if (!btn || btn.dataset.annId !== annId) return;
-  const isRejected = !!_dismissedCache[annId];
-  btn.className = 'detail-dismiss-btn' + (isRejected ? ' is-rejected' : '');
-  btn.innerHTML = isRejected ? _restoreTagIcon + ' Restore tag' : _removeTagIcon + ' Remove tag';
-  btn.title = isRejected ? 'Restore this tag' : 'Remove this tag from the document';
-  btn.onclick = isRejected ? () => restoreAnnotation(annId) : () => dismissAnnotation(annId);
+  // Re-render both buttons (single + bulk) using the full render function
+  renderDetailDismissBtn(annId);
 }
 
 // Undo toast management
@@ -3557,7 +3580,7 @@ function _showUndoToast(message, undoFn, bulkFn, bulkCount) {
 
   let html = `<span>${escapeHtml(message)}</span>`;
   if (undoFn) html += `<button onclick="document.getElementById('undoToast')._undoFn()">Undo</button>`;
-  if (bulkFn && bulkCount > 0) html += `<button onclick="document.getElementById('undoToast')._bulkFn()">Dismiss all ${bulkCount}</button>`;
+  if (bulkFn && bulkCount > 0) html += `<button onclick="document.getElementById('undoToast')._bulkFn()">Remove all ${bulkCount}</button>`;
   toast.innerHTML = html;
   if (undoFn) toast._undoFn = () => { undoFn(); _dismissUndoToast(); };
   if (bulkFn) toast._bulkFn = () => { bulkFn(); _dismissUndoToast(); };
@@ -3993,7 +4016,6 @@ async function loadConceptDetail(iriHash, annId) {
     renderDetailAlternatives(annId);
     renderDetailLineage(annId);
     renderDetailDag(detail);
-    renderDetailSiblings(detail);
     renderDetailRelated(detail);
     renderDetailNotes(iriHash, annId);
     renderDetailGraphButton(iriHash, detail.label);
@@ -4439,34 +4461,43 @@ async function renderDetailLineage(annId) {
   }
 }
 
-function renderDetailDag(detail) {
-  const container = document.getElementById('detailDag');
-  const parents = detail.all_parents || [];
-  const children = detail.children || [];
-  if (parents.length === 0 && children.length === 0) { container.innerHTML = ''; return; }
+// Toggle state for ontology context siblings/children
+const _dagToggles = { siblings: false, children: false };
+let _dagDetail = null;
 
+function _buildDagSvg(detail, showSiblings, showChildren) {
+  const parents = detail.all_parents || [];
+  const siblings = detail.siblings || [];
+  const children = detail.children || [];
   const branchColor = detail.branch_color || BRANCH_COLORS[detail.branch] || '#3b64e0';
 
-  // Build a simple SVG DAG: parents → concept → children
-  const allNodes = [];
   const PILL_H = 26, PILL_PAD = 10, GAP_Y = 50, GAP_X = 12, FONT_SIZE = 11;
-
-  // Helper: measure text width roughly
   function textW(t) { return t.length * FONT_SIZE * 0.58 + PILL_PAD * 2; }
 
-  // Layout rows: parents | focus | children
+  // Layout rows: parents → focus (+ siblings on same row) → children
   const rows = [];
-  if (parents.length) rows.push(parents.map(p => ({ ...p, type: 'parent' })));
-  rows.push([{ label: detail.label, iri_hash: detail.iri_hash, type: 'focus' }]);
-  if (children.length) rows.push(children.slice(0, 8).map(c => ({ ...c, type: 'child' })));
+  if (parents.length) rows.push({ items: parents.map(p => ({ ...p, type: 'parent' })), role: 'parent' });
 
-  let svgH = 0;
-  let maxRowW = 0;
+  // Focus row: focus node, optionally with siblings beside it
+  const focusRow = [{ label: detail.label, iri_hash: detail.iri_hash, type: 'focus' }];
+  if (showSiblings && siblings.length) {
+    siblings.slice(0, 8).forEach(s => focusRow.push({ ...s, type: 'sibling' }));
+    if (siblings.length > 8) focusRow.push({ label: `+${siblings.length - 8} more`, iri_hash: '', type: 'more' });
+  }
+  rows.push({ items: focusRow, role: 'focus' });
+
+  if (showChildren && children.length) {
+    const childRow = children.slice(0, 8).map(c => ({ ...c, type: 'child' }));
+    if (children.length > 8) childRow.push({ label: `+${children.length - 8} more`, iri_hash: '', type: 'more' });
+    rows.push({ items: childRow, role: 'child' });
+  }
+
+  let svgH = 0, maxRowW = 0;
   const rowLayouts = [];
 
   rows.forEach(row => {
     let rowW = 0;
-    const items = row.map(n => {
+    const items = row.items.map(n => {
       const w = Math.max(textW(n.label), 60);
       const item = { ...n, x: rowW, w, h: PILL_H };
       rowW += w + GAP_X;
@@ -4474,11 +4505,11 @@ function renderDetailDag(detail) {
     });
     rowW -= GAP_X;
     if (rowW > maxRowW) maxRowW = rowW;
-    rowLayouts.push({ items, totalW: rowW, y: svgH });
+    rowLayouts.push({ items, totalW: rowW, y: svgH, role: row.role });
     svgH += PILL_H + GAP_Y;
   });
   svgH -= GAP_Y;
-  svgH += 10; // padding
+  svgH += 10;
 
   const svgW = maxRowW + 20;
 
@@ -4494,79 +4525,112 @@ function renderDetailDag(detail) {
   for (let r = 0; r < rowLayouts.length - 1; r++) {
     const topRow = rowLayouts[r];
     const botRow = rowLayouts[r + 1];
-    topRow.items.forEach(top => {
-      botRow.items.forEach(bot => {
+    // Parents → all focus-row nodes (focus + siblings); Focus → children
+    if (topRow.role === 'parent') {
+      // Edges from each parent to focus node only (first item in focus row)
+      const focusItem = botRow.items[0];
+      topRow.items.forEach(top => {
         const x1 = top.x + top.w / 2, y1 = topRow.y + PILL_H;
+        const x2 = focusItem.x + focusItem.w / 2, y2 = botRow.y;
+        const cy1 = y1 + (y2 - y1) * 0.4, cy2 = y1 + (y2 - y1) * 0.6;
+        svg += `<path class="dag-edge" d="M${x1},${y1} C${x1},${cy1} ${x2},${cy2} ${x2},${y2}" />`;
+      });
+      // Edges from parents to siblings too (they share the same parent)
+      if (showSiblings) {
+        botRow.items.forEach(sib => {
+          if (sib.type !== 'sibling') return;
+          topRow.items.forEach(top => {
+            const x1 = top.x + top.w / 2, y1 = topRow.y + PILL_H;
+            const x2 = sib.x + sib.w / 2, y2 = botRow.y;
+            const cy1 = y1 + (y2 - y1) * 0.4, cy2 = y1 + (y2 - y1) * 0.6;
+            svg += `<path class="dag-edge" d="M${x1},${y1} C${x1},${cy1} ${x2},${cy2} ${x2},${y2}" stroke-dasharray="4,3" />`;
+          });
+        });
+      }
+    } else if (topRow.role === 'focus') {
+      // Focus node → each child
+      const focusItem = topRow.items[0];
+      botRow.items.forEach(bot => {
+        if (bot.type === 'more') return;
+        const x1 = focusItem.x + focusItem.w / 2, y1 = topRow.y + PILL_H;
         const x2 = bot.x + bot.w / 2, y2 = botRow.y;
         const cy1 = y1 + (y2 - y1) * 0.4, cy2 = y1 + (y2 - y1) * 0.6;
         svg += `<path class="dag-edge" d="M${x1},${y1} C${x1},${cy1} ${x2},${cy2} ${x2},${y2}" />`;
       });
-    });
+    }
   }
 
   // Draw pills
   rowLayouts.forEach(rl => {
     rl.items.forEach(item => {
       const isFocus = item.type === 'focus';
+      const isMore = item.type === 'more';
       const fill = isFocus ? branchColor : '#f5f6f8';
-      const textColor = isFocus ? '#fff' : '#1a1a2e';
+      const textColor = isFocus ? '#fff' : isMore ? '#6b6b80' : '#1a1a2e';
       const stroke = isFocus ? branchColor : '#d0d2da';
-      const onclick = isFocus ? '' : ` onclick="loadConceptDetail('${escapeAttr(item.iri_hash)}')" style="cursor:pointer"`;
+      const clickable = !isFocus && !isMore && item.iri_hash;
+      const onclick = clickable ? ` onclick="loadConceptDetail('${escapeAttr(item.iri_hash)}')" style="cursor:pointer"` : '';
       svg += `<g class="dag-pill"${onclick}>
         <rect x="${item.x}" y="${rl.y}" width="${item.w}" height="${PILL_H}" rx="13" fill="${fill}" stroke="${stroke}" stroke-width="1"/>
-        <text class="dag-label" x="${item.x + item.w / 2}" y="${rl.y + PILL_H / 2 + 4}" text-anchor="middle" fill="${textColor}">${escapeHtml(item.label.length > 20 ? item.label.slice(0, 18) + '...' : item.label)}</text>
+        <text class="dag-label" x="${item.x + item.w / 2}" y="${rl.y + PILL_H / 2 + 4}" text-anchor="middle" fill="${textColor}" font-size="${isMore ? '10' : '11'}">${escapeHtml(item.label.length > 22 ? item.label.slice(0, 20) + '\u2026' : item.label)}</text>
       </g>`;
     });
   });
 
   svg += '</svg>';
-
-  container.innerHTML = `<div class="detail-section-title">Ontology Context</div><div class="dag-container">${svg}</div>`;
+  return svg;
 }
 
-function renderDetailSiblings(detail) {
-  const container = document.getElementById('detailSiblings');
+function renderDetailDag(detail) {
+  const container = document.getElementById('detailDag');
+  const parents = detail.all_parents || [];
   const siblings = detail.siblings || [];
-  if (siblings.length === 0) { container.innerHTML = ''; return; }
+  const children = detail.children || [];
+  if (parents.length === 0 && siblings.length === 0 && children.length === 0) { container.innerHTML = ''; return; }
 
-  const branchColor = detail.branch_color || BRANCH_COLORS[detail.branch] || '#6b6b80';
-  const show = 8;
-  const visible = siblings.slice(0, show);
-  const extra = siblings.length - show;
-
-  let html = `<div class="detail-section-title">Siblings (${siblings.length})</div><div class="concept-pill-list" id="siblingsList">`;
-  visible.forEach(s => {
-    html += `<span class="concept-pill" onclick="loadConceptDetail('${escapeAttr(s.iri_hash)}')">
-      <span class="concept-pill-dot" style="background:${branchColor}"></span>
-      ${escapeHtml(s.label)}
-    </span>`;
-  });
-  if (extra > 0) {
-    html += `<span class="concept-pill-more" onclick="expandSiblings()" id="siblingsMore">+${extra} more</span>`;
-  }
-  html += '</div>';
-  container.innerHTML = html;
-
-  // Store full list for expansion
-  container._allSiblings = siblings;
-  container._branchColor = branchColor;
+  _dagDetail = detail;
+  _dagToggles.siblings = false;
+  _dagToggles.children = false;
+  _rerenderDag();
 }
 
-function expandSiblings() {
-  const container = document.getElementById('detailSiblings');
-  const siblings = container._allSiblings || [];
-  const branchColor = container._branchColor || '#6b6b80';
-  const list = document.getElementById('siblingsList');
-  if (!list) return;
+function _rerenderDag() {
+  const detail = _dagDetail;
+  if (!detail) return;
+  const container = document.getElementById('detailDag');
+  const siblings = detail.siblings || [];
+  const children = detail.children || [];
 
-  let html = '';
-  siblings.forEach(s => {
-    html += `<span class="concept-pill" onclick="loadConceptDetail('${escapeAttr(s.iri_hash)}')">
-      <span class="concept-pill-dot" style="background:${branchColor}"></span>
-      ${escapeHtml(s.label)}
-    </span>`;
-  });
-  list.innerHTML = html;
+  const svg = _buildDagSvg(detail, _dagToggles.siblings, _dagToggles.children);
+
+  let html = `<div class="detail-section-title">Ontology Context</div>`;
+
+  // Toggle buttons row
+  if (siblings.length > 0 || children.length > 0) {
+    html += `<div class="dag-toggles-row">`;
+    if (siblings.length > 0) {
+      const arrow = _dagToggles.siblings ? '&#9662;' : '&#9656;';
+      html += `<button class="dag-toggle-btn" onclick="toggleDagSiblings()">${arrow} Siblings (${siblings.length})</button>`;
+    }
+    if (children.length > 0) {
+      const arrow = _dagToggles.children ? '&#9662;' : '&#9656;';
+      html += `<button class="dag-toggle-btn" onclick="toggleDagChildren()">${arrow} Children (${children.length})</button>`;
+    }
+    html += `</div>`;
+  }
+
+  html += `<div class="dag-container">${svg}</div>`;
+  container.innerHTML = html;
+}
+
+function toggleDagSiblings() {
+  _dagToggles.siblings = !_dagToggles.siblings;
+  _rerenderDag();
+}
+
+function toggleDagChildren() {
+  _dagToggles.children = !_dagToggles.children;
+  _rerenderDag();
 }
 
 function renderDetailRelated(detail) {
@@ -4620,15 +4684,45 @@ function saveDetailNote(iriHash) {
 
 function renderDetailDismissBtn(annId) {
   const btn = document.getElementById('detailDismissBtn');
+  const bulkBtn = document.getElementById('detailBulkDismissBtn');
   if (!btn) return;
-  if (!annId) { btn.style.display = 'none'; return; }
+  if (!annId) {
+    btn.style.display = 'none';
+    if (bulkBtn) bulkBtn.style.display = 'none';
+    return;
+  }
 
   btn.style.display = '';
   btn.dataset.annId = annId;
   const isRejected = !!_dismissedCache[annId];
   btn.className = 'detail-dismiss-btn' + (isRejected ? ' is-rejected' : '');
-  btn.innerHTML = isRejected ? '&#x21A9; Restore' : '&#x2715; Dismiss';
+  btn.innerHTML = isRejected ? _restoreTagIcon + ' Restore tag' : _removeTagIcon + ' Remove tag';
+  btn.title = isRejected ? 'Restore this tag' : 'Remove this tag from the document';
   btn.onclick = isRejected ? () => restoreAnnotation(annId) : () => dismissAnnotation(annId);
+
+  // Show "Remove all N" button if other instances share the same IRI
+  if (bulkBtn) {
+    const annData = _annotationDataById[annId];
+    const primaryIri = annData?.concepts?.[0]?.folio_iri;
+    let sameCount = 0;
+    if (primaryIri && !isRejected) {
+      for (const id in _annotationDataById) {
+        if (id === annId) continue;
+        const a = _annotationDataById[id];
+        if (a.state === 'rejected' || _dismissedCache[id]) continue;
+        if (a.concepts?.[0]?.folio_iri === primaryIri) sameCount++;
+      }
+    }
+    if (sameCount > 0) {
+      bulkBtn.style.display = '';
+      bulkBtn.className = 'detail-dismiss-btn';
+      bulkBtn.innerHTML = _removeTagIcon + ` Remove all ${sameCount + 1}`;
+      bulkBtn.title = 'Remove all instances of this concept';
+      bulkBtn.onclick = () => bulkDismiss(primaryIri);
+    } else {
+      bulkBtn.style.display = 'none';
+    }
+  }
 }
 
 function renderDetailGraphButton(iriHash, label) {
