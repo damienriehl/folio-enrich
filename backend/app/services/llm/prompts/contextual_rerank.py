@@ -19,7 +19,7 @@ CANDIDATE CONCEPTS:
 {concepts_json}
 
 For each concept, respond with JSON:
-{{"scores": [{{"concept_text": "...", "folio_iri": "...", "contextual_score": 0.XX, "reasoning": "brief explanation"}}]}}"""
+{"scores": [{"concept_text": "...", "folio_iri": "...", "contextual_score": 0.XX, "reasoning": "brief explanation"}]}"""
 
 
 def build_contextual_rerank_prompt(
@@ -34,7 +34,6 @@ def build_contextual_rerank_prompt(
             "folio_iri": c.get("folio_iri", ""),
             "folio_label": c.get("folio_label", ""),
             "folio_definition": (c.get("folio_definition") or "")[:200],
-            "pipeline_confidence": c.get("confidence", 0),
         })
 
     return (

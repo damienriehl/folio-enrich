@@ -45,9 +45,9 @@ class TestReconciler:
 
     def test_ruler_only_preferred_label_single_word_kept(self):
         """Single-word preferred label matches (e.g., 'court') should be kept
-        because confidence=0.80 is above the threshold."""
+        because confidence=0.72 is above the threshold."""
         reconciler = Reconciler()
-        ruler = [_concept("court", source="entity_ruler", confidence=0.80)]
+        ruler = [_concept("court", source="entity_ruler", confidence=0.72)]
         llm = []
         results = reconciler.reconcile(ruler, llm)
         assert len(results) == 1

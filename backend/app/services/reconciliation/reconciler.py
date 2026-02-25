@@ -32,7 +32,7 @@ def _diminishing_boost(base: float, max_boost: float = 0.05) -> float:
 
 # Ruler-only concepts need at least this confidence to be accepted
 # This filters out low-confidence single-word alt-label matches (conf=0.35)
-# while keeping preferred labels (conf=0.80) and multi-word matches (conf>=0.65)
+# while keeping preferred labels (conf=0.72+) and multi-word matches (conf>=0.65)
 RULER_ONLY_MIN_CONFIDENCE = 0.60
 
 

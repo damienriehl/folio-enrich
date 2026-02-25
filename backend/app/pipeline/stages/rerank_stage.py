@@ -31,7 +31,7 @@ class ContextualRerankStage(PipelineStage):
     async def execute(self, job: Job) -> Job:
         from app.config import settings
 
-        if not getattr(settings, "contextual_rerank_enabled", True):
+        if not settings.contextual_rerank_enabled:
             return job
 
         resolved = job.result.metadata.get("resolved_concepts", [])

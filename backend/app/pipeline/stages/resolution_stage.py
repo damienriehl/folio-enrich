@@ -150,7 +150,15 @@ class ResolutionStage(PipelineStage):
                 continue
 
             search_score = rd.get("confidence", 0.5)
-            rd["confidence"] = round(search_score * 0.6 + sim * 0.4, 4)
+            blended = round(search_score * 0.6 + sim * 0.4, 4)
+            rd["confidence"] = blended
+            events = rd.setdefault("_lineage_events", [])
+            events.append({
+                "stage": "resolution",
+                "action": "embedding_context",
+                "detail": f"Embedding similarity={sim:.2f}, blended 60/40 (was {search_score:.2f})",
+                "confidence": blended,
+            })
 
     async def execute(self, job: Job) -> Job:
         job.status = JobStatus.RESOLVING

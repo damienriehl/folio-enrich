@@ -82,8 +82,16 @@ class ConceptResolver:
             self._cache[cache_key] = None
             return None
 
-        # Use search score when available; preserve caller confidence for IRI fast-path
-        final_confidence = score if score > 0 else confidence
+        # Blend search score with caller confidence when both are available.
+        # IRI fast-path: score == confidence (set above), so this is a no-op.
+        # Search path: score comes from multi_strategy_search, confidence from
+        # the reconciler — blend to preserve upstream calibration work.
+        if score > 0 and confidence > 0:
+            final_confidence = score * 0.6 + confidence * 0.4
+        elif score > 0:
+            final_confidence = score
+        else:
+            final_confidence = confidence
         resolved = ResolvedConcept(
             concept_text=concept_text,
             folio_concept=best_concept,
