@@ -5086,7 +5086,7 @@ function renderInsightsPanel(data) {
                   </td>
                   <td style="text-align:center">
                     <span class="${fb.rating === 'up' ? 'insights-rating-up' : 'insights-rating-down'}">
-                      ${fb.rating === 'up' ? '&#x1F44D;' : '&#x1F44E;'}
+                      ${fb.rating === 'up' ? '&#x1F44D;' : fb.rating === 'dismissed' ? '&#x1F6AB;' : '&#x1F44E;'}
                     </span>
                   </td>
                   <td>
