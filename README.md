@@ -1,8 +1,11 @@
 # FOLIO Enrich
 
-**Automatic legal document annotation using the [FOLIO ontology](https://github.com/FOLIO-Ontology/FOLIO).**
+**Tag every legal document with precise, machine-readable legal concepts — automatically.**
 
-FOLIO Enrich is a multi-stage NLP pipeline that ingests legal documents, identifies legal concepts, maps them to the FOLIO (Financial Industry Legal Ontology) taxonomy, scores confidence through calibrated multi-signal blending, and exports structured results in 13 formats. It runs as a FastAPI service with a browser-based UI.
+Legal documents contain thousands of concepts buried in dense prose: causes of action, contract terms, regulatory frameworks,  events. FOLIO Enrich reads your documents, identifies those concepts, maps each one to the [FOLIO ontology](https://github.com/FOLIO-Ontology/FOLIO) (18,000+ standardized legal concepts), scores its confidence, and exports structured results in 13 formats — all through a single API call.
+
+**Upload a complaint, a contract, or a regulatory filing. Seconds later, receive a structured annotation layer that machines can search, filter, sort, and analyze.
+**
 
 ---
 
