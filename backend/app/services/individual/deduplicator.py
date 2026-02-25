@@ -53,14 +53,18 @@ def _names_match(a: Individual, b: Individual) -> bool:
 def _merge_class_links(
     winner: Individual, loser: Individual
 ) -> list[IndividualClassLink]:
-    """Merge class links from loser into winner, avoiding duplicates."""
+    """Merge class links from loser into winner, avoiding duplicates.
+
+    Dedup by (folio_label, folio_iri) — the same class linked via different
+    annotation_ids (different text positions) should appear only once.
+    """
     existing = {
-        (l.annotation_id, l.folio_label, l.folio_iri)
+        (l.folio_label, l.folio_iri)
         for l in winner.class_links
     }
     merged = list(winner.class_links)
     for link in loser.class_links:
-        key = (link.annotation_id, link.folio_label, link.folio_iri)
+        key = (link.folio_label, link.folio_iri)
         if key not in existing:
             merged.append(link)
             existing.add(key)

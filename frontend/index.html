@@ -836,16 +836,18 @@
     white-space: nowrap;
     width: max-content;
     max-width: 420px;
+    text-align: center;
   }
 
   .concept-tooltip.visible { display: block; }
 
   .tooltip-branch {
-    font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px;
-    line-height: 1; margin-bottom: 2px;
+    font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    line-height: 1; margin-bottom: 4px;
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
   }
   .tooltip-main-row {
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 8px; justify-content: center;
   }
   .tooltip-label { font-size: 14px; font-weight: 600; color: #1a1a2e; margin-bottom: 2px; }
   .tooltip-conf-num {
@@ -891,7 +893,7 @@
   /* Remove-tag action row in tooltip */
   .tooltip-remove-row {
     display: flex; gap: 4px; margin-top: 4px; padding-top: 4px;
-    border-top: 1px solid #f0f0f4;
+    border-top: 1px solid #f0f0f4; justify-content: center;
   }
   .tooltip-remove-row .tooltip-dismiss-btn { flex: 1; justify-content: center; margin-left: 0; }
   .concept-tooltip .tooltip-dismiss-btn {
@@ -1013,7 +1015,7 @@
   .ind-card .ind-type-badge.entity   { background: rgba(230,126,34,0.15); color: #e67e22; }
   .ind-card .ind-conf { font-size: 11px; color: #8888a0; min-width: 28px; text-align: right; }
   .ind-card .ind-count { font-size: 10px; color: #aaa; }
-  .ind-class-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+  .ind-class-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; justify-content: center; }
   .ind-class-chip {
     font-size: 10px; background: #e8eaf6; color: #3b64e0;
     padding: 1px 6px; border-radius: 8px; cursor: pointer;
@@ -1090,7 +1092,8 @@
     cursor: pointer; transition: box-shadow 0.15s; min-width: 80px;
   }
   .multi-pill:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
-  .multi-pill-branch { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .multi-pill-label { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 2px; }
+  .multi-pill-branch { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 6px; border-radius: 4px; display: inline-block; }
   .multi-pill-conf { font-size: 14px; font-weight: 700; margin: 2px 0; }
   .multi-pill-actions { display: flex; gap: 4px; justify-content: center; align-items: center; }
   .multi-pill-dismiss { background: none; border: none; cursor: pointer; color: #999; font-size: 12px; padding: 2px; }
@@ -3505,18 +3508,17 @@ function showIndividualTooltip(event, el) {
   const confPct = conf > 1 ? conf : conf * 100;
   const confTier = confPct >= 80 ? 'conf-high' : confPct >= 50 ? 'conf-mid' : 'conf-low';
 
-  // Build class link chips
-  let classChips = '';
-  if (ind.class_links && ind.class_links.length > 0) {
-    classChips = '<div class="ind-class-chips" style="margin-top:4px">' +
-      ind.class_links.map(cl => {
-        const label = cl.folio_label || '';
-        const annId = cl.annotation_id || '';
-        const onclick = annId
-          ? `onclick="navigateToAnnotation('${escapeAttr(annId)}')" style="cursor:pointer"`
-          : '';
-        return `<span class="ind-class-chip" ${onclick}>${escapeHtml(label)}</span>`;
-      }).join('') + '</div>';
+  // Deduplicate class links by (label, IRI) for display
+  const uniqueLinks = [];
+  const seenLinkKeys = new Set();
+  if (ind.class_links) {
+    for (const cl of ind.class_links) {
+      const lk = (cl.folio_label || '') + '|' + (cl.folio_iri || '');
+      if (!seenLinkKeys.has(lk)) {
+        seenLinkKeys.add(lk);
+        uniqueLinks.push(cl);
+      }
+    }
   }
 
   let normalizedLine = '';
@@ -3528,29 +3530,41 @@ function showIndividualTooltip(event, el) {
     urlLine = `<div style="font-size:10px;margin-top:2px"><a href="${escapeAttr(ind.url)}" target="_blank" style="color:#3b64e0">View source</a></div>`;
   }
 
-  // Show class chips on line 1 if available; fall back to type badge only when no class links
-  const headerLine = classChips
-    ? classChips
-    : `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px" class="ind-type-badge ${typeClass}">${typeBadge}</div>`;
+  // Multi-class graph overlay for individuals with 2+ class links
+  if (uniqueLinks.length >= 2) {
+    _showIndividualMultiClassOverlay(tooltip, el, ind, uniqueLinks, name, confPct, confTier, normalizedLine, urlLine);
+    return;
+  }
+
+  // Single class link: show as pill badge; fall back to type badge
+  let badgeLine;
+  if (uniqueLinks.length === 1) {
+    const cl = uniqueLinks[0];
+    const label = cl.folio_label || '';
+    const clBranch = cl.branch || '';
+    const clColor = BRANCH_COLORS[clBranch] || '#3b64e0';
+    const annId = cl.annotation_id || '';
+    const onclick = annId
+      ? `onclick="navigateToAnnotation('${escapeAttr(annId)}')" style="cursor:pointer"`
+      : '';
+    badgeLine = `<div class="tooltip-branch" style="color:${clColor};background:${clColor}18" ${onclick}>${escapeHtml(label)}</div>`;
+  } else {
+    const badgeColor = indType === 'legal_citation' ? '#009688' : '#e67e22';
+    badgeLine = `<div class="tooltip-branch" style="color:${badgeColor};background:${badgeColor}18">${typeBadge}</div>`;
+  }
 
   tooltip.innerHTML = `
-    ${headerLine}
-    <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-top:2px">${escapeHtml(name)}</div>
+    <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:2px">${escapeHtml(name)}</div>
+    ${badgeLine}
     <div class="tooltip-main-row">
       <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}</span>
-      <span style="font-size:10px;color:#888;margin-left:4px">${escapeHtml(ind.source || '')}</span>
     </div>
     ${normalizedLine}
     ${urlLine}
   `;
   tooltip.classList.add('visible');
 
-  // Position tooltip
-  const rect = el.getBoundingClientRect();
-  const panelRight = document.querySelector('.panel-right');
-  const panelRect = panelRight ? panelRight.getBoundingClientRect() : { left: 0, right: window.innerWidth };
-  tooltip.style.left = `${Math.max(panelRect.left + 8, Math.min(rect.left, panelRect.right - 320))}px`;
-  tooltip.style.top = `${rect.bottom + 6}px`;
+  _positionTooltip(tooltip, el);
 }
 
 function showPropertyTooltip(event, el) {
@@ -3598,27 +3612,21 @@ function showPropertyTooltip(event, el) {
   }
 
   tooltip.innerHTML = `
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#9C27B0">Property</div>
-    <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-top:2px">${escapeHtml(label)}</div>
+    <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:2px">${escapeHtml(label)}</div>
+    <div class="tooltip-branch" style="color:#9C27B0;background:rgba(156,39,176,0.12)">Property</div>
     <div class="tooltip-main-row">
       <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}</span>
-      <span style="font-size:10px;color:#888;margin-left:4px">${escapeHtml(prop.source || '')} ${escapeHtml(prop.match_type || '')}</span>
     </div>
-    ${def ? `<div style="font-size:11px;color:#444;margin-top:4px">${escapeHtml(def)}</div>` : ''}
+    ${def ? `<div style="font-size:11px;color:#444;margin-top:4px;white-space:normal">${escapeHtml(def)}</div>` : ''}
     ${domainRange}
     ${inverseLine}
     ${altLine}
     ${examplesLine}
-    ${iri ? `<div style="font-size:9px;color:#aaa;margin-top:4px;word-break:break-all">${escapeHtml(iri)}</div>` : ''}
+    ${iri ? `<div style="font-size:9px;color:#aaa;margin-top:4px;word-break:break-all;white-space:normal">${escapeHtml(iri)}</div>` : ''}
   `;
   tooltip.classList.add('visible');
 
-  // Position tooltip
-  const rect = el.getBoundingClientRect();
-  const panelRight = document.querySelector('.panel-right');
-  const panelRect = panelRight ? panelRight.getBoundingClientRect() : { left: 0, right: window.innerWidth };
-  tooltip.style.left = `${Math.max(panelRect.left + 8, Math.min(rect.left, panelRect.right - 320))}px`;
-  tooltip.style.top = `${rect.bottom + 6}px`;
+  _positionTooltip(tooltip, el);
 }
 
 function navigateToAnnotation(annId) {
@@ -3679,9 +3687,13 @@ function showTooltip(event, el) {
     ? `<button class="tooltip-dismiss-btn" onclick="bulkDismiss('${escapeAttr(primaryIri)}')" title="Remove all instances of this concept">${_removeTagIcon} All ${sameConceptCount + 1}</button>`
     : '';
 
+  const branchBadge = branch
+    ? `<div class="tooltip-branch" style="color:${branchColor};background:${branchColor}18">${escapeHtml(branch)}</div>`
+    : '';
+
   tooltip.innerHTML = `
-    <div class="tooltip-branch" style="color:${branchColor}">${escapeHtml(branch || 'Unknown')}</div>
     <div class="tooltip-label">${escapeHtml(label)}</div>
+    ${branchBadge}
     <div class="tooltip-main-row">
       <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}</span>
       <div class="tooltip-feedback" data-ann-id="${escapeAttr(annId)}">
@@ -3724,14 +3736,15 @@ function showTooltip(event, el) {
   _positionTooltip(tooltip, el);
 }
 
-/** Multi-branch graph overlay: shows each branch as a pill connected to the text pill */
+/** Multi-branch graph overlay: shows each branch as a pill connected to the text pill.
+ *  Layout flips based on position: label nearest source text, classifications away. */
 function _showMultiBranchOverlay(tooltip, el, annIds) {
   const matchedText = el.textContent.replace(/\s+/g, ' ').trim();
 
   // Build pills for each branch annotation
   let pillsHtml = '';
-  let svgLines = '';
   const pillCount = annIds.length;
+  const pillColors = [];
 
   for (let i = 0; i < annIds.length; i++) {
     const aid = annIds[i];
@@ -3740,12 +3753,16 @@ function _showMultiBranchOverlay(tooltip, el, annIds) {
     const ac = aData.concepts[0];
     const ab = (ac.branches && ac.branches.length > 0) ? ac.branches[0] : '';
     const aColor = BRANCH_COLORS[ab] || '#6b6b80';
+    pillColors.push(aColor);
+    const conceptLabel = ac.folio_label || ac.concept_text || 'Unknown';
+    const branchBadge = ab ? `<div class="multi-pill-branch" style="color:${aColor};background:${aColor}18">${escapeHtml(ab)}</div>` : '';
     const aConf = typeof ac.confidence === 'number' ? (ac.confidence > 1 ? ac.confidence : ac.confidence * 100) : 0;
     const existingRating = _feedbackCache[aid] || null;
 
     pillsHtml += `
       <div class="multi-pill" style="border-color:${aColor};background:${aColor}12" data-pill-idx="${i}">
-        <div class="multi-pill-branch" style="color:${aColor}">${escapeHtml(ab || 'Unknown')}</div>
+        <div class="multi-pill-label">${escapeHtml(conceptLabel)}</div>
+        ${branchBadge}
         <div class="multi-pill-conf">${aConf.toFixed(0)}%</div>
         <div class="multi-pill-actions">
           <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" onclick="submitFeedback(this, 'up')" data-rating="up" data-ann-id="${escapeAttr(aid)}">&#x1F44D;</button>
@@ -3753,19 +3770,33 @@ function _showMultiBranchOverlay(tooltip, el, annIds) {
           <button class="multi-pill-dismiss" onclick="dismissAnnotation('${escapeAttr(aid)}')" title="Remove this branch">${_removeTagIcon}</button>
         </div>
       </div>`;
-
-    // SVG line from pill center to text pill center (computed after render)
-    const pillX = (i + 0.5) / pillCount * 100;
-    svgLines += `<line class="multi-line" x1="${pillX}%" y1="100%" x2="50%" y2="0%" stroke="${aColor}" stroke-width="1.5" stroke-opacity="0.5"/>`;
   }
 
-  tooltip.innerHTML = `
-    <div class="multi-overlay">
-      <div class="multi-pills-row">${pillsHtml}</div>
-      <svg class="multi-svg" preserveAspectRatio="none">${svgLines}</svg>
-      <div class="multi-text-pill">${escapeHtml(matchedText)}</div>
-    </div>
-  `;
+  // Build SVG lines (direction-aware — flipped after positioning)
+  function _buildSvgLines(dir) {
+    let lines = '';
+    for (let i = 0; i < pillColors.length; i++) {
+      const px = (i + 0.5) / pillCount * 100;
+      if (dir === 'below') {
+        // Text pill on top, classification pills below → lines go from top (text) to bottom (pills)
+        lines += `<line x1="50%" y1="0%" x2="${px}%" y2="100%" stroke="${pillColors[i]}" stroke-width="1.5" stroke-opacity="0.5"/>`;
+      } else {
+        // Text pill on bottom, classification pills above → lines go from bottom (text) to top (pills)
+        lines += `<line x1="50%" y1="100%" x2="${px}%" y2="0%" stroke="${pillColors[i]}" stroke-width="1.5" stroke-opacity="0.5"/>`;
+      }
+    }
+    return lines;
+  }
+
+  // Initial render (below orientation — text label on top, pills below)
+  const textPillHtml = `<div class="multi-text-pill">${escapeHtml(matchedText)}</div>`;
+  const pillsRowHtml = `<div class="multi-pills-row">${pillsHtml}</div>`;
+
+  tooltip.innerHTML = `<div class="multi-overlay" data-direction="below">
+    ${textPillHtml}
+    <svg class="multi-svg" preserveAspectRatio="none">${_buildSvgLines('below')}</svg>
+    ${pillsRowHtml}
+  </div>`;
   tooltip.classList.add('visible');
 
   // Load detail for the first (highest confidence) annotation
@@ -3780,7 +3811,7 @@ function _showMultiBranchOverlay(tooltip, el, annIds) {
   // Make each pill clickable to load its concept in the detail panel
   tooltip.querySelectorAll('.multi-pill').forEach(pill => {
     pill.addEventListener('click', (e) => {
-      if (e.target.closest('button')) return; // don't intercept button clicks
+      if (e.target.closest('button')) return;
       const idx = parseInt(pill.dataset.pillIdx, 10);
       const aid = annIds[idx];
       const aData = _annotationDataById[aid];
@@ -3792,12 +3823,39 @@ function _showMultiBranchOverlay(tooltip, el, annIds) {
     });
   });
 
-  _positionTooltip(tooltip, el);
+  // Position, then flip layout if tooltip opens above the source text
+  _positionTooltip(tooltip, el, (direction) => {
+    if (direction === 'above') {
+      // Flip: pills on top, text label on bottom (nearest to source text)
+      const overlay = tooltip.querySelector('.multi-overlay');
+      if (overlay) {
+        overlay.dataset.direction = 'above';
+        overlay.innerHTML = `${pillsRowHtml}
+          <svg class="multi-svg" preserveAspectRatio="none">${_buildSvgLines('above')}</svg>
+          ${textPillHtml}`;
+        // Re-attach pill click handlers after re-render
+        overlay.querySelectorAll('.multi-pill').forEach(pill => {
+          pill.addEventListener('click', (e) => {
+            if (e.target.closest('button')) return;
+            const idx = parseInt(pill.dataset.pillIdx, 10);
+            const aid = annIds[idx];
+            const aData = _annotationDataById[aid];
+            if (aData && aData.concepts && aData.concepts[0]) {
+              const ac = aData.concepts[0];
+              const iriHash = ac.iri_hash || (ac.folio_iri ? ac.folio_iri.split('/').pop() : null);
+              if (iriHash) loadConceptDetail(iriHash, aid);
+            }
+          });
+        });
+      }
+    }
+  });
 }
 
-/** Shared tooltip positioning logic */
-function _positionTooltip(tooltip, el) {
-  // Position tooltip — constrain to the annotated text panel so it doesn't cover the detail pane
+/** Shared tooltip positioning logic.
+ *  Centers horizontally on the source element; opens below if room, above otherwise.
+ *  Returns 'below' | 'above' via a callback so overlay builders can flip layout. */
+function _positionTooltip(tooltip, el, onDirectionKnown) {
   const rect = el.getBoundingClientRect();
   const panelRight = el.closest('.panel-right');
   const panelRect = panelRight ? panelRight.getBoundingClientRect() : { left: 0, right: window.innerWidth, top: 0, bottom: window.innerHeight };
@@ -3807,18 +3865,93 @@ function _positionTooltip(tooltip, el) {
   requestAnimationFrame(() => {
     const tw = tooltip.offsetWidth;
     const th = tooltip.offsetHeight;
-    let top = rect.bottom + 8;
-    let left = rect.left;
 
-    // Keep within the panel bounds horizontally
+    // Center horizontally on the source element
+    const elCenter = rect.left + rect.width / 2;
+    let left = elCenter - tw / 2;
+
+    // Clamp within panel bounds
     if (left + tw > panelRect.right - 8) left = panelRect.right - tw - 8;
     if (left < panelRect.left + 8) left = panelRect.left + 8;
-    // Vertical: try below, then above, then clamp
-    if (top + th > window.innerHeight - 8) top = rect.top - th - 8;
+
+    // Vertical: prefer below, fall back to above
+    let top = rect.bottom + 8;
+    let direction = 'below';
+    if (top + th > window.innerHeight - 8) {
+      top = rect.top - th - 8;
+      direction = 'above';
+    }
     if (top < 8) top = 8;
 
     tooltip.style.top = top + 'px';
     tooltip.style.left = left + 'px';
+
+    // Notify caller of direction so overlay can flip layout
+    if (onDirectionKnown) onDirectionKnown(direction);
+  });
+}
+
+/** Multi-class graph overlay for individuals with 2+ class links.
+ *  Layout flips based on position: label nearest source text, classifications away. */
+function _showIndividualMultiClassOverlay(tooltip, el, ind, uniqueLinks, name, confPct, confTier, normalizedLine, urlLine) {
+  const pillCount = uniqueLinks.length;
+  let pillsHtml = '';
+  const pillColors = [];
+
+  for (let i = 0; i < uniqueLinks.length; i++) {
+    const cl = uniqueLinks[i];
+    const label = cl.folio_label || 'Unknown';
+    const branch = cl.branch || '';
+    const color = BRANCH_COLORS[branch] || '#3b64e0';
+    pillColors.push(color);
+    const clConf = cl.confidence ? (cl.confidence > 1 ? cl.confidence : cl.confidence * 100).toFixed(0) + '%' : '';
+    const annId = cl.annotation_id || '';
+    const navAction = annId ? `onclick="navigateToAnnotation('${escapeAttr(annId)}')"` : '';
+    const branchBadge = branch ? `<div class="multi-pill-branch" style="color:${color};background:${color}18">${escapeHtml(branch)}</div>` : '';
+
+    pillsHtml += `
+      <div class="multi-pill" style="border-color:${color};background:${color}12;cursor:pointer" ${navAction}>
+        <div class="multi-pill-label">${escapeHtml(label)}</div>
+        ${branchBadge}
+        ${clConf ? `<div class="multi-pill-conf">${clConf}</div>` : ''}
+      </div>`;
+  }
+
+  function _buildSvgLines(dir) {
+    let lines = '';
+    for (let i = 0; i < pillColors.length; i++) {
+      const px = (i + 0.5) / pillCount * 100;
+      if (dir === 'below') {
+        lines += `<line x1="50%" y1="0%" x2="${px}%" y2="100%" stroke="${pillColors[i]}" stroke-width="1.5" stroke-opacity="0.5"/>`;
+      } else {
+        lines += `<line x1="50%" y1="100%" x2="${px}%" y2="0%" stroke="${pillColors[i]}" stroke-width="1.5" stroke-opacity="0.5"/>`;
+      }
+    }
+    return lines;
+  }
+
+  const textPillHtml = `<div class="multi-text-pill">${escapeHtml(name)}</div>`;
+  const confHtml = `<div class="tooltip-main-row" style="justify-content:center;margin-top:4px"><span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}</span></div>`;
+  const pillsRowHtml = `<div class="multi-pills-row">${pillsHtml}</div>`;
+
+  // Initial render: below orientation (text label on top, pills below)
+  tooltip.innerHTML = `<div class="multi-overlay" data-direction="below">
+    ${textPillHtml}${confHtml}
+    <svg class="multi-svg" preserveAspectRatio="none">${_buildSvgLines('below')}</svg>
+    ${pillsRowHtml}
+  </div>${normalizedLine}${urlLine}`;
+  tooltip.classList.add('visible');
+
+  _positionTooltip(tooltip, el, (direction) => {
+    if (direction === 'above') {
+      const overlay = tooltip.querySelector('.multi-overlay');
+      if (overlay) {
+        overlay.dataset.direction = 'above';
+        overlay.innerHTML = `${pillsRowHtml}
+          <svg class="multi-svg" preserveAspectRatio="none">${_buildSvgLines('above')}</svg>
+          ${textPillHtml}${confHtml}`;
+      }
+    }
   });
 }
 
