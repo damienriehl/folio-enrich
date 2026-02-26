@@ -1093,7 +1093,7 @@
   }
   .multi-pill:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
   .multi-pill-label { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 2px; }
-  .multi-pill-branch { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 6px; border-radius: 4px; display: inline-block; }
+  .multi-pill-branch { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 4px; display: inline-block; }
   .multi-pill-conf { font-size: 14px; font-weight: 700; margin: 2px 0; }
   .multi-pill-actions { display: flex; gap: 4px; justify-content: center; align-items: center; }
   .multi-pill-dismiss { background: none; border: none; cursor: pointer; color: #999; font-size: 12px; padding: 2px; }
@@ -3755,14 +3755,18 @@ function _showMultiBranchOverlay(tooltip, el, annIds) {
     const aColor = BRANCH_COLORS[ab] || '#6b6b80';
     pillColors.push(aColor);
     const conceptLabel = ac.folio_label || ac.concept_text || 'Unknown';
-    const branchBadge = ab ? `<div class="multi-pill-branch" style="color:${aColor};background:${aColor}18">${escapeHtml(ab)}</div>` : '';
     const aConf = typeof ac.confidence === 'number' ? (ac.confidence > 1 ? ac.confidence : ac.confidence * 100) : 0;
     const existingRating = _feedbackCache[aid] || null;
 
+    // Always show a pill badge: label + branch badge when branch exists, label AS badge when not
+    const pillLabelHtml = ab
+      ? `<div class="multi-pill-label">${escapeHtml(conceptLabel)}</div>
+         <div class="multi-pill-branch" style="color:${aColor};background:${aColor}18">${escapeHtml(ab)}</div>`
+      : `<div class="multi-pill-branch" style="color:${aColor};background:${aColor}18">${escapeHtml(conceptLabel)}</div>`;
+
     pillsHtml += `
       <div class="multi-pill" style="border-color:${aColor};background:${aColor}12" data-pill-idx="${i}">
-        <div class="multi-pill-label">${escapeHtml(conceptLabel)}</div>
-        ${branchBadge}
+        ${pillLabelHtml}
         <div class="multi-pill-conf">${aConf.toFixed(0)}%</div>
         <div class="multi-pill-actions">
           <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" onclick="submitFeedback(this, 'up')" data-rating="up" data-ann-id="${escapeAttr(aid)}">&#x1F44D;</button>
@@ -3907,12 +3911,16 @@ function _showIndividualMultiClassOverlay(tooltip, el, ind, uniqueLinks, name, c
     const clConf = cl.confidence ? (cl.confidence > 1 ? cl.confidence : cl.confidence * 100).toFixed(0) + '%' : '';
     const annId = cl.annotation_id || '';
     const navAction = annId ? `onclick="navigateToAnnotation('${escapeAttr(annId)}')"` : '';
-    const branchBadge = branch ? `<div class="multi-pill-branch" style="color:${color};background:${color}18">${escapeHtml(branch)}</div>` : '';
+
+    // Always show a pill badge: label + branch badge when branch exists, label AS badge when not
+    const pillLabelHtml = branch
+      ? `<div class="multi-pill-label">${escapeHtml(label)}</div>
+         <div class="multi-pill-branch" style="color:${color};background:${color}18">${escapeHtml(branch)}</div>`
+      : `<div class="multi-pill-branch" style="color:${color};background:${color}18">${escapeHtml(label)}</div>`;
 
     pillsHtml += `
       <div class="multi-pill" style="border-color:${color};background:${color}12;cursor:pointer" ${navAction}>
-        <div class="multi-pill-label">${escapeHtml(label)}</div>
-        ${branchBadge}
+        ${pillLabelHtml}
         ${clConf ? `<div class="multi-pill-conf">${clConf}</div>` : ''}
       </div>`;
   }
