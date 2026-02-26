@@ -143,11 +143,13 @@ class EntityRulerStage(PipelineStage):
             semantic_ruler = SemanticEntityRuler(self._embedding_service)
             semantic_matches = semantic_ruler.find_semantic_matches(full_text, known_spans)
             for sm in semantic_matches:
+                sm_fc = self._iri_to_concept.get(sm.iri)
+                sm_label = sm_fc.preferred_label if sm_fc else sm.matched_label
                 ruler_concepts.append(
                     ConceptMatch(
                         concept_text=sm.text,
                         folio_iri=sm.iri,
-                        folio_label=sm.matched_label,
+                        folio_label=sm_label,
                         confidence=sm.similarity,
                         source="semantic_ruler",
                     ).model_dump()
@@ -167,6 +169,8 @@ class EntityRulerStage(PipelineStage):
         )
         # Add semantic match annotations (reuse results from above)
         for sm in semantic_matches:
+            sm_fc = self._iri_to_concept.get(sm.iri)
+            sm_label = sm_fc.preferred_label if sm_fc else sm.matched_label
             ann = Annotation(
                 span=Span(
                     start=sm.start, end=sm.end, text=sm.text,
@@ -175,7 +179,7 @@ class EntityRulerStage(PipelineStage):
                 concepts=[ConceptMatch(
                     concept_text=sm.text,
                     folio_iri=sm.iri,
-                    folio_label=sm.matched_label,
+                    folio_label=sm_label,
                     confidence=sm.similarity,
                     source="semantic_ruler",
                 )],

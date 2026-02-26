@@ -850,6 +850,7 @@
     display: flex; align-items: center; gap: 8px; justify-content: center;
   }
   .tooltip-label { font-size: 14px; font-weight: 600; color: #1a1a2e; margin-bottom: 2px; }
+  .tooltip-matched-as { font-size: 10px; color: #888; margin: 1px 0 2px; font-style: italic; }
   .tooltip-conf-num {
     font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
   }
@@ -1113,11 +1114,11 @@
   .tooltip-note-slide textarea:focus { outline: none; border-top-color: #3b64e0; }
 
   /* Multi-branch graph overlay */
-  .multi-overlay { display: flex; flex-direction: column; align-items: center; gap: 0; min-width: 180px; }
-  .multi-pills-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .multi-overlay { display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 180px; position: relative; }
+  .multi-pills-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; position: relative; z-index: 1; }
   .multi-pill {
     border: 2px solid; border-radius: 8px; padding: 6px 10px; text-align: center;
-    cursor: pointer; transition: box-shadow 0.15s; min-width: 80px;
+    cursor: pointer; transition: box-shadow 0.15s; min-width: 80px; background: #fff;
   }
   .multi-pill:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
   .multi-pill-label { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 2px; }
@@ -1126,10 +1127,10 @@
   .multi-pill-actions { display: flex; gap: 4px; justify-content: center; align-items: center; }
   .multi-pill-dismiss { background: none; border: none; cursor: pointer; color: #999; font-size: 12px; padding: 2px; }
   .multi-pill-dismiss:hover { color: #c82828; }
-  .multi-svg { width: 100%; height: 16px; display: block; }
+  .multi-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
   .multi-text-pill {
     background: #f0f1f5; border-radius: 6px; padding: 4px 12px;
-    font-weight: 600; font-size: 13px; color: #1a1a2e;
+    font-weight: 600; font-size: 13px; color: #1a1a2e; position: relative; z-index: 1;
   }
 
   /* Lineage trail in tooltip */
@@ -3839,8 +3840,21 @@ function showTooltip(event, el) {
     ? `<div class="tooltip-branch" style="color:${branchColor};background:${branchColor}18">${escapeHtml(branch)}</div>`
     : '';
 
+  // Build "matched as" line when rdfs:label differs from document text
+  let matchedAsLine = '';
+  if (annData && annData.concepts && annData.concepts[0]) {
+    const conceptText = annData.concepts[0].concept_text || '';
+    if (label && conceptText && label.toLowerCase() !== conceptText.toLowerCase()) {
+      const alts = annData.concepts[0].folio_alt_labels || [];
+      const matchedAlt = alts.find(a => a.toLowerCase() === conceptText.toLowerCase());
+      const displayMatch = matchedAlt || conceptText;
+      matchedAsLine = `<div class="tooltip-matched-as">matched as: &ldquo;${escapeHtml(displayMatch)}&rdquo;</div>`;
+    }
+  }
+
   tooltip.innerHTML = `
     <div class="tooltip-label">${escapeHtml(label)}</div>
+    ${matchedAsLine}
     ${branchBadge}
     <div class="tooltip-main-row">
       <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}</span>
@@ -3886,6 +3900,39 @@ function showTooltip(event, el) {
 
 /** Multi-branch graph overlay: shows each branch as a pill connected to the text pill.
  *  Layout flips based on position: label nearest source text, classifications away. */
+/** Redraw SVG connector lines based on actual DOM positions of text pill and concept pills. */
+function _redrawOverlayLines(overlay, pillColors) {
+  const svg = overlay.querySelector('.multi-svg');
+  if (!svg) return;
+  const textPill = overlay.querySelector('.multi-text-pill');
+  const pills = overlay.querySelectorAll('.multi-pill');
+  if (!textPill || pills.length === 0) return;
+
+  const oRect = overlay.getBoundingClientRect();
+  const tRect = textPill.getBoundingClientRect();
+  const direction = overlay.dataset.direction || 'below';
+
+  // Start: bottom-center of text pill (below) or top-center (above)
+  const startX = tRect.left + tRect.width / 2 - oRect.left;
+  const startY = direction === 'below'
+    ? tRect.bottom - oRect.top
+    : tRect.top - oRect.top;
+
+  let lines = '';
+  pills.forEach((pill, i) => {
+    const pRect = pill.getBoundingClientRect();
+    const endX = pRect.left + pRect.width / 2 - oRect.left;
+    const endY = direction === 'below'
+      ? pRect.top - oRect.top
+      : pRect.bottom - oRect.top;
+    const color = pillColors[i] || '#6b6b80';
+    lines += `<line x1="${startX}" y1="${startY}" x2="${endX}" y2="${endY}" stroke="${color}" stroke-width="1.5" stroke-opacity="0.5"/>`;
+  });
+
+  svg.setAttribute('viewBox', `0 0 ${oRect.width} ${oRect.height}`);
+  svg.innerHTML = lines;
+}
+
 function _showMultiBranchOverlay(tooltip, el, annIds) {
   const matchedText = el.textContent.replace(/\s+/g, ' ').trim();
 
@@ -3906,14 +3953,19 @@ function _showMultiBranchOverlay(tooltip, el, annIds) {
     const aConf = typeof ac.confidence === 'number' ? (ac.confidence > 1 ? ac.confidence : ac.confidence * 100) : 0;
     const existingRating = _feedbackCache[aid] || null;
 
+    // "matched as" note when rdfs:label differs from document text
+    const pillMatchedAs = (conceptLabel.toLowerCase() !== matchedText.toLowerCase())
+      ? `<div class="tooltip-matched-as">matched as: &ldquo;${escapeHtml(matchedText)}&rdquo;</div>`
+      : '';
+
     // Always show a pill badge: label + branch badge when branch exists, label AS badge when not
     const pillLabelHtml = ab
-      ? `<div class="multi-pill-label">${escapeHtml(conceptLabel)}</div>
+      ? `<div class="multi-pill-label">${escapeHtml(conceptLabel)}</div>${pillMatchedAs}
          <div class="multi-pill-branch" style="color:${aColor};background:${aColor}18">${escapeHtml(ab)}</div>`
-      : `<div class="multi-pill-branch" style="color:${aColor};background:${aColor}18">${escapeHtml(conceptLabel)}</div>`;
+      : `<div class="multi-pill-branch" style="color:${aColor};background:${aColor}18">${escapeHtml(conceptLabel)}</div>${pillMatchedAs}`;
 
     pillsHtml += `
-      <div class="multi-pill" style="border-color:${aColor};background:${aColor}12" data-pill-idx="${i}">
+      <div class="multi-pill" style="border-color:${aColor}" data-pill-idx="${i}">
         ${pillLabelHtml}
         <div class="multi-pill-conf">${aConf.toFixed(0)}%</div>
         <div class="multi-pill-actions">
@@ -3924,29 +3976,13 @@ function _showMultiBranchOverlay(tooltip, el, annIds) {
       </div>`;
   }
 
-  // Build SVG lines (direction-aware — flipped after positioning)
-  function _buildSvgLines(dir) {
-    let lines = '';
-    for (let i = 0; i < pillColors.length; i++) {
-      const px = (i + 0.5) / pillCount * 100;
-      if (dir === 'below') {
-        // Text pill on top, classification pills below → lines go from top (text) to bottom (pills)
-        lines += `<line x1="50%" y1="0%" x2="${px}%" y2="100%" stroke="${pillColors[i]}" stroke-width="1.5" stroke-opacity="0.5"/>`;
-      } else {
-        // Text pill on bottom, classification pills above → lines go from bottom (text) to top (pills)
-        lines += `<line x1="50%" y1="100%" x2="${px}%" y2="0%" stroke="${pillColors[i]}" stroke-width="1.5" stroke-opacity="0.5"/>`;
-      }
-    }
-    return lines;
-  }
-
   // Initial render (below orientation — text label on top, pills below)
   const textPillHtml = `<div class="multi-text-pill">${escapeHtml(matchedText)}</div>`;
   const pillsRowHtml = `<div class="multi-pills-row">${pillsHtml}</div>`;
 
   tooltip.innerHTML = `<div class="multi-overlay" data-direction="below">
+    <svg class="multi-svg"></svg>
     ${textPillHtml}
-    <svg class="multi-svg" preserveAspectRatio="none">${_buildSvgLines('below')}</svg>
     ${pillsRowHtml}
   </div>`;
   tooltip.classList.add('visible');
@@ -3982,8 +4018,8 @@ function _showMultiBranchOverlay(tooltip, el, annIds) {
       const overlay = tooltip.querySelector('.multi-overlay');
       if (overlay) {
         overlay.dataset.direction = 'above';
-        overlay.innerHTML = `${pillsRowHtml}
-          <svg class="multi-svg" preserveAspectRatio="none">${_buildSvgLines('above')}</svg>
+        overlay.innerHTML = `<svg class="multi-svg"></svg>
+          ${pillsRowHtml}
           ${textPillHtml}`;
         // Re-attach pill click handlers after re-render
         overlay.querySelectorAll('.multi-pill').forEach(pill => {
@@ -4001,6 +4037,11 @@ function _showMultiBranchOverlay(tooltip, el, annIds) {
         });
       }
     }
+    // Draw connector lines based on actual DOM positions
+    requestAnimationFrame(() => {
+      const overlay = tooltip.querySelector('.multi-overlay');
+      if (overlay) _redrawOverlayLines(overlay, pillColors);
+    });
   });
 }
 
@@ -4067,23 +4108,10 @@ function _showIndividualMultiClassOverlay(tooltip, el, ind, uniqueLinks, name, c
       : `<div class="multi-pill-branch" style="color:${color};background:${color}18">${escapeHtml(label)}</div>`;
 
     pillsHtml += `
-      <div class="multi-pill" style="border-color:${color};background:${color}12;cursor:pointer" ${navAction}>
+      <div class="multi-pill" style="border-color:${color};cursor:pointer" ${navAction}>
         ${pillLabelHtml}
         ${clConf ? `<div class="multi-pill-conf">${clConf}</div>` : ''}
       </div>`;
-  }
-
-  function _buildSvgLines(dir) {
-    let lines = '';
-    for (let i = 0; i < pillColors.length; i++) {
-      const px = (i + 0.5) / pillCount * 100;
-      if (dir === 'below') {
-        lines += `<line x1="50%" y1="0%" x2="${px}%" y2="100%" stroke="${pillColors[i]}" stroke-width="1.5" stroke-opacity="0.5"/>`;
-      } else {
-        lines += `<line x1="50%" y1="100%" x2="${px}%" y2="0%" stroke="${pillColors[i]}" stroke-width="1.5" stroke-opacity="0.5"/>`;
-      }
-    }
-    return lines;
   }
 
   const textPillHtml = `<div class="multi-text-pill">${escapeHtml(name)}</div>`;
@@ -4092,8 +4120,8 @@ function _showIndividualMultiClassOverlay(tooltip, el, ind, uniqueLinks, name, c
 
   // Initial render: below orientation (text label on top, pills below)
   tooltip.innerHTML = `<div class="multi-overlay" data-direction="below">
+    <svg class="multi-svg"></svg>
     ${textPillHtml}${confHtml}
-    <svg class="multi-svg" preserveAspectRatio="none">${_buildSvgLines('below')}</svg>
     ${pillsRowHtml}
   </div>${normalizedLine}${urlLine}`;
   tooltip.classList.add('visible');
@@ -4103,11 +4131,15 @@ function _showIndividualMultiClassOverlay(tooltip, el, ind, uniqueLinks, name, c
       const overlay = tooltip.querySelector('.multi-overlay');
       if (overlay) {
         overlay.dataset.direction = 'above';
-        overlay.innerHTML = `${pillsRowHtml}
-          <svg class="multi-svg" preserveAspectRatio="none">${_buildSvgLines('above')}</svg>
+        overlay.innerHTML = `<svg class="multi-svg"></svg>
+          ${pillsRowHtml}
           ${textPillHtml}${confHtml}`;
       }
     }
+    requestAnimationFrame(() => {
+      const overlay = tooltip.querySelector('.multi-overlay');
+      if (overlay) _redrawOverlayLines(overlay, pillColors);
+    });
   });
 }
 
@@ -4145,7 +4177,7 @@ function _showIndividualMultiOverlay(tooltip, el, indIds) {
     const typeBadge = iType === 'legal_citation' ? 'Citation' : 'Entity';
 
     pillsHtml += `
-      <div class="multi-pill" style="border-color:${color};background:${color}12;cursor:pointer" data-pill-idx="${i}">
+      <div class="multi-pill" style="border-color:${color};cursor:pointer" data-pill-idx="${i}">
         <div class="multi-pill-label">${escapeHtml(iName)}</div>
         <div class="multi-pill-branch" style="color:${color};background:${color}18">${typeBadge}</div>
         ${classHtml}
@@ -4153,25 +4185,12 @@ function _showIndividualMultiOverlay(tooltip, el, indIds) {
       </div>`;
   }
 
-  function _buildSvgLines(dir) {
-    let lines = '';
-    for (let i = 0; i < pillColors.length; i++) {
-      const px = (i + 0.5) / pillCount * 100;
-      if (dir === 'below') {
-        lines += `<line x1="50%" y1="0%" x2="${px}%" y2="100%" stroke="${pillColors[i]}" stroke-width="1.5" stroke-opacity="0.5"/>`;
-      } else {
-        lines += `<line x1="50%" y1="100%" x2="${px}%" y2="0%" stroke="${pillColors[i]}" stroke-width="1.5" stroke-opacity="0.5"/>`;
-      }
-    }
-    return lines;
-  }
-
   const textPillHtml = `<div class="multi-text-pill">${escapeHtml(matchedText)}</div>`;
   const pillsRowHtml = `<div class="multi-pills-row">${pillsHtml}</div>`;
 
   tooltip.innerHTML = `<div class="multi-overlay" data-direction="below">
+    <svg class="multi-svg"></svg>
     ${textPillHtml}
-    <svg class="multi-svg" preserveAspectRatio="none">${_buildSvgLines('below')}</svg>
     ${pillsRowHtml}
   </div>`;
   tooltip.classList.add('visible');
@@ -4199,12 +4218,16 @@ function _showIndividualMultiOverlay(tooltip, el, indIds) {
       const overlay = tooltip.querySelector('.multi-overlay');
       if (overlay) {
         overlay.dataset.direction = 'above';
-        overlay.innerHTML = `${pillsRowHtml}
-          <svg class="multi-svg" preserveAspectRatio="none">${_buildSvgLines('above')}</svg>
+        overlay.innerHTML = `<svg class="multi-svg"></svg>
+          ${pillsRowHtml}
           ${textPillHtml}`;
         _attachPillHandlers(overlay);
       }
     }
+    requestAnimationFrame(() => {
+      const overlay = tooltip.querySelector('.multi-overlay');
+      if (overlay) _redrawOverlayLines(overlay, pillColors);
+    });
   });
 }
 

@@ -364,7 +364,7 @@ class FolioService:
 
     def _to_folio_property(self, prop) -> FOLIOProperty:
         """Convert an OWLObjectProperty to our FOLIOProperty dataclass."""
-        raw_label = getattr(prop, "preferred_label", None) or getattr(prop, "label", "") or ""
+        raw_label = getattr(prop, "label", None) or getattr(prop, "preferred_label", "") or ""
         clean_label = self._strip_prefix(raw_label)
 
         # Convert camelCase to spaces (e.g. "hasFigure" → "has Figure")
@@ -400,7 +400,7 @@ class FolioService:
 
     def _to_folio_concept(self, concept) -> FOLIOConcept:
         # preferred_label may be None; fall back to label
-        pref_label = getattr(concept, "preferred_label", None) or getattr(concept, "label", "") or ""
+        pref_label = getattr(concept, "label", None) or getattr(concept, "preferred_label", "") or ""
         alt_labels = getattr(concept, "alternative_labels", []) or []
         definition = getattr(concept, "definition", "") or ""
         iri = getattr(concept, "iri", "") or ""
