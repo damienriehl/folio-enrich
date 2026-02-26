@@ -33,6 +33,8 @@ class LLMPropertyIdentifier:
         chunk: TextChunk,
         annotations: list[Annotation],
         existing_properties: list[PropertyAnnotation],
+        *,
+        document_type: str = "",
     ) -> list[PropertyAnnotation]:
         """Extract properties from a single chunk using LLM."""
         chunk_start = chunk.start_offset
@@ -70,7 +72,8 @@ class LLMPropertyIdentifier:
             property_labels = []
 
         prompt = build_property_extraction_prompt(
-            chunk.text, class_annotations, existing_prop_context, property_labels
+            chunk.text, class_annotations, existing_prop_context, property_labels,
+            document_type=document_type,
         )
 
         try:
@@ -233,10 +236,15 @@ class LLMPropertyIdentifier:
         chunks: list[TextChunk],
         annotations: list[Annotation],
         existing_properties: list[PropertyAnnotation],
+        *,
+        document_type: str = "",
     ) -> list[PropertyAnnotation]:
         """Process all chunks in parallel, returning new properties."""
         tasks = [
-            self.identify_properties(chunk, annotations, existing_properties)
+            self.identify_properties(
+                chunk, annotations, existing_properties,
+                document_type=document_type,
+            )
             for chunk in chunks
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)

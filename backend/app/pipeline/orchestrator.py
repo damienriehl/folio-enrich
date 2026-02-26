@@ -19,6 +19,7 @@ from app.pipeline.stages.metadata_stage import MetadataStage
 from app.pipeline.stages.dependency_stage import DependencyStage
 from app.pipeline.stages.individual_stage import EarlyIndividualStage, LLMIndividualStage
 from app.pipeline.stages.property_stage import EarlyPropertyStage, LLMPropertyStage
+from app.pipeline.stages.document_type_stage import DocumentTypeStage
 from app.pipeline.stages.rerank_stage import ContextualRerankStage
 from app.services.llm.base import LLMProvider
 from app.storage.job_store import JobStore
@@ -26,7 +27,7 @@ from app.storage.job_store import JobStore
 logger = logging.getLogger(__name__)
 
 # Task names for per-task LLM configuration
-LLM_TASKS = ("classifier", "extractor", "concept", "branch_judge", "area_of_law", "synthetic", "individual", "property")
+LLM_TASKS = ("classifier", "extractor", "concept", "branch_judge", "area_of_law", "synthetic", "individual", "property", "document_type")
 
 # Map task names to TaskLLMs field names (needed when task name is a Python builtin)
 _TASK_FIELD_MAP: dict[str, str] = {"property": "property_llm"}
@@ -49,6 +50,7 @@ class TaskLLMs:
     synthetic: LLMProvider | None = None
     individual: LLMProvider | None = None
     property_llm: LLMProvider | None = None
+    document_type: LLMProvider | None = None
 
     # --- convenience helpers ------------------------------------------------
 
@@ -98,6 +100,7 @@ class PipelineConfig:
     llm_concept: PipelineStage | None = None
     early_individual: PipelineStage | None = None
     early_property: PipelineStage | None = None
+    document_type: PipelineStage | None = None
     post_parallel: list[PipelineStage] = field(default_factory=list)
 
 
@@ -118,6 +121,7 @@ def build_pipeline_config(
     extractor_llm = (task_llms.extractor if task_llms else llm) or llm
     individual_llm = (task_llms.individual if task_llms else llm) or llm
     property_llm = (task_llms.property_llm if task_llms else llm) or llm
+    document_type_llm = (task_llms.document_type if task_llms else llm) or llm
 
     config = PipelineConfig(
         pre_parallel=[
@@ -135,6 +139,10 @@ def build_pipeline_config(
 
     # Early property extraction (Aho-Corasick) runs in parallel
     config.early_property = EarlyPropertyStage()
+
+    # Early document type classification runs in parallel
+    if document_type_llm is not None:
+        config.document_type = DocumentTypeStage(document_type_llm)
 
     config.post_parallel = [
         ReconciliationStage(embedding_service=embedding_service),
@@ -188,6 +196,7 @@ def build_stages(
     extractor_llm = (task_llms.extractor if task_llms else llm) or llm
     individual_llm = (task_llms.individual if task_llms else llm) or llm
     property_llm = (task_llms.property_llm if task_llms else llm) or llm
+    document_type_llm = (task_llms.document_type if task_llms else llm) or llm
 
     stages: list[PipelineStage] = [
         IngestionStage(),
@@ -200,6 +209,10 @@ def build_stages(
 
     # Early property extraction (Aho-Corasick) — fast, no LLM
     stages.append(EarlyPropertyStage())
+
+    # Early document type classification — LLM-based
+    if document_type_llm is not None:
+        stages.append(DocumentTypeStage(document_type_llm))
 
     if concept_llm is not None:
         stages.append(LLMConceptStage(concept_llm))
@@ -364,7 +377,7 @@ class PipelineOrchestrator:
             job.updated_at = datetime.now(timezone.utc)
             await self.job_store.save(job)
 
-            _log_activity(job, "orchestrator", "Running EntityRuler, LLM, early individuals, and early properties in parallel...")
+            _log_activity(job, "orchestrator", "Running EntityRuler, LLM, early individuals, early properties, and document type in parallel...")
 
             async def run_entity_ruler(j: Job) -> None:
                 if config.entity_ruler is None:
@@ -414,11 +427,24 @@ class PipelineOrchestrator:
                     logger.warning("Stage %s failed for job %s: %s — continuing",
                                    config.early_property.name, j.id, e)
 
+            async def run_document_type(j: Job) -> None:
+                if config.document_type is None:
+                    return
+                logger.info("Running stage %s for job %s (parallel)", config.document_type.name, j.id)
+                try:
+                    await config.document_type.execute(j)
+                    j.updated_at = datetime.now(timezone.utc)
+                    await self.job_store.save(j)
+                except Exception as e:
+                    logger.warning("Stage %s failed for job %s: %s — continuing",
+                                   config.document_type.name, j.id, e)
+
             await asyncio.gather(
                 run_entity_ruler(job),
                 run_llm_concept(job),
                 run_early_individual(job),
                 run_early_property(job),
+                run_document_type(job),
             )
 
             _log_activity(job, "orchestrator", "Parallel enrichment complete")
@@ -455,6 +481,21 @@ class PipelineOrchestrator:
                     await self.job_store.save(job)
                 except Exception as e:
                     logger.warning("Area of law assessment failed: %s", e)
+
+            # Post-completion: Document type quality cross-check
+            dt_llm = (self._task_llms.document_type if self._task_llms else None) or self._llm
+            if dt_llm is not None and job.result.metadata.get("self_identified_type"):
+                try:
+                    from app.services.quality.document_type_checker import DocumentTypeChecker
+                    checker = DocumentTypeChecker(dt_llm)
+                    signals = await checker.check(job)
+                    if signals:
+                        job.result.metadata["quality_signals"] = signals
+                        _log_activity(job, "quality_check",
+                            f"Document type cross-check: {len(signals)} signal(s)")
+                        await self.job_store.save(job)
+                except Exception as e:
+                    logger.warning("Document type quality check failed: %s", e)
 
         except Exception as e:
             logger.exception("Pipeline failed for job %s", job.id)
@@ -499,6 +540,21 @@ class PipelineOrchestrator:
                     await self.job_store.save(job)
                 except Exception as e:
                     logger.warning("Area of law assessment failed: %s", e)
+
+            # Post-completion: Document type quality cross-check
+            dt_llm = (self._task_llms.document_type if self._task_llms else None) or self._llm
+            if dt_llm is not None and job.result.metadata.get("self_identified_type"):
+                try:
+                    from app.services.quality.document_type_checker import DocumentTypeChecker
+                    checker = DocumentTypeChecker(dt_llm)
+                    signals = await checker.check(job)
+                    if signals:
+                        job.result.metadata["quality_signals"] = signals
+                        _log_activity(job, "quality_check",
+                            f"Document type cross-check: {len(signals)} signal(s)")
+                        await self.job_store.save(job)
+                except Exception as e:
+                    logger.warning("Document type quality check failed: %s", e)
 
         except Exception as e:
             logger.exception("Pipeline failed for job %s", job.id)

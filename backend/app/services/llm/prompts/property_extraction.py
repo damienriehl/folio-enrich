@@ -25,7 +25,7 @@ A property is a VERB or RELATION that connects concepts. Examples:
 - Nouns: "summary judgment", "court", "plaintiff" — these are OWL Classes
 - Named entities: "John Smith", "42 U.S.C. § 1983" — these are OWL Individuals
 - Common verbs without legal significance: "is", "was", "has", "had", "the"
-
+{document_type_section}
 ## OWL Class Annotations in this chunk:
 {class_annotations}
 
@@ -74,6 +74,8 @@ def build_property_extraction_prompt(
     class_annotations: list[dict],
     existing_properties: list[dict],
     property_labels: list[str],
+    *,
+    document_type: str = "",
 ) -> str:
     """Build the LLM prompt for property extraction."""
     # Format class annotations
@@ -104,8 +106,13 @@ def build_property_extraction_prompt(
     # Format available property labels (sample for context)
     labels_str = ", ".join(property_labels[:50]) if property_labels else "(none available)"
 
+    dt_section = ""
+    if document_type:
+        dt_section = f"## Document Type\nThis document is: {document_type}\n - use that as context when doing your tasks.\n"
+
     return (
         _PROPERTY_EXTRACTION_TEMPLATE
+        .replace("{document_type_section}", dt_section)
         .replace("{class_annotations}", ann_str)
         .replace("{existing_properties}", prop_str)
         .replace("{property_labels}", labels_str)

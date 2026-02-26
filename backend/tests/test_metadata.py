@@ -5,6 +5,9 @@ from typing import Any
 import pytest
 
 from app.models.annotation import Annotation, ConceptMatch, Span
+from app.models.document import CanonicalText, DocumentFormat, DocumentInput, TextChunk
+from app.models.job import Job, JobResult, JobStatus
+from app.pipeline.stages.metadata_stage import MetadataStage
 from app.services.llm.base import LLMProvider
 from app.services.metadata.classifier import DocumentClassifier
 from app.services.metadata.extractor import MetadataExtractor
@@ -77,6 +80,100 @@ class TestMetadataExtractor:
         assert result["author"] == "John Doe"
         assert result["recipient"] == "Jane Smith"
         assert result["addresses"] == ["123 Main St, New York, NY 10001"]
+
+
+class TrackingClassifierLLM(LLMProvider):
+    """Tracks whether classify was called."""
+
+    def __init__(self):
+        self.classify_called = False
+
+    async def complete(self, prompt: str, **kwargs: Any) -> str:
+        return ""
+
+    async def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
+        return ""
+
+    async def structured(self, prompt: str, schema: dict, **kwargs: Any) -> dict:
+        if "classifier" in prompt.lower() or "classify" in prompt.lower() or "document type" in prompt.lower():
+            self.classify_called = True
+            return {"document_type": "Should Not Be Used", "confidence": 0.5, "reasoning": "test"}
+        return {
+            "court": "",
+            "judge": "",
+            "case_number": "",
+            "parties": [],
+            "date_filed": "",
+            "jurisdiction": "",
+            "governing_law": "",
+            "claim_types": [],
+            "author": "",
+            "recipient": "",
+            "addresses": [],
+        }
+
+    async def test_connection(self) -> bool:
+        return True
+
+    async def list_models(self):
+        return []
+
+
+class TestMetadataStageReuse:
+    @pytest.mark.asyncio
+    async def test_reuses_early_document_type(self):
+        """When self_identified_type is set, MetadataStage skips classifier."""
+        llm = FakeExtractorLLM()
+        stage = MetadataStage(llm, classifier_llm=llm, extractor_llm=llm)
+
+        text = "IN THE UNITED STATES DISTRICT COURT..."
+        job = Job(
+            input=DocumentInput(content=text, format=DocumentFormat.PLAIN_TEXT),
+            status=JobStatus.ENRICHING,
+            result=JobResult(
+                canonical_text=CanonicalText(
+                    full_text=text,
+                    chunks=[TextChunk(text=text, start_offset=0, end_offset=len(text), chunk_index=0)],
+                ),
+            ),
+        )
+        job.result.metadata["self_identified_type"] = "Defendant's Motion to Dismiss"
+        job.result.metadata["document_type_confidence"] = 0.95
+
+        result = await stage.execute(job)
+
+        # Should use the early type, not re-classify
+        assert result.result.metadata["document_type"] == "Defendant's Motion to Dismiss"
+        # Activity log should indicate reuse
+        log = result.result.metadata.get("activity_log", [])
+        assert any("reused_early=yes" in entry.get("msg", "") for entry in log)
+
+    @pytest.mark.asyncio
+    async def test_falls_back_when_no_early_type(self):
+        """Without self_identified_type, MetadataStage classifies normally."""
+        stage = MetadataStage(
+            FakeClassifierLLM(),
+            classifier_llm=FakeClassifierLLM(),
+            extractor_llm=FakeExtractorLLM(),
+        )
+
+        text = "IN THE UNITED STATES DISTRICT COURT..."
+        job = Job(
+            input=DocumentInput(content=text, format=DocumentFormat.PLAIN_TEXT),
+            status=JobStatus.ENRICHING,
+            result=JobResult(
+                canonical_text=CanonicalText(
+                    full_text=text,
+                    chunks=[TextChunk(text=text, start_offset=0, end_offset=len(text), chunk_index=0)],
+                ),
+            ),
+        )
+
+        result = await stage.execute(job)
+
+        assert result.result.metadata["document_type"] == "Motion to Dismiss"
+        log = result.result.metadata.get("activity_log", [])
+        assert any("reused_early=no" in entry.get("msg", "") for entry in log)
 
 
 class TestMetadataPromoter:

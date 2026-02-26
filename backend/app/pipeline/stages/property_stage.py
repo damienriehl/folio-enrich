@@ -119,8 +119,10 @@ class LLMPropertyStage(PipelineStage):
                 )
 
                 identifier = LLMPropertyIdentifier(self.llm)
+                document_type = job.result.metadata.get("self_identified_type", "")
                 llm_new = await identifier.identify_batch(
-                    chunks, job.result.annotations, existing_properties
+                    chunks, job.result.annotations, existing_properties,
+                    document_type=document_type,
                 )
             except Exception:
                 logger.warning("LLM property extraction failed", exc_info=True)

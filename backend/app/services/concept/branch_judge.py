@@ -12,7 +12,7 @@ _BRANCH_JUDGE_TEMPLATE = """You are a legal ontology expert. Given a concept tha
 
 FOLIO branches:
 {branch_info}
-
+{document_type_section}
 Given:
 - **concept**: {concept_text}
 - **sentence**: {sentence}
@@ -65,13 +65,20 @@ class BranchJudge:
         concept_text: str,
         sentence: str,
         candidate_branches: list[str],
+        *,
+        document_type: str = "",
     ) -> dict:
         folio_context = _build_folio_context(concept_text, candidate_branches)
         branch_info = get_branch_detail()
 
+        dt_section = ""
+        if document_type:
+            dt_section = f"\n## Document Type\nThis document is: {document_type}\n - use that as context when doing your tasks.\n"
+
         prompt = (
             _BRANCH_JUDGE_TEMPLATE
             .replace("{branch_info}", branch_info)
+            .replace("{document_type_section}", dt_section)
             .replace("{concept_text}", concept_text)
             .replace("{sentence}", sentence)
             .replace("{candidates}", ", ".join(candidate_branches))
@@ -100,7 +107,7 @@ class BranchJudge:
             }
 
     async def judge_batch(
-        self, items: list[dict]
+        self, items: list[dict], *, document_type: str = ""
     ) -> list[dict]:
         import asyncio
 
@@ -109,6 +116,7 @@ class BranchJudge:
                 item["concept_text"],
                 item["sentence"],
                 item.get("candidate_branches", []),
+                document_type=document_type,
             )
             for item in items
         ]

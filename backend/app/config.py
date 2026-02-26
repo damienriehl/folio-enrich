@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     llm_area_of_law_model: str = ""
     llm_synthetic_provider: str = ""
     llm_synthetic_model: str = ""
+    llm_document_type_provider: str = ""
+    llm_document_type_model: str = ""
 
     # Embedding
     embedding_provider: str = "local"  # local, ollama, openai

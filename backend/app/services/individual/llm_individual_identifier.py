@@ -33,6 +33,8 @@ class LLMIndividualIdentifier:
         chunk: TextChunk,
         annotations: list[Annotation],
         existing_individuals: list[Individual],
+        *,
+        document_type: str = "",
     ) -> list[Individual]:
         """Extract individuals from a single chunk using LLM."""
         # Build class annotation context for this chunk
@@ -63,7 +65,8 @@ class LLMIndividualIdentifier:
                 })
 
         prompt = build_individual_extraction_prompt(
-            chunk.text, class_annotations, existing_ind_context
+            chunk.text, class_annotations, existing_ind_context,
+            document_type=document_type,
         )
 
         try:
@@ -243,10 +246,15 @@ class LLMIndividualIdentifier:
         chunks: list[TextChunk],
         annotations: list[Annotation],
         existing_individuals: list[Individual],
+        *,
+        document_type: str = "",
     ) -> list[Individual]:
         """Process all chunks in parallel, returning new individuals."""
         tasks = [
-            self.identify_individuals(chunk, annotations, existing_individuals)
+            self.identify_individuals(
+                chunk, annotations, existing_individuals,
+                document_type=document_type,
+            )
             for chunk in chunks
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)

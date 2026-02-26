@@ -24,7 +24,7 @@ An individual is a SPECIFIC, NAMED instance of an OWL class. Examples:
 - Generic references: "the plaintiff", "a court", "the statute" — these refer to classes, not instances
 - Abstract concepts: "negligence", "breach of contract" — these ARE the OWL classes themselves
 - Pronouns: "he", "they", "it"
-
+{document_type_section}
 ## OWL Class Annotations in this chunk:
 {class_annotations}
 
@@ -72,6 +72,8 @@ def build_individual_extraction_prompt(
     text: str,
     class_annotations: list[dict],
     existing_individuals: list[dict],
+    *,
+    document_type: str = "",
 ) -> str:
     """Build the LLM prompt for individual extraction."""
     # Format class annotations
@@ -99,8 +101,13 @@ def build_individual_extraction_prompt(
     else:
         ind_str = "(none found by automated extractors in this chunk)"
 
+    dt_section = ""
+    if document_type:
+        dt_section = f"## Document Type\nThis document is: {document_type}\n - use that as context when doing your tasks.\n"
+
     return (
         _INDIVIDUAL_EXTRACTION_TEMPLATE
+        .replace("{document_type_section}", dt_section)
         .replace("{class_annotations}", ann_str)
         .replace("{existing_individuals}", ind_str)
         .replace("{text}", text)

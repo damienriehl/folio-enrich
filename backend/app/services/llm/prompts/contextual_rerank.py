@@ -11,7 +11,7 @@ Scoring rubric:
 - 0.60 = The concept is relevant but secondary or tangential
 - 0.40 = The concept is a stretch — the term appears but the FOLIO concept doesn't really fit
 - 0.20 = The concept is likely a false positive — the text matches a label but the legal meaning doesn't apply
-
+{document_type_section}
 DOCUMENT EXCERPT:
 {document_text}
 
@@ -23,7 +23,7 @@ For each concept, respond with JSON:
 
 
 def build_contextual_rerank_prompt(
-    document_text: str, concepts: list[dict]
+    document_text: str, concepts: list[dict], *, document_type: str = ""
 ) -> str:
     import json
 
@@ -36,8 +36,13 @@ def build_contextual_rerank_prompt(
             "folio_definition": (c.get("folio_definition") or "")[:200],
         })
 
+    dt_section = ""
+    if document_type:
+        dt_section = f"\n## Document Type\nThis document is: {document_type}\n - use that as context when doing your tasks.\n"
+
     return (
         _CONTEXTUAL_RERANK_TEMPLATE
+        .replace("{document_type_section}", dt_section)
         .replace("{document_text}", document_text[:3000])
         .replace("{concepts_json}", json.dumps(concepts_for_prompt, indent=2))
     )

@@ -32,9 +32,17 @@ class MetadataStage(PipelineStage):
 
         full_text = job.result.canonical_text.full_text
 
-        # Phase 1: Classify document type
-        classification = await self.classifier.classify(full_text)
-        doc_type = classification.get("document_type", "Unknown")
+        # Phase 1: Classify document type — reuse early result if available
+        early_type = job.result.metadata.get("self_identified_type")
+        if early_type:
+            doc_type = early_type
+            classification = {
+                "document_type": early_type,
+                "confidence": job.result.metadata.get("document_type_confidence", 0.0),
+            }
+        else:
+            classification = await self.classifier.classify(full_text)
+            doc_type = classification.get("document_type", "Unknown")
 
         # Phase 2: Extract structured fields
         fields = await self.extractor.extract(full_text, doc_type)
@@ -51,6 +59,7 @@ class MetadataStage(PipelineStage):
         job.result.metadata["extracted_fields"] = fields
 
         conf = round(classification.get("confidence", 0.0) * 100)
+        reused = "reused_early=yes" if early_type else "reused_early=no"
         log = job.result.metadata.setdefault("activity_log", [])
-        log.append({"ts": datetime.now(timezone.utc).isoformat(), "stage": self.name, "msg": f"Classified as {doc_type} ({conf}% confidence)"})
+        log.append({"ts": datetime.now(timezone.utc).isoformat(), "stage": self.name, "msg": f"Classified as {doc_type} ({conf}% confidence, {reused})"})
         return job

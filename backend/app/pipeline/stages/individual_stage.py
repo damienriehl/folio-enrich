@@ -134,8 +134,10 @@ class LLMIndividualStage(PipelineStage):
                 )
 
                 identifier = LLMIndividualIdentifier(self.llm)
+                document_type = job.result.metadata.get("self_identified_type", "")
                 llm_new = await identifier.identify_batch(
-                    chunks, job.result.annotations, existing_individuals
+                    chunks, job.result.annotations, existing_individuals,
+                    document_type=document_type,
                 )
             except Exception:
                 logger.warning("LLM individual extraction failed", exc_info=True)

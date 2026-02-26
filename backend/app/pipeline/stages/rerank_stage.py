@@ -45,7 +45,8 @@ class ContextualRerankStage(PipelineStage):
         if not full_text:
             return job
 
-        prompt = build_contextual_rerank_prompt(full_text, resolved)
+        document_type = job.result.metadata.get("self_identified_type", "")
+        prompt = build_contextual_rerank_prompt(full_text, resolved, document_type=document_type)
 
         try:
             raw = await self.llm.complete(prompt, temperature=0.0)
