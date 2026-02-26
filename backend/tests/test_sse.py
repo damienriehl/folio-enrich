@@ -46,3 +46,31 @@ class TestSSEEventStream:
 
         assert len(events) == 1
         assert events[0]["event"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_document_type_event_emitted(self, tmp_path):
+        store = JobStore(base_dir=tmp_path / "jobs")
+        job = Job(
+            input=DocumentInput(content="test", format=DocumentFormat.PLAIN_TEXT),
+            status=JobStatus.COMPLETED,
+            result=JobResult(
+                canonical_text=CanonicalText(full_text="test", chunks=[]),
+                metadata={
+                    "document_type": "Motion to Dismiss",
+                    "document_type_confidence": 0.92,
+                },
+            ),
+        )
+        await store.save(job)
+
+        events = []
+        async for event in job_event_stream(job.id, store):
+            events.append(event)
+            if event.get("event") == "complete":
+                break
+
+        dt_events = [e for e in events if e["event"] == "document_type"]
+        assert len(dt_events) == 1
+        data = json.loads(dt_events[0]["data"])
+        assert data["document_type"] == "Motion to Dismiss"
+        assert data["confidence"] == 0.92

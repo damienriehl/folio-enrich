@@ -21,6 +21,7 @@ async def job_event_stream(
     seen_property_ids: set[str] = set()
     last_states: dict[str, str] = {}
     last_activity_count: int = 0
+    doc_type_sent: bool = False
 
     while True:
         job = await job_store.load(job_id)
@@ -112,6 +113,17 @@ async def job_event_stream(
                     "match_type": prop.match_type,
                 }
                 yield {"event": "property_added", "data": json.dumps(prop_data)}
+
+        # Emit document type as soon as MetadataStage assigns it
+        if not doc_type_sent and job.result.metadata.get("document_type"):
+            doc_type_sent = True
+            yield {
+                "event": "document_type",
+                "data": json.dumps({
+                    "document_type": job.result.metadata["document_type"],
+                    "confidence": job.result.metadata.get("document_type_confidence", 0.0),
+                }),
+            }
 
         # Emit new activity log entries
         activity_log = job.result.metadata.get("activity_log", [])

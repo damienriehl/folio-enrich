@@ -946,6 +946,34 @@
   @keyframes toast-in { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
   @keyframes toast-out { from { opacity: 1; transform: translateX(-50%) translateY(0); } to { opacity: 0; transform: translateX(-50%) translateY(12px); } }
 
+  /* Document type banner — prominent label above annotated text */
+  .doc-type-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    margin: 0 0 12px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #f0f4ff 0%, #e8eeff 100%);
+    border: 1px solid #c7d2fe;
+  }
+  .doc-type-banner .doc-type-label {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1e293b;
+    letter-spacing: -0.01em;
+  }
+  .doc-type-banner .doc-type-conf {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 11px;
+  }
+  .doc-type-banner .doc-type-conf.conf-high { background: #dcfce7; color: #166534; }
+  .doc-type-banner .doc-type-conf.conf-mid  { background: #fef3c7; color: #92400e; }
+  .doc-type-banner .doc-type-conf.conf-low  { background: #fee2e2; color: #991b1b; }
+
   /* View filter toggle for dismissed annotations */
   .ann-filter-bar {
     display: inline-flex; gap: 0; border: 1px solid #e0e1e6; border-radius: 6px;
@@ -2025,6 +2053,10 @@
     </div>
     <div class="panel-body" id="resultBody">
       <div class="tab-content active" id="tab-annotated">
+        <div class="doc-type-banner" id="docTypeBanner">
+          <span class="doc-type-label" id="docTypeLabel"></span>
+          <span class="doc-type-conf" id="docTypeConf"></span>
+        </div>
         <div class="ann-filter-bar" id="annFilterBar" style="display:none;margin-bottom:8px">
           <button class="active" onclick="setAnnFilter('all', this)" title="Show all annotations (dismissed ones are faded)">All</button>
           <button onclick="setAnnFilter('hide-dismissed', this)" title="Hide dismissed annotations">Active only</button>
@@ -3086,6 +3118,11 @@ function startSSE() {
     renderActivityLog();
   });
 
+  eventSource.addEventListener('document_type', (e) => {
+    const data = JSON.parse(e.data);
+    showDocTypeBanner(data.document_type, data.confidence);
+  });
+
   eventSource.addEventListener('individual_added', (e) => {
     const data = JSON.parse(e.data);
     const existingIdx = accumulatedIndividuals.findIndex(ind => ind.id === data.id);
@@ -3276,6 +3313,37 @@ function renderProgressStages(currentStatus) {
 }
 
 // ==============================================
+// Document Type Banner
+// ==============================================
+
+function showDocTypeBanner(docType, confidence) {
+  const banner = document.getElementById('docTypeBanner');
+  const label = document.getElementById('docTypeLabel');
+  const conf = document.getElementById('docTypeConf');
+
+  label.textContent = docType;
+
+  if (confidence != null && confidence > 0) {
+    const pct = Math.round(confidence * 100);
+    const tier = pct >= 80 ? 'conf-high' : pct >= 50 ? 'conf-mid' : 'conf-low';
+    conf.textContent = pct + '%';
+    conf.className = 'doc-type-conf ' + tier;
+    conf.style.display = '';
+  } else {
+    conf.style.display = 'none';
+  }
+
+  banner.style.display = 'flex';
+}
+
+function hideDocTypeBanner() {
+  const banner = document.getElementById('docTypeBanner');
+  banner.style.display = 'none';
+  document.getElementById('docTypeLabel').textContent = '';
+  document.getElementById('docTypeConf').textContent = '';
+}
+
+// ==============================================
 // Results Rendering
 // ==============================================
 
@@ -3287,6 +3355,9 @@ function renderResults(job) {
   const metadata = job.result?.metadata || {};
 
   _seedDismissedCache(annotations);
+  if (metadata.document_type) {
+    showDocTypeBanner(metadata.document_type, metadata.document_type_confidence);
+  }
   renderAnnotatedText(text, annotations, individuals, properties);
   renderConceptsList(annotations);
   renderTriples(metadata.spo_triples || []);
@@ -6410,6 +6481,7 @@ function clearAll() {
   }
   document.getElementById('activityLog').innerHTML = '';
   document.getElementById('logWrapper').classList.add('collapsed');
+  hideDocTypeBanner();
   stopPolling();
   setStatus('Ready', 'idle');
   renderProgressStages('pending');
