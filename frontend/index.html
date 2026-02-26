@@ -3485,7 +3485,7 @@ function renderAnnotatedText(text, annotations, individuals, properties) {
     // Build from innermost to outermost: property → individual → annotation
     let html = segText;
     if (prop) html = _buildPropertySpan(prop, html);
-    if (ind) html = _buildIndividualSpan(ind, html);
+    if (ind) html = _buildIndividualSpan(ind, html, coveringInds);
     if (ann) html = _buildAnnotationSpan(ann, html, ind || prop ? true : false, coveringAnns);
     pieces.push(html);
   }
@@ -3500,6 +3500,18 @@ function renderAnnotatedText(text, annotations, individuals, properties) {
       if (dotColors.length >= 2) {
         const dotsHtml = dotColors.map(c => `<span class="dot" style="background:${c.trim()}"></span>`).join('');
         el.insertAdjacentHTML('beforeend', `<span class="multi-branch-dots">${dotsHtml}</span>`);
+      }
+    }
+  });
+
+  // Add multi-individual dot indicators
+  container.querySelectorAll('.individual-span[data-multi-ind-count]').forEach(el => {
+    const count = parseInt(el.dataset.multiIndCount, 10);
+    if (count >= 2) {
+      const dotColors = (el.style.getPropertyValue('--multi-ind-dots') || '').split(',').filter(Boolean);
+      if (dotColors.length >= 2) {
+        const dotsHtml = dotColors.map(c => `<span class="dot" style="background:${c.trim()}"></span>`).join('');
+        el.insertAdjacentHTML('beforeend', `<span class="multi-branch-dots" style="top:-8px;bottom:auto">${dotsHtml}</span>`);
       }
     }
   });
@@ -3584,12 +3596,18 @@ function _buildPropertySpan(prop, innerHtml) {
   return `<span class="property-span" ${dataAttrs}>${innerHtml}</span>`;
 }
 
-function _buildIndividualSpan(ind, innerHtml) {
+function _buildIndividualSpan(ind, innerHtml, allCoveringInds) {
   const confVal = typeof ind.confidence === 'number' ? (ind.confidence > 1 ? ind.confidence / 100 : ind.confidence) : 1;
   const confTier = confVal < 0.5 ? 'low' : confVal < 0.8 ? 'mid' : 'high';
   const classLabel = (ind.class_links && ind.class_links.length > 0 && ind.class_links[0].folio_label) ? ind.class_links[0].folio_label : '';
+  // Multi-individual: collect all individual IDs and count
+  const multiInds = allCoveringInds || [ind];
+  const allIndIds = multiInds.map(i => i.id || '').filter(Boolean);
+  const multiCount = allIndIds.length;
   const dataAttrs = [
     `data-ind-id="${escapeAttr(ind.id || '')}"`,
+    `data-ind-ids="${escapeAttr(allIndIds.join(','))}"`,
+    `data-multi-ind-count="${multiCount}"`,
     `data-type="individual"`,
     `data-individual-type="${escapeAttr(ind.individual_type || 'named_entity')}"`,
     `data-name="${escapeAttr(ind.name || '')}"`,
@@ -3598,7 +3616,22 @@ function _buildIndividualSpan(ind, innerHtml) {
     `data-source="${escapeAttr(ind.source || '')}"`,
     `data-class-label="${escapeAttr(classLabel)}"`,
   ].join(' ');
-  return `<span class="individual-span" ${dataAttrs}>${innerHtml}</span>`;
+  let confStyle = '';
+  // Multi-individual: stacked top border via gradient
+  if (multiCount >= 2) {
+    const indColors = multiInds.map(i => {
+      const iType = i.individual_type || 'named_entity';
+      return iType === 'legal_citation' ? '#009688' : '#e67e22';
+    });
+    const gradStops = indColors.map((col, idx) => {
+      const pct1 = (idx / indColors.length * 100).toFixed(1);
+      const pct2 = ((idx + 1) / indColors.length * 100).toFixed(1);
+      return `${col} ${pct1}%, ${col} ${pct2}%`;
+    }).join(', ');
+    confStyle += `border-top:3px solid;border-image:linear-gradient(to right, ${gradStops}) 1;`;
+    confStyle += `--multi-ind-dots:${indColors.join(',')};`;
+  }
+  return `<span class="individual-span" ${dataAttrs}${confStyle ? ` style="${confStyle}"` : ''}>${innerHtml}</span>`;
 }
 
 function showIndividualTooltip(event, el) {
@@ -3606,6 +3639,14 @@ function showIndividualTooltip(event, el) {
   const indId = el.dataset.indId;
   const ind = _individualDataById[indId];
   if (!ind) return;
+
+  // Multi-individual overlay: when multiple individuals overlap at this span
+  const multiIndCount = parseInt(el.dataset.multiIndCount || '1', 10);
+  const allIndIds = (el.dataset.indIds || indId || '').split(',').filter(Boolean);
+  if (multiIndCount >= 2 && allIndIds.length >= 2) {
+    _showIndividualMultiOverlay(tooltip, el, allIndIds);
+    return;
+  }
 
   const name = ind.name || el.dataset.name || '';
   const indType = ind.individual_type || 'named_entity';
@@ -4065,6 +4106,103 @@ function _showIndividualMultiClassOverlay(tooltip, el, ind, uniqueLinks, name, c
         overlay.innerHTML = `${pillsRowHtml}
           <svg class="multi-svg" preserveAspectRatio="none">${_buildSvgLines('above')}</svg>
           ${textPillHtml}${confHtml}`;
+      }
+    }
+  });
+}
+
+/** Multi-individual graph overlay — shows all overlapping individuals at a span
+ *  with SVG connector lines, mirroring the concept multi-branch overlay. */
+function _showIndividualMultiOverlay(tooltip, el, indIds) {
+  const matchedText = el.textContent.replace(/\s+/g, ' ').trim();
+
+  let pillsHtml = '';
+  const pillCount = indIds.length;
+  const pillColors = [];
+
+  for (let i = 0; i < indIds.length; i++) {
+    const iid = indIds[i];
+    const iData = _individualDataById[iid];
+    if (!iData) continue;
+    const iType = iData.individual_type || 'named_entity';
+    const color = iType === 'legal_citation' ? '#009688' : '#e67e22';
+    pillColors.push(color);
+    const iName = iData.name || iData.mention_text || 'Unknown';
+    const iConf = typeof iData.confidence === 'number' ? (iData.confidence > 1 ? iData.confidence : iData.confidence * 100) : 0;
+
+    // Show class links as sub-badges if available
+    let classHtml = '';
+    if (iData.class_links && iData.class_links.length > 0) {
+      const uniqueLabels = [...new Set(iData.class_links.map(cl => cl.folio_label).filter(Boolean))];
+      classHtml = uniqueLabels.map(lbl => {
+        const cl = iData.class_links.find(c => c.folio_label === lbl);
+        const branch = cl?.branch || '';
+        const bColor = BRANCH_COLORS[branch] || '#3b64e0';
+        return `<div class="multi-pill-branch" style="color:${bColor};background:${bColor}18;font-size:9px;padding:1px 5px">${escapeHtml(lbl)}</div>`;
+      }).join('');
+    }
+
+    const typeBadge = iType === 'legal_citation' ? 'Citation' : 'Entity';
+
+    pillsHtml += `
+      <div class="multi-pill" style="border-color:${color};background:${color}12;cursor:pointer" data-pill-idx="${i}">
+        <div class="multi-pill-label">${escapeHtml(iName)}</div>
+        <div class="multi-pill-branch" style="color:${color};background:${color}18">${typeBadge}</div>
+        ${classHtml}
+        <div class="multi-pill-conf">${iConf.toFixed(0)}%</div>
+      </div>`;
+  }
+
+  function _buildSvgLines(dir) {
+    let lines = '';
+    for (let i = 0; i < pillColors.length; i++) {
+      const px = (i + 0.5) / pillCount * 100;
+      if (dir === 'below') {
+        lines += `<line x1="50%" y1="0%" x2="${px}%" y2="100%" stroke="${pillColors[i]}" stroke-width="1.5" stroke-opacity="0.5"/>`;
+      } else {
+        lines += `<line x1="50%" y1="100%" x2="${px}%" y2="0%" stroke="${pillColors[i]}" stroke-width="1.5" stroke-opacity="0.5"/>`;
+      }
+    }
+    return lines;
+  }
+
+  const textPillHtml = `<div class="multi-text-pill">${escapeHtml(matchedText)}</div>`;
+  const pillsRowHtml = `<div class="multi-pills-row">${pillsHtml}</div>`;
+
+  tooltip.innerHTML = `<div class="multi-overlay" data-direction="below">
+    ${textPillHtml}
+    <svg class="multi-svg" preserveAspectRatio="none">${_buildSvgLines('below')}</svg>
+    ${pillsRowHtml}
+  </div>`;
+  tooltip.classList.add('visible');
+
+  // Clicking a pill navigates to that individual's class annotation (if linked)
+  function _attachPillHandlers(container) {
+    container.querySelectorAll('.multi-pill').forEach(pill => {
+      pill.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        const idx = parseInt(pill.dataset.pillIdx, 10);
+        const iid = indIds[idx];
+        const iData = _individualDataById[iid];
+        if (iData && iData.class_links) {
+          const annId = iData.class_links.find(cl => cl.annotation_id)?.annotation_id;
+          if (annId) navigateToAnnotation(annId);
+        }
+      });
+    });
+  }
+  _attachPillHandlers(tooltip);
+
+  // Position, then flip layout if tooltip opens above the source text
+  _positionTooltip(tooltip, el, (direction) => {
+    if (direction === 'above') {
+      const overlay = tooltip.querySelector('.multi-overlay');
+      if (overlay) {
+        overlay.dataset.direction = 'above';
+        overlay.innerHTML = `${pillsRowHtml}
+          <svg class="multi-svg" preserveAspectRatio="none">${_buildSvgLines('above')}</svg>
+          ${textPillHtml}`;
+        _attachPillHandlers(overlay);
       }
     }
   });

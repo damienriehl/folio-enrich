@@ -470,6 +470,17 @@ _SPACY_NER_STOP_PHRASES: set[str] = {
 }
 
 
+# Organizational suffixes — when spaCy misclassifies a company/firm as PERSON,
+# the presence of one of these suffixes overrides the label to Organization.
+_ORG_SUFFIX_RE = re.compile(
+    r"\b(?:LLP|LLC|L\.L\.P\.|L\.L\.C\.|Inc|Corp|Corporation|Ltd|Limited|"
+    r"P\.?C\.?|P\.?A\.?|P\.?L\.?L\.?C\.?|L\.?P\.?|LTD|PLC|GmbH|AG|S\.?A\.?|"
+    r"Co\.|& Co|Associates|Partners|Group|Holdings|Foundation|"
+    r"International|Bancorp|Bank|Trust)\b",
+    re.IGNORECASE,
+)
+
+
 class SpaCyPersonExtractor(EntityExtractor):
     @property
     def name(self) -> str:
@@ -496,6 +507,15 @@ class SpaCyPersonExtractor(EntityExtractor):
         for ent in doc.ents:
             if ent.label_ == "PERSON":
                 if ent.text.lower().strip() in _SPACY_NER_STOP_PHRASES:
+                    continue
+                # Reclassify as Organization if text contains an org suffix
+                if _ORG_SUFFIX_RE.search(ent.text):
+                    results.append(
+                        self._make_individual(
+                            text, ent.text, ent.start_char, ent.end_char,
+                            folio_label="Organization",
+                        )
+                    )
                     continue
                 results.append(
                     self._make_individual(
