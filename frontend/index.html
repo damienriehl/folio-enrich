@@ -2889,9 +2889,17 @@ async function processFile(file) {
 const DEBUG_MAX_WORDS = 500;
 
 function truncateToWords(text, maxWords) {
-  const words = text.split(/\s+/);
-  if (words.length <= maxWords) return text;
-  return words.slice(0, maxWords).join(' ') + '\n\n[... truncated by Debug Mode — ' + words.length + ' words \u2192 ' + maxWords + ' words]';
+  // Match each word and the whitespace that follows it, preserving line breaks
+  const re = /\S+(\s*)/g;
+  let count = 0, end = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    count++;
+    if (count === maxWords) { end = re.lastIndex; break; }
+  }
+  if (!end) return text;  // fewer words than maxWords
+  // Count total words for the message
+  while (re.exec(text) !== null) count++;
+  return text.slice(0, end).trimEnd() + '\n\n[... truncated by Debug Mode \u2014 ' + count + ' words \u2192 ' + maxWords + ' words]';
 }
 
 function applyDebugTruncation() {
