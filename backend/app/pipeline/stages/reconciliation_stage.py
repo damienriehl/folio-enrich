@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from app.models.annotation import ConceptMatch
 from app.models.job import Job, JobStatus
 from app.pipeline.stages.base import PipelineStage, record_lineage
 from app.services.reconciliation.reconciler import Reconciler
+
+logger = logging.getLogger(__name__)
 
 
 class ReconciliationStage(PipelineStage):
@@ -16,6 +19,21 @@ class ReconciliationStage(PipelineStage):
     def name(self) -> str:
         return "reconciliation"
 
+    @staticmethod
+    def _get_property_labels() -> set[str]:
+        """Get all known property labels (including lemma variants) for filtering."""
+        try:
+            from app.services.folio.folio_service import FolioService
+            svc = FolioService.get_instance()
+            labels = set(svc.get_all_property_labels().keys())
+            # Also include lemma variants
+            from app.services.property.property_matcher import _compute_verb_lemmas
+            lemma_map = _compute_verb_lemmas(labels)
+            labels.update(lemma_map.keys())
+            return labels
+        except Exception:
+            return set()
+
     async def execute(self, job: Job) -> Job:
         # Gather ruler concepts
         ruler_raw = job.result.metadata.get("ruler_concepts", [])
@@ -24,8 +42,19 @@ class ReconciliationStage(PipelineStage):
         # Gather LLM concepts (flatten from per-chunk)
         llm_raw = job.result.metadata.get("llm_concepts", {})
         llm_concepts = []
+
+        # Filter out LLM concepts whose text matches a known property label —
+        # these are verbs/relations, not OWL Classes.
+        property_labels = self._get_property_labels()
+
         for chunk_concepts in llm_raw.values():
             for c in chunk_concepts:
+                text = c.get("concept_text", "").lower().strip()
+                if text in property_labels:
+                    logger.debug(
+                        "Suppressing LLM concept '%s' — matches property label", text
+                    )
+                    continue
                 llm_concepts.append(ConceptMatch(**c))
 
         # Use embedding triage if embedding service is available

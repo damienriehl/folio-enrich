@@ -421,6 +421,55 @@ class CopyrightExtractor(EntityExtractor):
         return results
 
 
+# Latin legal phrases and legal terms that spaCy commonly misclassifies as
+# named entities (PERSON, ORG, GPE).  Checked case-insensitively.
+_SPACY_NER_STOP_PHRASES: set[str] = {
+    # Latin standards of review / procedural terms
+    "de novo",
+    "de facto",
+    "de jure",
+    "de minimis",
+    "ex parte",
+    "ex rel",
+    "habeas corpus",
+    "in camera",
+    "in forma pauperis",
+    "in limine",
+    "in personam",
+    "in re",
+    "in rem",
+    "inter alia",
+    "mens rea",
+    "nolo contendere",
+    "nunc pro tunc",
+    "per curiam",
+    "per se",
+    "prima facie",
+    "pro bono",
+    "pro hac vice",
+    "pro se",
+    "pro tem",
+    "pro tempore",
+    "quantum meruit",
+    "quasi",
+    "res judicata",
+    "stare decisis",
+    "sua sponte",
+    "sub judice",
+    "sui generis",
+    "voir dire",
+    # Common legal role words spaCy may confuse
+    "appellant",
+    "appellee",
+    "petitioner",
+    "respondent",
+    "plaintiff",
+    "defendant",
+    "amicus curiae",
+    "amici curiae",
+}
+
+
 class SpaCyPersonExtractor(EntityExtractor):
     @property
     def name(self) -> str:
@@ -446,6 +495,8 @@ class SpaCyPersonExtractor(EntityExtractor):
         results: list[Individual] = []
         for ent in doc.ents:
             if ent.label_ == "PERSON":
+                if ent.text.lower().strip() in _SPACY_NER_STOP_PHRASES:
+                    continue
                 results.append(
                     self._make_individual(
                         text, ent.text, ent.start_char, ent.end_char
@@ -479,6 +530,8 @@ class SpaCyOrgExtractor(EntityExtractor):
         results: list[Individual] = []
         for ent in doc.ents:
             if ent.label_ == "ORG":
+                if ent.text.lower().strip() in _SPACY_NER_STOP_PHRASES:
+                    continue
                 results.append(
                     self._make_individual(
                         text, ent.text, ent.start_char, ent.end_char
@@ -512,6 +565,8 @@ class SpaCyLocationExtractor(EntityExtractor):
         results: list[Individual] = []
         for ent in doc.ents:
             if ent.label_ in ("GPE", "LOC"):
+                if ent.text.lower().strip() in _SPACY_NER_STOP_PHRASES:
+                    continue
                 results.append(
                     self._make_individual(
                         text, ent.text, ent.start_char, ent.end_char
