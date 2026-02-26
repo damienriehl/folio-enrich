@@ -2389,8 +2389,6 @@ async function init() {
   const leftCollapsed = localStorage.getItem('leftPanelCollapsed');
   if (leftCollapsed === 'true') {
     main.classList.add('left-collapsed');
-    // If detail is open and left was collapsed, that's the persisted state (no override)
-    _leftManualOverride = false;
   }
 
   // Re-enable transitions after first paint
@@ -4601,7 +4599,6 @@ let _currentDetailIriHash = null;
 let _currentDetailAnnId = null;
 let _graphCy = null;  // Cytoscape instance
 let _graphDirection = 'TB';  // 'TB' or 'LR'
-let _leftManualOverride = false;  // user manually re-expanded left while detail open
 
 function toggleDetailPanel() {
   const main = document.getElementById('mainLayout');
@@ -4616,38 +4613,24 @@ function closeDetailPanel() {
   const main = document.getElementById('mainLayout');
   main.classList.add('detail-hidden');
   localStorage.setItem('detailPanelVisible', 'false');
-  // Auto-expand left panel when detail closes
-  main.classList.remove('left-collapsed');
-  localStorage.setItem('leftPanelCollapsed', 'false');
-  _leftManualOverride = false;
 }
 
 function showDetailPanel() {
   const main = document.getElementById('mainLayout');
   main.classList.remove('detail-hidden');
   localStorage.setItem('detailPanelVisible', 'true');
-  // Auto-collapse left panel (unless user manually overrode)
-  if (!_leftManualOverride) {
-    main.classList.add('left-collapsed');
-    localStorage.setItem('leftPanelCollapsed', 'true');
-  }
 }
 
 function collapseLeftPanel() {
   const main = document.getElementById('mainLayout');
   main.classList.add('left-collapsed');
   localStorage.setItem('leftPanelCollapsed', 'true');
-  _leftManualOverride = false;
 }
 
 function expandLeftPanel() {
   const main = document.getElementById('mainLayout');
   main.classList.remove('left-collapsed');
   localStorage.setItem('leftPanelCollapsed', 'false');
-  // If detail panel is open, mark as manual override so auto-collapse won't re-trigger
-  if (!main.classList.contains('detail-hidden')) {
-    _leftManualOverride = true;
-  }
 }
 
 function toggleLeftPanel() {
