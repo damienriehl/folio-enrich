@@ -231,6 +231,9 @@ class StringMatchStage(PipelineStage):
         # Sort by span start
         new_annotations.sort(key=lambda a: a.span.start)
 
+        # Dedup overlapping/contained spans with the same IRI
+        new_annotations = self._dedup_overlapping_same_iri(new_annotations)
+
         updated = sum(1 for s in seen_spans if s in existing_by_span)
         new_count = len([a for a in new_annotations if a.state == "confirmed"]) - updated
         log = job.result.metadata.setdefault("activity_log", [])
@@ -238,3 +241,60 @@ class StringMatchStage(PipelineStage):
 
         job.result.annotations = new_annotations
         return job
+
+    @staticmethod
+    def _dedup_overlapping_same_iri(annotations: list[Annotation]) -> list[Annotation]:
+        """Remove duplicate annotations where the same IRI appears at overlapping spans.
+
+        For each IRI group, overlapping/contained/identical spans are merged:
+        keep the longest (or highest-confidence on tie), absorb lineage from losers.
+        Different IRIs at the same span are preserved (legitimate multi-branch).
+        Rejected annotations bypass dedup entirely.
+        """
+        # Separate rejected / no-IRI annotations (bypass dedup)
+        bypass: list[Annotation] = []
+        by_iri: dict[str, list[Annotation]] = {}
+
+        for ann in annotations:
+            if ann.state == "rejected":
+                bypass.append(ann)
+                continue
+            iri = ann.concepts[0].folio_iri if ann.concepts and ann.concepts[0].folio_iri else None
+            if not iri:
+                bypass.append(ann)
+                continue
+            by_iri.setdefault(iri, []).append(ann)
+
+        kept: list[Annotation] = list(bypass)
+
+        for iri, group in by_iri.items():
+            if len(group) <= 1:
+                kept.extend(group)
+                continue
+
+            # Sort: longest span first, then highest confidence
+            group.sort(key=lambda a: (-(a.span.end - a.span.start), -a.concepts[0].confidence))
+
+            survivors: list[Annotation] = []
+            for ann in group:
+                merged = False
+                for survivor in survivors:
+                    # Check overlap: two spans overlap if start < other_end and end > other_start
+                    if ann.span.start < survivor.span.end and ann.span.end > survivor.span.start:
+                        # Merge: survivor is already the longer/higher-conf span
+                        survivor.lineage.extend(ann.lineage)
+                        record_lineage(
+                            survivor, "string_matching", "dedup_merged",
+                            detail=f"Absorbed overlapping span [{ann.span.start},{ann.span.end}] "
+                                   f"conf={ann.concepts[0].confidence:.2f} for IRI {iri}",
+                        )
+                        merged = True
+                        break
+                if not merged:
+                    survivors.append(ann)
+
+            kept.extend(survivors)
+
+        # Re-sort by span start to maintain order
+        kept.sort(key=lambda a: a.span.start)
+        return kept

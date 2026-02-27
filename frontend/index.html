@@ -857,6 +857,10 @@
   }
   .tooltip-label { font-size: 14px; font-weight: 600; color: #1a1a2e; margin-bottom: 2px; }
   .tooltip-matched-as { font-size: 10px; color: #888; margin: 1px 0 2px; font-style: italic; }
+  .tooltip-sources-badge, .pill-sources-badge {
+    font-size: 10px; color: #166534; background: #dcfce7; border-radius: 8px;
+    padding: 1px 7px; display: inline-block; margin: 2px 0;
+  }
   .tooltip-conf-num {
     font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
   }
@@ -3492,9 +3496,22 @@ function renderAnnotatedText(text, annotations, individuals, properties) {
     if (segStart >= segEnd) continue;
 
     // Find which annotations, individuals, and properties cover this segment
-    const coveringAnns = [];
+    let coveringAnns = [];
     for (const s of spans) {
       if (s.type === 'annotation' && s.start <= segStart && s.end >= segEnd) coveringAnns.push(s.data);
+    }
+    // Dedup by primary IRI — keep highest confidence per IRI
+    if (coveringAnns.length >= 2) {
+      const iriMap = new Map();
+      for (const a of coveringAnns) {
+        const iri = a.concepts?.[0]?.folio_iri || '';
+        if (!iri) { iriMap.set('__no_iri_' + a.id, a); continue; }
+        const existing = iriMap.get(iri);
+        if (!existing || (a.concepts[0].confidence || 0) > (existing.concepts[0].confidence || 0)) {
+          iriMap.set(iri, a);
+        }
+      }
+      coveringAnns = [...iriMap.values()];
     }
     const coveringInds = [];
     for (const s of spans) {
@@ -3567,6 +3584,16 @@ function renderAnnotatedText(text, annotations, individuals, properties) {
   });
 }
 
+/** Count unique pipeline stages that created or confirmed this annotation (from lineage). */
+function _countConfirmingStages(ann) {
+  if (!ann.lineage || ann.lineage.length === 0) return 0;
+  const stages = new Set();
+  for (const e of ann.lineage) {
+    if (e.action === 'created' || e.action === 'confirmed') stages.add(e.stage);
+  }
+  return stages.size;
+}
+
 function _buildAnnotationSpan(ann, innerHtml, rawInner, allCoveringAnns) {
   const c = ann.concepts[0];
   const branch = (c.branches && c.branches.length > 0) ? c.branches[0] : (c.branch || '');
@@ -3588,6 +3615,7 @@ function _buildAnnotationSpan(ann, innerHtml, rawInner, allCoveringAnns) {
     `data-source="${escapeAttr(c.source || '')}"`,
     `data-state="${escapeAttr(state)}"`,
     `data-alt-count="${altCount}"`,
+    `data-source-count="${_countConfirmingStages(ann)}"`,
   ].join(' ');
   let confStyle = '';
   if (state !== 'rejected') {
@@ -3890,10 +3918,20 @@ function showTooltip(event, el) {
     }
   }
 
+  // Count confirming stages: prefer DOM attr (set at render time from lineage),
+  // fall back to live lineage data on the annotation object
+  let sourceCount = parseInt(el.dataset.sourceCount || '0', 10);
+  if (sourceCount <= 1 && annData && annData.lineage) {
+    sourceCount = _countConfirmingStages(annData);
+  }
+  const sourceBadge = sourceCount > 1
+    ? `<div class="tooltip-sources-badge">${sourceCount} sources agree</div>`
+    : '';
   tooltip.innerHTML = `
     <div class="tooltip-label">${escapeHtml(label)}</div>
     ${matchedAsLine}
     ${branchBadge}
+    ${sourceBadge}
     <div class="tooltip-main-row">
       <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}%</span>
       <div class="tooltip-feedback" data-ann-id="${escapeAttr(annId)}">
@@ -3970,6 +4008,47 @@ function _redrawOverlayLines(overlay, pillColors) {
 }
 
 function _showMultiBranchOverlay(tooltip, el, annIds) {
+  // Dedup annIds by primary IRI — keep highest confidence per IRI,
+  // track how many sources agreed for the "N sources agree" indicator
+  const _iriGroups = new Map();
+  for (const aid of annIds) {
+    const aData = _annotationDataById[aid];
+    const iri = aData?.concepts?.[0]?.folio_iri || '';
+    const key = iri || ('__no_iri_' + aid);
+    if (!_iriGroups.has(key)) _iriGroups.set(key, []);
+    _iriGroups.get(key).push(aid);
+  }
+  const _pillSourceCount = new Map(); // winnerId → count of merged annotations
+  const dedupedIds = [];
+  for (const [, group] of _iriGroups) {
+    let bestAid = group[0];
+    let bestConf = _annotationDataById[bestAid]?.concepts?.[0]?.confidence || 0;
+    for (const aid of group) {
+      const conf = _annotationDataById[aid]?.concepts?.[0]?.confidence || 0;
+      if (conf > bestConf) { bestAid = aid; bestConf = conf; }
+    }
+    dedupedIds.push(bestAid);
+    if (group.length > 1) _pillSourceCount.set(bestAid, group.length);
+  }
+  annIds = dedupedIds;
+  // If dedup reduces to single branch, render single tooltip instead of overlay
+  if (annIds.length <= 1) {
+    // Temporarily set DOM attrs so showTooltip takes the single-tooltip path
+    const _origMC = el.dataset.multiCount;
+    const _origIds = el.dataset.annIds;
+    el.dataset.multiCount = '1';
+    el.dataset.annIds = annIds[0] || '';
+    el.dataset.annId = annIds[0] || '';
+    // Ensure source count is available for the single tooltip path (lineage-based)
+    const winData = _annotationDataById[annIds[0]];
+    const srcCnt = _pillSourceCount.get(annIds[0]) || (winData?.lineage ? _countConfirmingStages(winData) : 0);
+    if (srcCnt > 1) el.dataset.sourceCount = String(srcCnt);
+    showTooltip(null, el);
+    el.dataset.multiCount = _origMC;
+    el.dataset.annIds = _origIds;
+    return;
+  }
+
   // Read span text from annotation data (immune to DOM badge injection)
   const _firstData = _annotationDataById[annIds[0]];
   const matchedText = (_firstData && _firstData.span && _firstData.span.text)
@@ -4005,10 +4084,16 @@ function _showMultiBranchOverlay(tooltip, el, annIds) {
       : `<div class="multi-pill-branch" style="color:${aColor};background:${aColor}18">${escapeHtml(conceptLabel)}</div>${pillMatchedAs}`;
 
     const aConfTier = aConf >= 80 ? 'conf-high' : aConf >= 50 ? 'conf-mid' : 'conf-low';
+    // Count confirming stages: prefer dedup merge count, fall back to lineage
+    let pillSrcCount = _pillSourceCount.get(aid) || 0;
+    if (pillSrcCount <= 1 && aData.lineage) pillSrcCount = _countConfirmingStages(aData);
+    const pillSrcBadge = pillSrcCount > 1
+      ? `<span class="pill-sources-badge">${pillSrcCount} sources agree</span>` : '';
 
     pillsHtml += `
       <div class="multi-pill" style="border-color:${aColor}" data-pill-idx="${i}">
         ${pillLabelHtml}
+        ${pillSrcBadge}
         <div class="multi-pill-action-row">
           <span class="multi-pill-conf ${aConfTier}">${aConf.toFixed(0)}%</span>
           <div class="multi-pill-actions">
