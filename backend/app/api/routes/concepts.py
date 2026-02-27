@@ -5,16 +5,41 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/concepts", tags=["concepts"])
+
+MAX_BATCH_SIZE = 100
 
 
 def _get_folio():
     """Get the raw FOLIO instance."""
     from app.services.folio.folio_service import FolioService
     return FolioService.get_instance()._get_folio()
+
+
+class BatchRequest(BaseModel):
+    iri_hashes: list[str] = Field(..., max_length=MAX_BATCH_SIZE)
+
+
+@router.post("/batch")
+async def get_concepts_batch(body: BatchRequest) -> dict:
+    """Look up multiple FOLIO concepts by IRI hash in one call.
+
+    Returns a mapping of iri_hash → detail for each found concept.
+    Unknown hashes are silently omitted.
+    """
+    from app.services.folio.concept_detail import lookup_concept_detail
+
+    folio = _get_folio()
+    results: dict[str, dict] = {}
+    for iri_hash in body.iri_hashes[:MAX_BATCH_SIZE]:
+        detail = lookup_concept_detail(folio, iri_hash)
+        if detail is not None:
+            results[iri_hash] = detail.model_dump()
+    return results
 
 
 @router.get("/{iri_hash}")
