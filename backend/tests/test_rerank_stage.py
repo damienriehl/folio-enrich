@@ -66,7 +66,9 @@ class TestContextualRerankStage:
         stage = ContextualRerankStage(llm)
         job = _make_job(concepts)
 
-        result = await stage.execute(job)
+        with patch("app.config.settings") as mock_settings:
+            mock_settings.contextual_rerank_enabled = True
+            result = await stage.execute(job)
 
         # 0.80 * 0.5 + 0.60 * 0.5 = 0.70
         assert abs(result.result.metadata["resolved_concepts"][0]["confidence"] - 0.70) < 1e-4
@@ -96,7 +98,9 @@ class TestContextualRerankStage:
         stage = ContextualRerankStage(llm)
         job = _make_job(concepts)
 
-        result = await stage.execute(job)
+        with patch("app.config.settings") as mock_settings:
+            mock_settings.contextual_rerank_enabled = True
+            result = await stage.execute(job)
 
         events = result.result.metadata["resolved_concepts"][0].get("_lineage_events", [])
         assert len(events) == 1
@@ -175,7 +179,9 @@ class TestContextualRerankStage:
         stage = ContextualRerankStage(llm)
         job = _make_job(concepts, "The breach caused significant damages to the plaintiff.")
 
-        result = await stage.execute(job)
+        with patch("app.config.settings") as mock_settings:
+            mock_settings.contextual_rerank_enabled = True
+            result = await stage.execute(job)
 
         resolved = result.result.metadata["resolved_concepts"]
         # breach: 0.80*0.5 + 0.90*0.5 = 0.85

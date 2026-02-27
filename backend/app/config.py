@@ -62,8 +62,13 @@ class Settings(BaseSettings):
     embedding_disabled: bool = False
     semantic_similarity_threshold: float = 0.80
 
-    # Contextual reranking
-    contextual_rerank_enabled: bool = True
+    # Contextual reranking — disabled by default (2026-02-27).
+    # The 50/50 LLM-context / pipeline-score blend was degrading precision
+    # and recall in testing: the LLM context scores often inflated marginal
+    # matches and diluted high-confidence pipeline signals, producing noisier
+    # annotations overall.  Re-enable only after validating that blended
+    # scores improve F1 on a representative evaluation set.
+    contextual_rerank_enabled: bool = False
 
     # Individual extraction
     individual_extraction_enabled: bool = True
