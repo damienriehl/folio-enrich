@@ -163,6 +163,9 @@ def build_pipeline_config(
     # LLM property linking (after LLMIndividual, needs resolved classes)
     config.post_parallel.append(LLMPropertyStage(llm=property_llm))
 
+    config.post_parallel.append(DependencyStage())
+
+    # MetadataStage runs absolute last — it uses all pipeline outputs as context
     if classifier_llm is not None or extractor_llm is not None:
         config.post_parallel.append(
             MetadataStage(
@@ -171,8 +174,6 @@ def build_pipeline_config(
                 extractor_llm=extractor_llm,
             )
         )
-
-    config.post_parallel.append(DependencyStage())
 
     return config
 
@@ -234,6 +235,9 @@ def build_stages(
     # LLM property linking (after LLMIndividual, needs resolved classes)
     stages.append(LLMPropertyStage(llm=property_llm))
 
+    stages.append(DependencyStage())
+
+    # MetadataStage runs absolute last — it uses all pipeline outputs as context
     if classifier_llm is not None or extractor_llm is not None:
         stages.append(
             MetadataStage(
@@ -242,8 +246,6 @@ def build_stages(
                 extractor_llm=extractor_llm,
             )
         )
-
-    stages.append(DependencyStage())
 
     return stages
 

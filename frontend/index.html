@@ -1529,6 +1529,19 @@
   .meta-key { color: #6b6b80; font-weight: 500; padding: 2px 0; }
   .meta-value { color: #1a1a2e; padding: 2px 0; word-break: break-word; }
 
+  /* Metadata group sections */
+  .meta-group { margin-bottom: 8px; border: 1px solid #e8e8f0; border-radius: 6px; overflow: hidden; }
+  .meta-group-header {
+    display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+    background: #f6f6fa; cursor: pointer; user-select: none; font-size: 12px;
+    font-weight: 600; color: #3a3a5c; border-bottom: 1px solid #e8e8f0;
+  }
+  .meta-group-header:hover { background: #eeeef6; }
+  .meta-group-header .chevron { transition: transform 0.15s; font-size: 10px; color: #8888a0; }
+  .meta-group-header.collapsed .chevron { transform: rotate(-90deg); }
+  .meta-group-body { padding: 4px 10px 6px; }
+  .meta-group-body.hidden { display: none; }
+
   /* Settings modal */
   .modal-overlay {
     position: fixed;
@@ -6520,7 +6533,26 @@ function renderMetadata(metadata, job) {
   const container = document.getElementById('metadataDisplay');
   const fields = metadata.extracted_fields || {};
 
-  let html = '<div class="meta-grid">';
+  // --- Field-to-group mapping ---
+  const fieldGroups = {
+    'Case & Litigation': ['case_name','court','judge','case_number','parties','jurisdiction',
+      'procedural_posture','cause_of_action','claim_types','relief_sought','disposition',
+      'standard_of_review','governing_law'],
+    'People & Roles': ['author','recipient','attorneys','signatories','witnesses'],
+    'Dates': ['date_filed','date_signed','date_effective','date_due','dates_mentioned'],
+    'Document Identity': ['document_title','docket_entry_number','related_documents','confidentiality'],
+    'Contract Details': ['contract_type','counterparties','term_duration','termination_conditions','consideration'],
+    'Provenance': ['source_format','page_count','language','addresses','has_exhibits','exhibit_list'],
+  };
+
+  const fieldLabel = (k) => k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const isEmpty = (v) => !v || (Array.isArray(v) && v.length === 0) || v === '';
+  const formatVal = (v) => Array.isArray(v) ? v.map(s => escapeHtml(String(s))).join(', ') : escapeHtml(String(v));
+
+  let html = '';
+
+  // --- Job info & statistics (always shown) ---
+  html += '<div class="meta-grid" style="margin-bottom:10px">';
   html += `<div class="meta-key">Job ID</div><div class="meta-value">${escapeHtml(String(job.id))}</div>`;
   html += `<div class="meta-key">Status</div><div class="meta-value">${escapeHtml(job.status)}</div>`;
   html += `<div class="meta-key">Created</div><div class="meta-value">${new Date(job.created_at).toLocaleString()}</div>`;
@@ -6534,19 +6566,17 @@ function renderMetadata(metadata, job) {
     html += `<div class="meta-key">Type Confidence</div><div class="meta-value"><span class="confidence-badge ${dtcTier}">${dtcPct}%</span></div>`;
   }
 
-  // Statistics
   const resolved = metadata.resolved_concepts || [];
   const ruler = metadata.ruler_concepts || [];
   html += `<div class="meta-key">EntityRuler Matches</div><div class="meta-value">${ruler.length}</div>`;
   html += `<div class="meta-key">Resolved Concepts</div><div class="meta-value">${resolved.length}</div>`;
   html += `<div class="meta-key">Total Annotations</div><div class="meta-value">${(job.result?.annotations || []).length}</div>`;
 
-  // Individuals statistics
   const inds = job.result?.individuals || [];
   if (inds.length > 0) {
     const citations = inds.filter(i => i.individual_type === 'legal_citation').length;
     const entities = inds.filter(i => i.individual_type === 'named_entity').length;
-    html += `<div class="meta-key">Individuals Identified</div><div class="meta-value">${inds.length}</div>`;
+    html += `<div class="meta-key">Individuals</div><div class="meta-value">${inds.length}</div>`;
     html += `<div class="meta-key">Legal Citations</div><div class="meta-value">${citations}</div>`;
     html += `<div class="meta-key">Named Entities</div><div class="meta-value">${entities}</div>`;
   }
@@ -6556,7 +6586,6 @@ function renderMetadata(metadata, job) {
     html += `<div class="meta-key">SPO Triples</div><div class="meta-value">${triples.length}</div>`;
   }
 
-  // Areas of Law (post-pipeline assessment)
   const areas = metadata.areas_of_law || [];
   if (areas.length) {
     let aolHtml = '';
@@ -6571,16 +6600,40 @@ function renderMetadata(metadata, job) {
     }
     html += `<div class="meta-key">Areas of Law</div><div class="meta-value">${aolHtml}</div>`;
   }
+  html += '</div>';
 
-  // Extracted fields
-  for (const [k, v] of Object.entries(fields)) {
-    if (v && !k.startsWith('_')) {
-      const display = Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v);
-      html += `<div class="meta-key">${escapeHtml(k)}</div><div class="meta-value">${escapeHtml(display)}</div>`;
+  // --- Grouped extracted fields ---
+  const grouped = new Set();
+  for (const [groupName, groupFields] of Object.entries(fieldGroups)) {
+    const populated = groupFields.filter(k => !isEmpty(fields[k]));
+    if (populated.length === 0) continue;
+    populated.forEach(k => grouped.add(k));
+
+    html += `<div class="meta-group">`;
+    html += `<div class="meta-group-header" onclick="this.classList.toggle('collapsed');this.nextElementSibling.classList.toggle('hidden')">`;
+    html += `<span class="chevron">&#9660;</span> ${escapeHtml(groupName)} <span style="color:#8888a0;font-weight:400">(${populated.length})</span>`;
+    html += `</div>`;
+    html += `<div class="meta-group-body"><div class="meta-grid">`;
+    for (const k of populated) {
+      html += `<div class="meta-key">${escapeHtml(fieldLabel(k))}</div><div class="meta-value">${formatVal(fields[k])}</div>`;
     }
+    html += `</div></div></div>`;
   }
 
-  html += '</div>';
+  // --- Ungrouped fields ("Other") ---
+  const ungrouped = Object.entries(fields).filter(([k, v]) => !grouped.has(k) && !isEmpty(v) && !k.startsWith('_'));
+  if (ungrouped.length > 0) {
+    html += `<div class="meta-group">`;
+    html += `<div class="meta-group-header" onclick="this.classList.toggle('collapsed');this.nextElementSibling.classList.toggle('hidden')">`;
+    html += `<span class="chevron">&#9660;</span> Other <span style="color:#8888a0;font-weight:400">(${ungrouped.length})</span>`;
+    html += `</div>`;
+    html += `<div class="meta-group-body"><div class="meta-grid">`;
+    for (const [k, v] of ungrouped) {
+      html += `<div class="meta-key">${escapeHtml(fieldLabel(k))}</div><div class="meta-value">${formatVal(v)}</div>`;
+    }
+    html += `</div></div></div>`;
+  }
+
   container.innerHTML = html;
 }
 

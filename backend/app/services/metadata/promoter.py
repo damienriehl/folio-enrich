@@ -11,6 +11,9 @@ POSITION_HINTS = {
     "signatory": ["signature", "signed by", "executed by"],
     "court": ["in the", "united states district court", "court of"],
     "judge": ["honorable", "judge", "justice"],
+    "attorney": ["attorney for", "counsel for", "represented by", "law offices of"],
+    "witness": ["witness", "deponent", "affiant", "declarant"],
+    "confidentiality": ["confidential", "under seal", "attorney-client", "privileged"],
 }
 
 
