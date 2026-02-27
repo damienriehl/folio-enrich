@@ -1,10 +1,10 @@
 # FOLIO Enrich
 
-**Tag every legal document with precise, machine-readable legal concepts — automatically.**
+**Tag every legal document with precise, machine-readable legal concepts, individuals, and relationships — automatically.**
 
-Legal documents contain thousands of concepts buried in dense prose: causes of action, contract terms, regulatory frameworks,  events. FOLIO Enrich reads your documents, identifies those concepts, maps each one to the [FOLIO ontology](https://github.com/FOLIO-Ontology/FOLIO) (18,000+ standardized legal concepts), scores its confidence, and exports structured results in 13 formats — all through a single API call.
+Legal documents contain thousands of concepts buried in dense prose: causes of action, contract terms, regulatory frameworks, named entities, and inter-concept relationships. FOLIO Enrich reads your documents, identifies those concepts, maps each one to the [FOLIO ontology](https://github.com/FOLIO-Ontology/FOLIO) (18,000+ standardized legal concepts), extracts named individuals (citations, parties, dates, amounts) and OWL object properties (legal verbs and relationships), scores confidence, and exports structured results in 13 formats — all through a single API call.
 
-Upload complaints, contracts, or regulatory filings. 
+Upload complaints, contracts, or regulatory filings.
 
 Seconds later, receive a structured annotation layer that machines can search, filter, sort, and analyze.
 
@@ -23,6 +23,10 @@ Seconds later, receive a structured annotation layer that machines can search, f
 - [LLM Integration](#llm-integration)
 - [Embedding & Semantic Search](#embedding--semantic-search)
 - [Confidence Scoring](#confidence-scoring)
+- [Individual Extraction](#individual-extraction)
+- [Property Extraction](#property-extraction)
+- [Metadata Extraction](#metadata-extraction)
+- [Document Type Detection](#document-type-detection)
 - [Synthetic Document Generation](#synthetic-document-generation)
 - [Testing](#testing)
 - [Project Structure](#project-structure)
@@ -36,17 +40,23 @@ Seconds later, receive a structured annotation layer that machines can search, f
 - **Multi-format ingestion** — PDF, DOCX, HTML, Markdown, RTF, email (EML/MSG), and plain text
 - **Dual-path enrichment** — spaCy EntityRuler and LLM concept extraction run in parallel, then reconcile
 - **FOLIO ontology mapping** — resolves every annotation to a FOLIO IRI with multi-candidate backup lists
+- **Multi-branch classification** — assigns multiple FOLIO branch categories per concept with nested same-type span support
+- **Individual extraction** — three-path hybrid (eyecite/citeurl citations, 14 regex/spaCy extractors, LLM class linking) for OWL individuals
+- **Property extraction** — Aho-Corasick + LLM identification of OWL ObjectProperties (legal verbs and relationships) with domain/range/inverse linking
+- **28-field metadata extraction** — pipeline-aware context engineering extracts parties, dates, courts, claims, attorneys, and more
+- **Document type detection** — early parallel LLM classification with post-pipeline quality cross-check
 - **Calibrated confidence scoring** — graduated initial scores, contextual LLM reranking, branch judge blending, and embedding triage across 5 stages
+- **Containment-aware dedup** — nested spans (A inside B) survive across all stages; partial overlaps resolve to longer match
 - **13 export formats** — JSON, JSON-LD, XML, CSV, JSONL, Parquet, Elasticsearch bulk, Neo4j CSV, RAG chunks, RDF/Turtle, brat standoff, HTML, Excel
-- **Real-time streaming** — Server-Sent Events (SSE) for live pipeline progress
+- **Real-time streaming** — Server-Sent Events (SSE) for live pipeline progress including individuals, properties, and document type
 - **Annotation lifecycle** — promote, reject, restore, cascade-promote, and bulk-reject operations with full lineage tracking
-- **Per-task LLM routing** — assign different LLM providers to different pipeline tasks (classifier, extractor, concept, branch judge, area of law, synthetic)
+- **Per-task LLM routing** — assign different LLM providers to 9 pipeline tasks (classifier, extractor, concept, branch judge, area of law, synthetic, individual, property, document type)
 - **14 LLM providers** — OpenAI, Anthropic, Google Gemini, Mistral, Cohere, Meta Llama, Groq, xAI, GitHub Models, Ollama, LM Studio, Llamafile, and custom OpenAI-compatible endpoints
 - **Semantic search** — FAISS-backed embedding index for fast concept lookup and conflict resolution
 - **Synthetic document generation** — LLM-powered generation of realistic legal test documents across 40+ document types
 - **Legal citation parsing** — eyecite + citeurl integration for citation extraction and URL resolution
 - **Feedback system** — per-annotation user feedback with aggregated insights dashboard
-- **Dark-themed UI** — single-file browser frontend with concept graph visualization (Cytoscape)
+- **Dark-themed UI** — single-file browser frontend with concept graph visualization (Cytoscape), individual/property tabs, multi-branch overlays, and polyhierarchy tree views
 
 ---
 
@@ -56,6 +66,8 @@ Seconds later, receive a structured annotation layer that machines can search, f
 ┌──────────────────────────────────────────────────────────────────┐
 │                         Frontend (index.html)                    │
 │        Vanilla JS · Dark theme · Cytoscape graph viz             │
+│   Tabs: Annotated Text · Concepts · Individuals · Properties    │
+│         Triples · Metadata · Export · Insights                   │
 └──────────────────────────┬───────────────────────────────────────┘
                            │ REST + SSE
 ┌──────────────────────────▼───────────────────────────────────────┐
@@ -67,18 +79,28 @@ Seconds later, receive a structured annotation layer that machines can search, f
 ├──────────────────────────────────────────────────────────────────┤
 │                    Pipeline Orchestrator                          │
 │                                                                  │
-│  Phase 1 (Sequential)     Phase 2 (Parallel)    Phase 3 (Seq.)  │
-│  ┌─────────────────┐   ┌──────────────────────┐                  │
-│  │ 1. Ingestion    │   │ 3. EntityRuler  ─┐   │  5. Reconcile   │
-│  │ 2. Normalize    │──▶│ 4. LLM Concept  ─┤──▶│  6. Resolve     │
-│  └─────────────────┘   └──────────────────┘│   │  7. Rerank      │
-│                         (run concurrently)  │   │  8. BranchJudge │
-│                                             │   │  9. StringMatch │
-│                                             │   │ 10. Metadata    │
-│                                             │   │ 11. Dependency  │
-│                                             │   └─────────────────│
+│  Phase 1 (Sequential)       Phase 2 (Parallel)                   │
+│  ┌─────────────────┐   ┌─────────────────────────────┐           │
+│  │ 1. Ingestion    │   │ 3. EntityRuler         ─┐   │           │
+│  │ 2. Normalize    │──▶│ 4. LLM Concept         ─┤   │           │
+│  └─────────────────┘   │ 5. EarlyIndividual     ─┤   │           │
+│                         │ 6. EarlyProperty       ─┤   │           │
+│                         │ 7. DocumentType        ─┘   │           │
+│                         └──────────────┬──────────────┘           │
+│                                        │                          │
+│  Phase 3 (Sequential)                  ▼                          │
+│  ┌──────────────────────────────────────────────────┐             │
+│  │  8. Reconciliation   12. LLMIndividual           │             │
+│  │  9. Resolution       13. LLMProperty             │             │
+│  │ 10. Rerank           14. Dependency              │             │
+│  │ 11. BranchJudge      15. StringMatch             │             │
+│  │                      16. Metadata                │             │
+│  └──────────────────────────────────────────────────┘             │
+│                                                                  │
+│  Post-pipeline: Area of Law · Document Type Quality Check        │
 ├──────────────────────────────────────────────────────────────────┤
-│  Services: FOLIO · Embedding · LLM Registry · Job Store          │
+│  Services: FOLIO · Embedding · LLM Registry · Individual ·       │
+│            Property · Quality · Job Store                         │
 ├──────────────────────────────────────────────────────────────────┤
 │  Storage: ~/.folio-enrich/jobs/ (JSON, atomic writes)            │
 └──────────────────────────────────────────────────────────────────┘
@@ -88,7 +110,7 @@ Seconds later, receive a structured annotation layer that machines can search, f
 
 ## Pipeline Stages
 
-The pipeline runs in three phases. LLM-dependent stages are automatically skipped when no LLM is configured.
+The pipeline runs in three phases with 5 parallel stages and 9 sequential post-parallel stages. LLM-dependent stages are automatically skipped when no LLM is configured.
 
 | # | Stage | Phase | Description |
 |---|-------|-------|-------------|
@@ -96,15 +118,20 @@ The pipeline runs in three phases. LLM-dependent stages are automatically skippe
 | 2 | **Normalization** | Pre-parallel | Chunks text into semantic chunks, builds sentence index |
 | 3 | **EntityRuler** | Parallel | spaCy pattern matching against FOLIO preferred and alternative labels |
 | 4 | **LLM Concept** | Parallel | LLM-based concept extraction per chunk (runs concurrently with EntityRuler) |
-| 5 | **Reconciliation** | Post-parallel | Merges EntityRuler + LLM results using embedding-powered triage |
-| 6 | **Resolution** | Post-parallel | Resolves concept text to FOLIO IRIs with multi-candidate backup lists |
-| 7 | **Contextual Rerank** | Post-parallel | LLM reranking using full document context (50/50 blend with pipeline score) |
-| 8 | **Branch Judge** | Post-parallel | LLM assigns FOLIO branch categories for ambiguous concepts (70/30 blend) |
-| 9 | **String Match** | Post-parallel | Aho-Corasick automaton for high-speed multi-pattern matching of alternative labels |
-| 10 | **Metadata** | Post-parallel | LLM document classification, metadata extraction, annotation-to-metadata promotion |
-| 11 | **Dependency** | Post-parallel | spaCy dependency parsing to extract subject-predicate-object triples |
+| 5 | **EarlyIndividual** | Parallel | Citation parsing (eyecite/citeurl) + 14 regex/spaCy entity extractors |
+| 6 | **EarlyProperty** | Parallel | Aho-Corasick automaton matching FOLIO ObjectProperty labels |
+| 7 | **DocumentType** | Parallel | LLM identifies what the document "calls itself" from title/header |
+| 8 | **Reconciliation** | Post-parallel | Merges EntityRuler + LLM results using embedding-powered triage |
+| 9 | **Resolution** | Post-parallel | Resolves concept text to FOLIO IRIs with multi-candidate backup lists |
+| 10 | **Contextual Rerank** | Post-parallel | LLM reranking using full document context (50/50 blend with pipeline score) |
+| 11 | **Branch Judge** | Post-parallel | LLM assigns FOLIO branch categories for ambiguous concepts (70/30 blend) |
+| 12 | **String Match** | Post-parallel | Aho-Corasick matching with containment-aware dedup and multi-branch keying |
+| 13 | **LLM Individual** | Post-parallel | LLM links individuals to resolved OWL class annotations |
+| 14 | **LLM Property** | Post-parallel | LLM identifies properties with domain/range cross-linking |
+| 15 | **Dependency** | Post-parallel | spaCy dependency parsing to extract subject-predicate-object triples |
+| 16 | **Metadata** | Post-parallel | LLM extracts 28 metadata fields using full pipeline context |
 
-**Post-pipeline**: Area of Law assessment runs after completion to classify the document's legal domains.
+**Post-pipeline**: Area of Law assessment classifies legal domains. Document Type quality cross-check validates findings against pipeline output.
 
 ---
 
@@ -119,7 +146,7 @@ The pipeline runs in three phases. LLM-dependent stages are automatically skippe
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_ORG/folio-enrich.git
+git clone https://github.com/damienriehl/folio-enrich.git
 cd folio-enrich/backend
 
 # Create virtual environment and install dependencies
@@ -192,7 +219,16 @@ Each pipeline task can use a different provider/model:
 | `FOLIO_ENRICH_LLM_{TASK}_PROVIDER` | `FOLIO_ENRICH_LLM_CLASSIFIER_PROVIDER=anthropic` |
 | `FOLIO_ENRICH_LLM_{TASK}_MODEL` | `FOLIO_ENRICH_LLM_CLASSIFIER_MODEL=claude-sonnet-4-6` |
 
-Tasks: `CLASSIFIER`, `EXTRACTOR`, `CONCEPT`, `BRANCH_JUDGE`, `AREA_OF_LAW`, `SYNTHETIC`
+Tasks: `CLASSIFIER`, `EXTRACTOR`, `CONCEPT`, `BRANCH_JUDGE`, `AREA_OF_LAW`, `SYNTHETIC`, `INDIVIDUAL`, `PROPERTY`, `DOCUMENT_TYPE`
+
+### Individual & Property Extraction Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FOLIO_ENRICH_INDIVIDUAL_EXTRACTION_ENABLED` | `true` | Enable individual (named entity) extraction |
+| `FOLIO_ENRICH_INDIVIDUAL_REGEX_ONLY` | `false` | Skip LLM class linking, use only regex/spaCy |
+| `FOLIO_ENRICH_PROPERTY_EXTRACTION_ENABLED` | `true` | Enable property (verb/relation) extraction |
+| `FOLIO_ENRICH_PROPERTY_REGEX_ONLY` | `false` | Skip LLM property identification, use only Aho-Corasick |
 
 ### Embedding Settings
 
@@ -226,7 +262,7 @@ Tasks: `CLASSIFIER`, `EXTRACTOR`, `CONCEPT`, `BRANCH_JUDGE`, `AREA_OF_LAW`, `SYN
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/enrich` | Submit a document for enrichment (returns `202` with `job_id`) |
-| `GET` | `/enrich/{job_id}` | Get job status and results |
+| `GET` | `/enrich/{job_id}` | Get job status and results (includes annotations, individuals, properties) |
 | `GET` | `/enrich/{job_id}/stream` | SSE stream of pipeline progress |
 | `GET` | `/enrich/branches` | List all FOLIO branches with display colors |
 
@@ -248,6 +284,8 @@ Tasks: `CLASSIFIER`, `EXTRACTOR`, `CONCEPT`, `BRANCH_JUDGE`, `AREA_OF_LAW`, `SYN
 | `GET` | `/enrich/{job_id}/export?format=json` | Export results in any of the 13 supported formats |
 
 Query parameters: `format` (required), `include_dismissed` (default `false`)
+
+All export formats include annotations, individuals, and properties sections.
 
 ### Concepts
 
@@ -295,7 +333,7 @@ Query parameters: `format` (required), `include_dismissed` (default `false`)
 
 | Format | Content-Type | Description |
 |--------|-------------|-------------|
-| `json` | `application/json` | Flat JSON with annotations array |
+| `json` | `application/json` | Flat JSON with annotations, individuals, and properties arrays |
 | `jsonld` | `application/ld+json` | JSON-LD with `@context` for Linked Data |
 | `xml` | `application/xml` | Hierarchical XML with annotation elements |
 | `csv` | `text/csv` | One row per annotation |
@@ -322,11 +360,18 @@ The frontend is a single-file SPA at `frontend/index.html` — no build step req
 
 **Capabilities:**
 - Drag-and-drop document upload (or paste text directly)
-- Real-time pipeline progress via SSE
+- Real-time pipeline progress via SSE with progressive rendering
 - Annotation viewer with ranked concept candidates and confidence bars
 - Color-coded FOLIO branch badges (Actor, Area of Law, Document, Engagement, Event, Location, etc.)
+- Multi-branch overlays with stacked gradient borders and colored dot indicators
+- Polyhierarchy tree views for multi-parent concept hierarchies
+- Individuals tab with citation details, entity cards, and OWL class links
+- Properties tab with verb/relation cards showing definition, domain/range, and inverse
+- Document type banner with confidence indicator
+- "N sources agree" badges for multi-source annotation confirmation
 - Annotation state management (preliminary / confirmed / rejected)
 - Concept graph visualization using Cytoscape with Dagre layout
+- Right detail panel with concept info, entity graph, and ancestry tree
 - Cascade-promote and bulk-reject operations
 - Export menu for all 13 formats
 - LLM provider settings panel
@@ -361,13 +406,16 @@ Each task can be independently routed to a different provider:
 | Task | Pipeline Role |
 |------|--------------|
 | **Classifier** | Document type classification |
-| **Extractor** | Structured metadata field extraction (parties, court, dates, etc.) |
+| **Extractor** | Structured metadata field extraction (28 fields) |
 | **Concept** | Legal concept identification from text chunks |
 | **Branch Judge** | FOLIO branch category assignment for ambiguous concepts |
 | **Area of Law** | Post-pipeline legal domain classification |
+| **Individual** | OWL individual class linking |
+| **Property** | OWL ObjectProperty identification with domain/range |
+| **Document Type** | Early parallel document self-identification |
 | **Synthetic** | Test document generation |
 
-The pipeline degrades gracefully — LLM-dependent stages are skipped when no provider is available, and the EntityRuler + String Match stages still produce useful results.
+The pipeline degrades gracefully — LLM-dependent stages are skipped when no provider is available, and the EntityRuler + String Match + EarlyIndividual + EarlyProperty stages still produce useful results.
 
 ---
 
@@ -435,6 +483,99 @@ High-confidence annotations are promoted to document-level metadata fields.
 
 ---
 
+## Individual Extraction
+
+FOLIO Enrich extracts OWL individuals (named instances) using a three-path hybrid approach across two pipeline stages.
+
+### EarlyIndividualStage (Parallel, No LLM)
+
+- **Legal citations** — eyecite parses U.S. legal citations; citeurl normalizes forms and resolves URLs
+- **14 regex/spaCy extractors** — dates, monetary amounts, addresses, durations, percentages, phone numbers, emails, URLs, statutory references, court names, case numbers, organization entities, person entities, and geopolitical entities
+
+### LLMIndividualStage (Post-Parallel)
+
+- **Class linking** — LLM links extracted individuals to resolved OWL class annotations with confidence scores and relationship types
+- **Deduplication** — merges duplicates across extraction paths
+
+### Individual Types
+
+| Source | Extracted Types |
+|--------|----------------|
+| **eyecite + citeurl** | Case citations, statutory citations, regulatory citations with normalized forms and URLs |
+| **Regex/spaCy** | DATE, MONEY, DURATION, PERCENT, ADDRESS, PHONE, EMAIL, URL, STATUTE, COURT, CASE_NUMBER, ORG, PERSON, GPE |
+| **LLM** | Class-linked individuals with relationship to OWL class annotations |
+
+---
+
+## Property Extraction
+
+FOLIO Enrich identifies OWL ObjectProperties (legal verbs and relationships) using a two-stage approach.
+
+### EarlyPropertyStage (Parallel, No LLM)
+
+- **Aho-Corasick automaton** — fast multi-pattern matching against all FOLIO ObjectProperty labels
+- **Containment-aware overlap resolution** — contained spans survive, partial overlaps resolve to longer match
+
+### LLMPropertyStage (Post-Parallel)
+
+- **Contextual identification** — LLM identifies property verbs in context with domain/range cross-linking
+- **Merge and dedup** — combines with early results, deduplicates
+
+### Property Data
+
+Each extracted property includes:
+- **FOLIO IRI** — resolved ObjectProperty identifier
+- **Label and definition** — from FOLIO ontology
+- **Domain and range** — OWL class constraints
+- **Inverse relation** — linked inverse property (if any)
+- **Alternative labels and examples** — from SKOS metadata
+- **Confidence score** — extraction confidence
+
+---
+
+## Metadata Extraction
+
+The Metadata stage runs last in the pipeline and uses all prior pipeline output as structured context for LLM extraction.
+
+### 28 Extracted Fields
+
+| Category | Fields |
+|----------|--------|
+| **Case identification** | `case_name`, `case_number`, `docket_entry_number`, `court`, `jurisdiction` |
+| **Parties and people** | `parties` (with roles), `judge`, `attorneys` (with affiliations), `signatories`, `witnesses`, `author`, `recipient` |
+| **Legal substance** | `cause_of_action`, `claim_types`, `relief_sought`, `disposition`, `standard_of_review`, `governing_law`, `procedural_posture` |
+| **Dates** | `date_filed`, `date_signed`, `date_effective`, `date_due`, `dates_mentioned` |
+| **Document info** | `document_title`, `related_documents`, `confidentiality`, `contract_type` |
+
+Additional context-aware fields: `counterparties`, `term_duration`, `termination_conditions`, `consideration`, `addresses`, `has_exhibits`, `exhibit_list`, `language`
+
+### Pipeline Context Used
+
+The LLM receives structured context from all upstream stages:
+- Individuals grouped by type (citations, persons, organizations, dates, amounts)
+- Low-confidence entities with surrounding sentence context
+- Extracted properties with FOLIO labels
+- Resolved concepts with branch classifications
+- Subject-predicate-object triples from dependency parsing
+- Areas of law assessment
+
+---
+
+## Document Type Detection
+
+### DocumentTypeStage (Parallel)
+
+Asks the LLM what the document "calls itself" from the title, caption, or header. Stores `self_identified_type` in metadata for use by all downstream stages.
+
+### Post-Pipeline Quality Check
+
+After pipeline completion, a DocumentTypeChecker cross-validates:
+- Compares document type against discovered branches, concepts, and annotation counts
+- Detects missing expected branches or unexpected dominant branches
+- Stores `quality_signals` array with severity levels in metadata
+
+---
+
 ## Synthetic Document Generation
 
 Generate realistic legal documents for testing and demonstration.
@@ -474,18 +615,22 @@ cd backend
 .venv/bin/python -m pytest tests/ -v
 ```
 
-**421 tests** covering:
+**586 tests** across 45 test files covering:
 
 | Area | Tests Cover |
 |------|------------|
-| **Pipeline** | End-to-end pipeline, progressive pipeline, parallel execution |
+| **Pipeline** | End-to-end pipeline, progressive pipeline, parallel execution, task LLM routing |
 | **Stages** | EntityRuler, reconciliation, resolution, rerank, branch judge, annotation states |
+| **Individuals** | Citation extraction, entity extraction, class linking, deduplication |
+| **Properties** | Aho-Corasick matching, property dedup, domain/range resolution |
+| **Document type** | Self-identification, quality cross-check signals |
+| **Metadata** | 28-field extraction, pipeline context building |
 | **Ingestion** | PDF, HTML, RTF, email, DOCX, Markdown, plain text |
-| **LLM** | Provider registry, per-task routing, connection testing |
+| **LLM** | Provider registry, per-task routing, connection testing, pricing |
 | **Embedding** | Semantic ruler, embedding index, FAISS index |
 | **Export** | All Tier 1 formats, all Tier 2 formats |
 | **Concepts** | Concept identification, concept detail, resolver |
-| **Matching** | Aho-Corasick automaton, entity ruler patterns |
+| **Matching** | Aho-Corasick automaton, containment-aware dedup, multi-branch keying |
 | **Feedback** | Submission, insights aggregation, dismiss/restore |
 | **Infrastructure** | Security middleware, SSE streaming, job retention, rate limiting |
 
@@ -508,7 +653,7 @@ folio-enrich/
 │   │   │   ├── settings.py                  # LLM/embedding configuration
 │   │   │   └── health.py                    # Health checks
 │   │   ├── models/
-│   │   │   ├── annotation.py                # Annotation, ConceptMatch, Span
+│   │   │   ├── annotation.py                # Annotation, Individual, PropertyAnnotation
 │   │   │   ├── job.py                       # Job, JobStatus, JobResult
 │   │   │   ├── document.py                  # Document formats and chunks
 │   │   │   ├── llm_models.py                # LLM provider types (14)
@@ -521,12 +666,15 @@ folio-enrich/
 │   │   │       ├── normalization_stage.py   # Chunking + sentence indexing
 │   │   │       ├── entity_ruler_stage.py    # spaCy pattern matching
 │   │   │       ├── llm_concept_stage.py     # LLM concept extraction
+│   │   │       ├── individual_stage.py      # EarlyIndividual + LLMIndividual
+│   │   │       ├── property_stage.py        # EarlyProperty + LLMProperty
+│   │   │       ├── document_type_stage.py   # Early document type classification
 │   │   │       ├── reconciliation_stage.py  # Dual-path merge
 │   │   │       ├── resolution_stage.py      # FOLIO IRI resolution
 │   │   │       ├── rerank_stage.py          # Contextual LLM reranking
 │   │   │       ├── branch_judge_stage.py    # Branch category assignment
 │   │   │       ├── string_match_stage.py    # Aho-Corasick matching
-│   │   │       ├── metadata_stage.py        # Classification + extraction
+│   │   │       ├── metadata_stage.py        # 28-field extraction + classification
 │   │   │       └── dependency_stage.py      # SPO triple extraction
 │   │   ├── services/
 │   │   │   ├── folio/                       # FOLIO ontology (resolver, search, graph)
@@ -535,6 +683,9 @@ folio-enrich/
 │   │   │   ├── entity_ruler/                # Pattern builder + semantic ruler
 │   │   │   ├── matching/                    # Aho-Corasick string matching
 │   │   │   ├── concept/                     # LLM concept ID, branch judge, area of law
+│   │   │   ├── individual/                  # Citation + entity extractors, deduplicator
+│   │   │   ├── property/                    # Property matcher, deduplicator, LLM identifier
+│   │   │   ├── quality/                     # Document type cross-check
 │   │   │   ├── metadata/                    # Classifier, extractor, promoter
 │   │   │   ├── normalization/               # Text chunking + sentence splitting
 │   │   │   ├── reconciliation/              # EntityRuler + LLM merge logic
@@ -548,7 +699,7 @@ folio-enrich/
 │   │   └── storage/
 │   │       ├── job_store.py                 # Atomic JSON job persistence
 │   │       └── feedback_store.py            # Feedback persistence
-│   ├── tests/                               # 421 tests
+│   ├── tests/                               # 586 tests across 45 files
 │   └── pyproject.toml                       # Dependencies + build config
 ├── frontend/
 │   └── index.html                           # Single-file SPA (vanilla JS, dark theme)
@@ -564,19 +715,19 @@ folio-enrich/
 | Library | Purpose |
 |---------|---------|
 | [FastAPI](https://fastapi.tiangolo.com/) | Web framework |
-| [folio-python](https://pypi.org/project/folio-python/) | FOLIO ontology access |
-| [spaCy](https://spacy.io/) | NLP, entity ruler, dependency parsing |
+| [folio-python](https://pypi.org/project/folio-python/) | FOLIO ontology access (classes, properties, search) |
+| [spaCy](https://spacy.io/) | NLP, entity ruler, NER, dependency parsing |
 | [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) | Configuration via environment variables |
 
 ### NLP & Matching
 
 | Library | Purpose |
 |---------|---------|
-| [pyahocorasick](https://pypi.org/project/pyahocorasick/) | Multi-pattern string matching |
+| [pyahocorasick](https://pypi.org/project/pyahocorasick/) | Multi-pattern string matching (concepts + properties) |
 | [faiss-cpu](https://github.com/facebookresearch/faiss) | Vector similarity search |
 | [nupunkt](https://pypi.org/project/nupunkt/) | Sentence segmentation |
 | [eyecite](https://pypi.org/project/eyecite/) | Legal citation parsing |
-| [citeurl](https://pypi.org/project/citeurl/) | Citation URL resolution |
+| [citeurl](https://pypi.org/project/citeurl/) | Citation normalization + URL resolution |
 
 ### Document Ingestion
 
