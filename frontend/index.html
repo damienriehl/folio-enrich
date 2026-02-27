@@ -904,13 +904,13 @@
   }
   .tooltip-remove-row .tooltip-dismiss-btn { flex: 1; justify-content: center; margin-left: 0; }
   .concept-tooltip .tooltip-dismiss-btn {
-    background: #fef2f2; border: 1px solid #fca5a5; border-radius: 4px; padding: 3px 8px;
+    background: #f9fafb; border: 1px solid #d1d5db; border-radius: 4px; padding: 3px 8px;
     cursor: pointer; font-size: 11px; display: inline-flex; align-items: center; gap: 3px;
-    color: #b91c1c; transition: all 0.15s ease; line-height: 1;
+    color: #6b7280; transition: all 0.15s ease; line-height: 1;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;
   }
   .concept-tooltip .tooltip-dismiss-btn:hover {
-    border-color: #ef4444; background: #fee2e2; color: #991b1b;
+    border-color: #f87171; background: #fef2f2; color: #dc2626;
   }
   .concept-tooltip .tooltip-dismiss-btn svg { flex-shrink: 0; }
   /* Restore variant — green tint */
@@ -924,13 +924,13 @@
   /* Remove-tag button in detail panel header */
   .detail-dismiss-btn {
     padding: 3px 10px; font-size: 12px; line-height: 1.2;
-    border: 1px solid #fca5a5; border-radius: 4px; cursor: pointer;
+    border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    background: #fef2f2; color: #b91c1c; transition: all 0.15s;
+    background: #f9fafb; color: #6b7280; transition: all 0.15s;
     display: inline-flex; align-items: center; gap: 4px;
   }
   .detail-dismiss-btn svg { flex-shrink: 0; }
-  .detail-dismiss-btn:hover { border-color: #ef4444; background: #fee2e2; color: #991b1b; }
+  .detail-dismiss-btn:hover { border-color: #f87171; background: #fef2f2; color: #dc2626; }
   .detail-dismiss-btn.is-rejected { border-color: #86efac; color: #166534; background: #f0fdf4; }
   .detail-dismiss-btn.is-rejected:hover { background: #dcfce7; }
 
@@ -4436,7 +4436,7 @@ async function submitNote(annId) {
 // ========== Dismiss / Restore annotations ==========
 
 // SVG icons for remove/restore — broken-link (unlink) and link (re-link)
-const _removeTagIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11l-1.5 1.5a2.83 2.83 0 0 1-4-4L3 7"/><path d="M9 5l1.5-1.5a2.83 2.83 0 0 1 4 4L13 9"/><line x1="3" y1="13" x2="6" y2="10"/><line x1="10" y1="6" x2="13" y2="3"/></svg>`;
+const _removeTagIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>`;
 const _restoreTagIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11l-1.5 1.5a2.83 2.83 0 0 1-4-4L3 7"/><path d="M9 5l1.5-1.5a2.83 2.83 0 0 1 4 4L13 9"/><line x1="6" y1="10" x2="10" y2="6"/></svg>`;
 
 // Track dismissed state locally for instant UI updates
