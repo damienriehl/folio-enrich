@@ -718,6 +718,7 @@
   }
 
   .annotation-span {
+    position: relative;
     background: rgba(59,100,224,0.13);
     border-bottom: 2px solid #3b64e0;
     cursor: pointer;
@@ -730,20 +731,22 @@
 
   .annotation-span:hover { background: rgba(59,100,224,0.25); }
 
-  /* Multi-branch dot indicators (rendered via JS after paint) */
-  .annotation-span .multi-branch-dots {
-    display: inline-flex;
-    gap: 2px;
+  /* Multi-branch count badge (rendered via JS after paint) */
+  .annotation-span .multi-branch-badge {
     position: absolute;
-    top: -6px;
-    right: -2px;
+    top: -7px;
+    right: -4px;
+    min-width: 13px;
+    height: 13px;
+    line-height: 13px;
+    font-size: 9px;
+    font-weight: 700;
+    text-align: center;
+    color: #fff;
+    border-radius: 7px;
+    padding: 0 2px;
     pointer-events: none;
-  }
-  .annotation-span .multi-branch-dots .dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    display: inline-block;
+    z-index: 2;
   }
 
   /* Annotation state styles */
@@ -3143,6 +3146,15 @@ function startSSE() {
     updateAnnotationInView(data);
   });
 
+  eventSource.addEventListener('annotation_removed', (e) => {
+    const data = JSON.parse(e.data);
+    const idx = accumulatedAnnotations.findIndex(a => a.id === data.id);
+    if (idx >= 0) {
+      accumulatedAnnotations.splice(idx, 1);
+      rerenderAnnotatedText();
+    }
+  });
+
   eventSource.addEventListener('activity', (e) => {
     const data = JSON.parse(e.data);
     activityEntries.push(data);
@@ -3493,27 +3505,29 @@ function renderAnnotatedText(text, annotations, individuals, properties) {
 
   container.innerHTML = pieces.join('');
 
-  // Add multi-branch dot indicators
+  // Add multi-branch count badges
   container.querySelectorAll('.annotation-span[data-multi-count]').forEach(el => {
     const count = parseInt(el.dataset.multiCount, 10);
     if (count >= 2) {
       const dotColors = (el.style.getPropertyValue('--multi-dots') || '').split(',').filter(Boolean);
-      if (dotColors.length >= 2) {
-        const dotsHtml = dotColors.map(c => `<span class="dot" style="background:${c.trim()}"></span>`).join('');
-        el.insertAdjacentHTML('beforeend', `<span class="multi-branch-dots">${dotsHtml}</span>`);
-      }
+      const bg = dotColors.length >= 2
+        ? `linear-gradient(135deg, ${dotColors[0].trim()}, ${dotColors[dotColors.length - 1].trim()})`
+        : '#666';
+      el.insertAdjacentHTML('beforeend',
+        `<span class="multi-branch-badge" style="background:${bg}">${count}</span>`);
     }
   });
 
-  // Add multi-individual dot indicators
+  // Add multi-individual count badges
   container.querySelectorAll('.individual-span[data-multi-ind-count]').forEach(el => {
     const count = parseInt(el.dataset.multiIndCount, 10);
     if (count >= 2) {
       const dotColors = (el.style.getPropertyValue('--multi-ind-dots') || '').split(',').filter(Boolean);
-      if (dotColors.length >= 2) {
-        const dotsHtml = dotColors.map(c => `<span class="dot" style="background:${c.trim()}"></span>`).join('');
-        el.insertAdjacentHTML('beforeend', `<span class="multi-branch-dots" style="top:-8px;bottom:auto">${dotsHtml}</span>`);
-      }
+      const bg = dotColors.length >= 2
+        ? `linear-gradient(135deg, ${dotColors[0].trim()}, ${dotColors[dotColors.length - 1].trim()})`
+        : '#666';
+      el.insertAdjacentHTML('beforeend',
+        `<span class="multi-branch-badge" style="top:-8px;bottom:auto;background:${bg}">${count}</span>`);
     }
   });
 
@@ -3934,7 +3948,11 @@ function _redrawOverlayLines(overlay, pillColors) {
 }
 
 function _showMultiBranchOverlay(tooltip, el, annIds) {
-  const matchedText = el.textContent.replace(/\s+/g, ' ').trim();
+  // Read span text from annotation data (immune to DOM badge injection)
+  const _firstData = _annotationDataById[annIds[0]];
+  const matchedText = (_firstData && _firstData.span && _firstData.span.text)
+    ? _firstData.span.text.replace(/\s+/g, ' ').trim()
+    : el.firstChild?.textContent?.replace(/\s+/g, ' ').trim() || '';
 
   // Build pills for each branch annotation
   let pillsHtml = '';
@@ -4146,7 +4164,11 @@ function _showIndividualMultiClassOverlay(tooltip, el, ind, uniqueLinks, name, c
 /** Multi-individual graph overlay — shows all overlapping individuals at a span
  *  with SVG connector lines, mirroring the concept multi-branch overlay. */
 function _showIndividualMultiOverlay(tooltip, el, indIds) {
-  const matchedText = el.textContent.replace(/\s+/g, ' ').trim();
+  // Read span text from individual data (immune to DOM badge injection)
+  const _firstData = _individualDataById[indIds[0]];
+  const matchedText = (_firstData && _firstData.span && _firstData.span.text)
+    ? _firstData.span.text.replace(/\s+/g, ' ').trim()
+    : el.firstChild?.textContent?.replace(/\s+/g, ' ').trim() || '';
 
   let pillsHtml = '';
   const pillCount = indIds.length;

@@ -170,6 +170,41 @@ class StringMatchStage(PipelineStage):
                     record_lineage(existing, "string_matching", "confirmed",
                                    detail="Aho-Corasick span match, enriched with FOLIO data")
                     new_annotations.append(existing)
+                elif (match.start, match.end) in existing_by_span:
+                    # Secondary lookup: match by span + concept text (preserves LLM preliminary annotation IDs)
+                    matched_existing = None
+                    match_text = concept.concept_text.lower()
+                    for candidate in existing_by_span[(match.start, match.end)]:
+                        if candidate.concepts and candidate.concepts[0].concept_text.lower() == match_text:
+                            matched_existing = candidate
+                            break
+                    if matched_existing is not None:
+                        matched_existing.concepts = [concept] + backup_concepts
+                        matched_existing.state = "confirmed"
+                        if not matched_existing.span.sentence_text:
+                            matched_existing.span.sentence_text = find_sentence_for_span(
+                                sentence_index, match.start, match.end
+                            )
+                        matched_existing.lineage.extend(upstream_events)
+                        record_lineage(matched_existing, "string_matching", "confirmed",
+                                       detail="Upgraded preliminary annotation with FOLIO data")
+                        new_annotations.append(matched_existing)
+                    else:
+                        # No text match among existing at this span — create new
+                        ann = Annotation(
+                            span=Span(
+                                start=match.start,
+                                end=match.end,
+                                text=full_text[match.start:match.end],
+                                sentence_text=find_sentence_for_span(sentence_index, match.start, match.end),
+                            ),
+                            concepts=[concept] + backup_concepts,
+                            state="confirmed",
+                            lineage=upstream_events,
+                        )
+                        record_lineage(ann, "string_matching", "confirmed",
+                                       detail="Aho-Corasick span match, enriched with FOLIO data")
+                        new_annotations.append(ann)
                 else:
                     # New span/IRI from Aho-Corasick
                     ann = Annotation(

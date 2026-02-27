@@ -447,6 +447,27 @@ class PipelineOrchestrator:
                 run_document_type(job),
             )
 
+            # Merge LLM preliminary annotations that don't overlap with EntityRuler
+            llm_prelim = job.result.metadata.pop("llm_preliminary_annotations", [])
+            if llm_prelim:
+                existing_spans = {
+                    (a.span.start, a.span.end, a.concepts[0].concept_text.lower())
+                    for a in job.result.annotations if a.concepts
+                }
+                from app.models.annotation import Annotation
+                merged = 0
+                for ann_dict in llm_prelim:
+                    span = ann_dict.get("span", {})
+                    concepts = ann_dict.get("concepts", [])
+                    text_key = concepts[0]["concept_text"].lower() if concepts else ""
+                    if (span.get("start"), span.get("end"), text_key) not in existing_spans:
+                        job.result.annotations.append(Annotation(**ann_dict))
+                        merged += 1
+                if merged:
+                    _log_activity(job, "orchestrator", f"Merged {merged} LLM preliminary annotations")
+                    job.updated_at = datetime.now(timezone.utc)
+                    await self.job_store.save(job)
+
             _log_activity(job, "orchestrator", "Parallel enrichment complete")
 
             # Phase 3: Sequential post-parallel stages

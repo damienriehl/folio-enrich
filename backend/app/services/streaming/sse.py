@@ -67,6 +67,14 @@ async def job_event_stream(
                 last_states[ann_id] = ann_state
                 yield {"event": "annotation_update", "data": json.dumps(ann_data)}
 
+        # Emit annotation_removed for annotations that disappeared (e.g., rejected by Resolution)
+        current_ids = {ann.id for ann in job.result.annotations}
+        removed_ids = seen_ids - current_ids
+        for rid in removed_ids:
+            yield {"event": "annotation_removed", "data": json.dumps({"id": rid})}
+            last_states.pop(rid, None)
+        seen_ids -= removed_ids
+
         # Emit new individuals
         for ind in job.result.individuals:
             if ind.id not in seen_individual_ids:

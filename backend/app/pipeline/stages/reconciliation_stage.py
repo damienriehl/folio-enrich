@@ -79,16 +79,31 @@ class ReconciliationStage(PipelineStage):
             "ruler_only": "EntityRuler only (confidence >= threshold)",
         }
 
+        # Build secondary text-only lookup for LLM annotations that lack an IRI
+        reconciled_by_text: dict[str, str] = {}
+        for (text, iri), cat in reconciled_by_key.items():
+            if text not in reconciled_by_text:
+                reconciled_by_text[text] = cat
+            elif cat in ("both_agree", "conflict_resolved"):
+                reconciled_by_text[text] = cat  # prefer stronger categories
+
         for ann in job.result.annotations:
             if ann.state != "preliminary":
                 continue
             concept_text = ann.concepts[0].concept_text.lower() if ann.concepts else ""
             concept_iri = ann.concepts[0].folio_iri or "" if ann.concepts else ""
             category = reconciled_by_key.get((concept_text, concept_iri))
+            # Fallback: text-only lookup for LLM annotations with empty/different IRI
+            if category is None and concept_iri == "":
+                category = reconciled_by_text.get(concept_text)
             if category in ("both_agree", "conflict_resolved"):
                 ann.state = "confirmed"
                 record_lineage(ann, "reconciliation", "confirmed",
                                detail=_CATEGORY_DETAIL.get(category, ""))
+            elif category in ("llm_only",):
+                # LLM-only concepts stay preliminary (may be confirmed by resolution)
+                record_lineage(ann, "reconciliation", "kept",
+                               detail="LLM-only concept — awaiting resolution")
             elif category is None:
                 # Not in reconciled set — low confidence, filtered out
                 ann.state = "rejected"
