@@ -876,10 +876,9 @@
   }
   .concept-tooltip .tooltip-feedback-row { display: flex; align-items: center; gap: 2px; }
   .concept-tooltip .tooltip-feedback-btn {
-    background: none; border: 1px solid transparent; border-radius: 4px; padding: 2px 5px;
-    cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; justify-content: center;
+    background: none; border: 1px solid transparent; border-radius: 4px; padding: 3px;
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
     color: #b0b0c0; transition: all 0.15s ease; line-height: 1;
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;
     min-height: auto;
   }
   .concept-tooltip .tooltip-feedback-btn:hover {
@@ -896,6 +895,22 @@
     box-shadow: 0 0 0 2px rgba(239,68,68,0.15); transform: none;
   }
   .concept-tooltip .tooltip-feedback-btn:disabled { opacity: 0.5; cursor: default; }
+
+  /* Inline dismiss icon in tooltip main row */
+  .concept-tooltip .tooltip-dismiss-icon {
+    background: none; border: 1px solid transparent; border-radius: 4px; padding: 3px;
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    color: #b0b0c0; transition: all 0.15s ease; line-height: 1; margin-left: 2px;
+  }
+  .concept-tooltip .tooltip-dismiss-icon:hover {
+    border-color: #f87171; background: #fef2f2; color: #dc2626;
+  }
+  .concept-tooltip .tooltip-dismiss-icon.is-rejected {
+    color: #22c55e;
+  }
+  .concept-tooltip .tooltip-dismiss-icon.is-rejected:hover {
+    border-color: #86efac; background: #f0fdf4; color: #166534;
+  }
 
   /* Remove-tag action row in tooltip */
   .tooltip-remove-row {
@@ -1129,7 +1144,11 @@
   .multi-pill:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
   .multi-pill-label { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 2px; }
   .multi-pill-branch { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 4px; display: inline-block; }
-  .multi-pill-conf { font-size: 14px; font-weight: 700; margin: 2px 0; }
+  .multi-pill-conf { font-size: 13px; font-weight: 700; }
+  .multi-pill-conf.conf-high { color: #166534; }
+  .multi-pill-conf.conf-mid  { color: #92400e; }
+  .multi-pill-conf.conf-low  { color: #991b1b; }
+  .multi-pill-action-row { display: flex; align-items: center; gap: 6px; justify-content: center; }
   .multi-pill-actions { display: flex; gap: 4px; justify-content: center; align-items: center; }
   .multi-pill-dismiss { background: none; border: none; cursor: pointer; color: #999; font-size: 12px; padding: 2px; }
   .multi-pill-dismiss:hover { color: #c82828; }
@@ -3723,7 +3742,7 @@ function showIndividualTooltip(event, el) {
     <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:2px">${escapeHtml(name)}</div>
     ${badgeLine}
     <div class="tooltip-main-row">
-      <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}</span>
+      <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}%</span>
     </div>
     ${normalizedLine}
     ${urlLine}
@@ -3781,7 +3800,7 @@ function showPropertyTooltip(event, el) {
     <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:2px">${escapeHtml(label)}</div>
     <div class="tooltip-branch" style="color:#9C27B0;background:rgba(156,39,176,0.12)">Property</div>
     <div class="tooltip-main-row">
-      <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}</span>
+      <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}%</span>
     </div>
     ${def ? `<div style="font-size:11px;color:#444;margin-top:4px;white-space:normal">${escapeHtml(def)}</div>` : ''}
     ${domainRange}
@@ -3835,7 +3854,9 @@ function showTooltip(event, el) {
   const dismissAction = isRejected
     ? `restoreAnnotation('${escapeAttr(annId)}')`
     : `dismissAnnotation('${escapeAttr(annId)}')`;
-  const dismissLabel = isRejected ? _restoreTagIcon + ' Restore' : _removeTagIcon + ' Remove';
+  const dismissIcon = isRejected ? _restoreTagIcon : _removeTagIcon;
+  const dismissTitle = isRejected ? 'Restore this tag' : 'Remove this tag';
+  const bulkDismissLabel = isRejected ? _restoreTagIcon + ' Restore' : _removeTagIcon + ' Remove';
 
   // Count other non-rejected instances of the same concept for bulk remove option
   const annData = annId ? _annotationDataById[annId] : null;
@@ -3874,18 +3895,16 @@ function showTooltip(event, el) {
     ${matchedAsLine}
     ${branchBadge}
     <div class="tooltip-main-row">
-      <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}</span>
+      <span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}%</span>
       <div class="tooltip-feedback" data-ann-id="${escapeAttr(annId)}">
         <div class="tooltip-feedback-row">
-          <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" data-rating="up" onclick="submitFeedback(this, 'up')">&#x1F44D;</button>
-          <button class="tooltip-feedback-btn${existingRating === 'down' ? ' active-down' : ''}" data-rating="down" onclick="submitFeedback(this, 'down')">&#x1F44E;</button>
+          <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" data-rating="up" onclick="submitFeedback(this, 'up')">${_thumbUpIcon}</button>
+          <button class="tooltip-feedback-btn${existingRating === 'down' ? ' active-down' : ''}" data-rating="down" onclick="submitFeedback(this, 'down')">${_thumbDownIcon}</button>
         </div>
       </div>
+      <button class="tooltip-dismiss-icon${dismissClass}" onclick="${dismissAction}" title="${dismissTitle}">${dismissIcon}</button>
     </div>
-    <div class="tooltip-remove-row">
-      <button class="tooltip-dismiss-btn${dismissClass}" onclick="${dismissAction}" title="${isRejected ? 'Restore this tag' : 'Remove this tag from the document'}">${dismissLabel}</button>
-      ${bulkRemoveBtn}
-    </div>
+    ${bulkRemoveBtn ? `<div class="tooltip-remove-row">${bulkRemoveBtn}</div>` : ''}
     <div class="tooltip-note-slide${noteOpen}" id="tooltipNoteSlide">
       <div><textarea id="tooltipNoteInput" data-ann-id="${escapeAttr(annId)}" rows="1" placeholder="Add a note\u2026" onblur="syncTooltipNote(this)">${escapeHtml(existingNote)}</textarea></div>
     </div>
@@ -3985,14 +4004,18 @@ function _showMultiBranchOverlay(tooltip, el, annIds) {
          <div class="multi-pill-branch" style="color:${aColor};background:${aColor}18">${escapeHtml(ab)}</div>`
       : `<div class="multi-pill-branch" style="color:${aColor};background:${aColor}18">${escapeHtml(conceptLabel)}</div>${pillMatchedAs}`;
 
+    const aConfTier = aConf >= 80 ? 'conf-high' : aConf >= 50 ? 'conf-mid' : 'conf-low';
+
     pillsHtml += `
       <div class="multi-pill" style="border-color:${aColor}" data-pill-idx="${i}">
         ${pillLabelHtml}
-        <div class="multi-pill-conf">${aConf.toFixed(0)}%</div>
-        <div class="multi-pill-actions">
-          <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" onclick="submitFeedback(this, 'up')" data-rating="up" data-ann-id="${escapeAttr(aid)}">&#x1F44D;</button>
-          <button class="tooltip-feedback-btn${existingRating === 'down' ? ' active-down' : ''}" onclick="submitFeedback(this, 'down')" data-rating="down" data-ann-id="${escapeAttr(aid)}">&#x1F44E;</button>
-          <button class="multi-pill-dismiss" onclick="dismissAnnotation('${escapeAttr(aid)}')" title="Remove this branch">${_removeTagIcon}</button>
+        <div class="multi-pill-action-row">
+          <span class="multi-pill-conf ${aConfTier}">${aConf.toFixed(0)}%</span>
+          <div class="multi-pill-actions">
+            <button class="tooltip-feedback-btn${existingRating === 'up' ? ' active-up' : ''}" onclick="submitFeedback(this, 'up')" data-rating="up" data-ann-id="${escapeAttr(aid)}">${_thumbUpIcon}</button>
+            <button class="tooltip-feedback-btn${existingRating === 'down' ? ' active-down' : ''}" onclick="submitFeedback(this, 'down')" data-rating="down" data-ann-id="${escapeAttr(aid)}">${_thumbDownIcon}</button>
+            <button class="multi-pill-dismiss" onclick="dismissAnnotation('${escapeAttr(aid)}')" title="Remove this branch">${_removeTagIcon}</button>
+          </div>
         </div>
       </div>`;
   }
@@ -4118,7 +4141,9 @@ function _showIndividualMultiClassOverlay(tooltip, el, ind, uniqueLinks, name, c
     const branch = cl.branch || '';
     const color = BRANCH_COLORS[branch] || '#3b64e0';
     pillColors.push(color);
-    const clConf = cl.confidence ? (cl.confidence > 1 ? cl.confidence : cl.confidence * 100).toFixed(0) + '%' : '';
+    const clConfVal = cl.confidence ? (cl.confidence > 1 ? cl.confidence : cl.confidence * 100) : 0;
+    const clConf = cl.confidence ? clConfVal.toFixed(0) + '%' : '';
+    const clConfTier = clConfVal >= 80 ? 'conf-high' : clConfVal >= 50 ? 'conf-mid' : 'conf-low';
     const annId = cl.annotation_id || '';
     const navAction = annId ? `onclick="navigateToAnnotation('${escapeAttr(annId)}')"` : '';
 
@@ -4131,18 +4156,17 @@ function _showIndividualMultiClassOverlay(tooltip, el, ind, uniqueLinks, name, c
     pillsHtml += `
       <div class="multi-pill" style="border-color:${color};cursor:pointer" ${navAction}>
         ${pillLabelHtml}
-        ${clConf ? `<div class="multi-pill-conf">${clConf}</div>` : ''}
+        ${clConf ? `<div class="multi-pill-conf ${clConfTier}">${clConf}</div>` : ''}
       </div>`;
   }
 
-  const textPillHtml = `<div class="multi-text-pill">${escapeHtml(name)}</div>`;
-  const confHtml = `<div class="tooltip-main-row" style="justify-content:center;margin-top:4px"><span class="tooltip-conf-num ${confTier}">${confPct.toFixed(0)}</span></div>`;
+  const textPillHtml = `<div class="multi-text-pill">${escapeHtml(name)} <span class="tooltip-conf-num ${confTier}" style="font-size:12px;margin-left:4px">${confPct.toFixed(0)}%</span></div>`;
   const pillsRowHtml = `<div class="multi-pills-row">${pillsHtml}</div>`;
 
   // Initial render: below orientation (text label on top, pills below)
   tooltip.innerHTML = `<div class="multi-overlay" data-direction="below">
     <svg class="multi-svg"></svg>
-    ${textPillHtml}${confHtml}
+    ${textPillHtml}
     ${pillsRowHtml}
   </div>${normalizedLine}${urlLine}`;
   tooltip.classList.add('visible');
@@ -4154,7 +4178,7 @@ function _showIndividualMultiClassOverlay(tooltip, el, ind, uniqueLinks, name, c
         overlay.dataset.direction = 'above';
         overlay.innerHTML = `<svg class="multi-svg"></svg>
           ${pillsRowHtml}
-          ${textPillHtml}${confHtml}`;
+          ${textPillHtml}`;
       }
     }
     requestAnimationFrame(() => {
@@ -4200,13 +4224,14 @@ function _showIndividualMultiOverlay(tooltip, el, indIds) {
     }
 
     const typeBadge = iType === 'legal_citation' ? 'Citation' : 'Entity';
+    const iConfTier = iConf >= 80 ? 'conf-high' : iConf >= 50 ? 'conf-mid' : 'conf-low';
 
     pillsHtml += `
       <div class="multi-pill" style="border-color:${color};cursor:pointer" data-pill-idx="${i}">
         <div class="multi-pill-label">${escapeHtml(iName)}</div>
         <div class="multi-pill-branch" style="color:${color};background:${color}18">${typeBadge}</div>
         ${classHtml}
-        <div class="multi-pill-conf">${iConf.toFixed(0)}%</div>
+        <div class="multi-pill-conf ${iConfTier}">${iConf.toFixed(0)}%</div>
       </div>`;
   }
 
@@ -4438,6 +4463,8 @@ async function submitNote(annId) {
 // SVG icons for remove/restore — broken-link (unlink) and link (re-link)
 const _removeTagIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>`;
 const _restoreTagIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11l-1.5 1.5a2.83 2.83 0 0 1-4-4L3 7"/><path d="M9 5l1.5-1.5a2.83 2.83 0 0 1 4 4L13 9"/><line x1="6" y1="10" x2="10" y2="6"/></svg>`;
+const _thumbUpIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`;
+const _thumbDownIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10zM17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>`;
 
 // Track dismissed state locally for instant UI updates
 const _dismissedCache = {};
@@ -6214,7 +6241,7 @@ function renderInsightsPanel(data) {
                   </td>
                   <td style="text-align:center">
                     <span class="${fb.rating === 'up' ? 'insights-rating-up' : 'insights-rating-down'}">
-                      ${fb.rating === 'up' ? '&#x1F44D;' : fb.rating === 'dismissed' ? '&#x1F6AB;' : '&#x1F44E;'}
+                      ${fb.rating === 'up' ? '${_thumbUpIcon}' : fb.rating === 'dismissed' ? '&#x1F6AB;' : '${_thumbDownIcon}'}
                     </span>
                   </td>
                   <td>
