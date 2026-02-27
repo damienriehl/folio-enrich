@@ -383,6 +383,9 @@
   .ancestry-branch-count {
     font-weight: 400; opacity: 0.6; margin-left: 2px;
   }
+  .hierarchy-path-count {
+    font-size: 11px; font-weight: 400; color: #6b6b80; margin-left: 4px;
+  }
 
   /* Tree children area */
   .ancestry-children {
@@ -5058,16 +5061,20 @@ function promoteFromHierarchy(annId, conceptIndex, event) {
 
 function renderAncestryTree(detail) {
   const container = document.getElementById('detailAncestry');
+  const paths = detail.hierarchy_paths || [];
   const path = detail.hierarchy_path || [];
-  if (path.length === 0) { container.innerHTML = ''; return; }
+  if (path.length === 0 && paths.length === 0) { container.innerHTML = ''; return; }
 
   const annData = _currentDetailAnnId ? _annotationDataById[_currentDetailAnnId] : null;
   const alts = (annData && annData.concepts) ? annData.concepts.slice(1) : [];
   const altCount = alts.length;
+  const pathCount = paths.length;
 
   // --- Title row with Alternatives toggle ---
   let html = '<div class="hierarchy-title-row">';
-  html += '<div class="detail-section-title">Hierarchy</div>';
+  html += '<div class="detail-section-title">Hierarchy';
+  if (pathCount > 1) html += `<span class="hierarchy-path-count">(${pathCount} paths)</span>`;
+  html += '</div>';
   if (altCount > 0 && _currentDetailAnnId) {
     html += `<button class="hierarchy-alts-toggle${_showAltsInHierarchy ? ' active' : ''}" onclick="toggleAltsInHierarchy(event)" title="${_showAltsInHierarchy ? 'Hide' : 'Show'} alternative concepts">`;
     html += `Alternatives (${altCount}) <span class="alts-chevron">&#9662;</span>`;
@@ -5081,6 +5088,8 @@ function renderAncestryTree(detail) {
     } else {
       html += renderMergedAncestryTree(detail, annData);
     }
+  } else if (pathCount > 1) {
+    html += renderMultiParentTree(detail, annData);
   } else {
     html += renderSingleAncestryTree(detail, annData);
   }
@@ -5164,17 +5173,15 @@ function renderSingleAncestryNodes(nodes, startIdx, detail, branchColor, confPct
   return html;
 }
 
-// ---- Merged multi-concept tree (primary + alternatives) ----
+// ---- Multi-parent tree (polyhierarchy: single concept, multiple parent chains) ----
 
-function buildMergedTree(primaryDetail, annData) {
-  // Tree structure: Map of branch iri_hash → { label, color, conceptCount, root }
-  // Each node: { iri_hash, label, children: Map<iri_hash, node>, concepts: [] }
+function buildMultiParentTree(detail) {
+  // Same Map-of-Maps pattern as buildMergedTree, but iterates hierarchy_paths
   const branches = new Map();
+  const paths = detail.hierarchy_paths || [detail.hierarchy_path || []];
 
-  function insertPath(detail, isPrimary, conceptIndex, confidence) {
-    const path = detail.hierarchy_path || [];
-    if (path.length === 0) return;
-
+  for (const path of paths) {
+    if (path.length === 0) continue;
     const branchColor = detail.branch_color || BRANCH_COLORS[detail.branch] || '#6b6b80';
     const rootEntry = path[0];
 
@@ -5183,12 +5190,10 @@ function buildMergedTree(primaryDetail, annData) {
         iri_hash: rootEntry.iri_hash,
         label: rootEntry.label,
         color: branchColor,
-        conceptCount: 0,
         children: new Map()
       });
     }
     const branch = branches.get(rootEntry.iri_hash);
-    branch.conceptCount++;
 
     let currentChildren = branch.children;
     for (let i = 1; i < path.length; i++) {
@@ -5198,14 +5203,143 @@ function buildMergedTree(primaryDetail, annData) {
           iri_hash: entry.iri_hash,
           label: entry.label,
           children: new Map(),
-          concepts: []
+          isTarget: entry.iri_hash === detail.iri_hash
         });
       }
       const node = currentChildren.get(entry.iri_hash);
-      if (i === path.length - 1) {
-        node.concepts.push({ isPrimary, conceptIndex, confidence, branchColor });
-      }
+      if (entry.iri_hash === detail.iri_hash) node.isTarget = true;
       currentChildren = node.children;
+    }
+  }
+  return branches;
+}
+
+function renderMultiParentTree(detail, annData) {
+  const branches = buildMultiParentTree(detail);
+  const branchColor = detail.branch_color || BRANCH_COLORS[detail.branch] || '#6b6b80';
+
+  let confPct = null;
+  if (annData && annData.concepts && annData.concepts[0]) {
+    const c = annData.concepts[0].confidence;
+    confPct = c > 1 ? c : c * 100;
+  }
+
+  let html = '<div class="ancestry-tree">';
+
+  for (const [branchIriHash, branch] of branches) {
+    const rootKey = `mp::${branchIriHash}`;
+    const isCollapsed = !!_ancestryCollapsed[rootKey];
+
+    html += `<div class="ancestry-branch-header" style="border-left-color:${branch.color};background:${branch.color}15;color:${branch.color}">`;
+    html += `<button class="ancestry-toggle" style="color:${branch.color}" onclick="toggleAncestryNode('${escapeAttr(rootKey)}', event)">${isCollapsed ? '\u25B6' : '\u25BC'}</button>`;
+    html += `<span>${escapeHtml(branch.label).toUpperCase()}</span>`;
+    html += '</div>';
+
+    if (!isCollapsed) {
+      html += renderMultiParentNodes(branch.children, rootKey, branchColor, confPct);
+    }
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function renderMultiParentNodes(children, parentKey, branchColor, confPct) {
+  let html = '';
+  for (const [iriHash, node] of children) {
+    const nodeKey = `${parentKey}::${iriHash}`;
+    const isCollapsed = !!_ancestryCollapsed[nodeKey];
+    const hasChildren = node.children.size > 0;
+
+    html += '<div class="ancestry-children">';
+
+    if (node.isTarget) {
+      // Render current concept leaf
+      const confBg = confPct != null ? (confPct >= 80 ? '#dcfce7' : confPct >= 50 ? '#fef3c7' : '#fee2e2') : '';
+      const confFg = confPct != null ? (confPct >= 80 ? '#166534' : confPct >= 50 ? '#92400e' : '#991b1b') : '';
+      html += `<div class="ancestry-node current" style="--current-node-accent:${branchColor};--current-node-bg:${branchColor}10">`;
+      html += `<span class="ancestry-toggle-spacer"></span>`;
+      html += `<span class="ancestry-bullet-char" style="color:${branchColor}">\u25CF</span>`;
+      html += `<span>${escapeHtml(node.label)}</span>`;
+      if (confPct != null) {
+        html += `<span class="ancestry-conf-badge" style="background:${confBg};color:${confFg}">${confPct.toFixed(0)}</span>`;
+      }
+      html += '</div>';
+    } else if (hasChildren) {
+      // Intermediate collapsible node
+      html += `<div class="ancestry-node clickable" onclick="loadConceptDetail('${escapeAttr(iriHash)}')">`;
+      html += `<button class="ancestry-toggle" onclick="toggleAncestryNode('${escapeAttr(nodeKey)}', event)">${isCollapsed ? '\u25B6' : '\u25BC'}</button>`;
+      html += `<span>${escapeHtml(node.label)}</span>`;
+      html += '</div>';
+      if (!isCollapsed) {
+        html += renderMultiParentNodes(node.children, nodeKey, branchColor, confPct);
+      }
+    } else {
+      // Leaf non-target — clickable
+      html += `<div class="ancestry-node clickable" onclick="loadConceptDetail('${escapeAttr(iriHash)}')">`;
+      html += `<span class="ancestry-toggle-spacer"></span>`;
+      html += `<span>${escapeHtml(node.label)}</span>`;
+      html += '</div>';
+    }
+
+    html += '</div>';
+  }
+  return html;
+}
+
+// ---- Merged multi-concept tree (primary + alternatives) ----
+
+function buildMergedTree(primaryDetail, annData) {
+  // Tree structure: Map of branch iri_hash → { label, color, conceptCount, root }
+  // Each node: { iri_hash, label, children: Map<iri_hash, node>, concepts: [] }
+  const branches = new Map();
+
+  function insertPath(detail, isPrimary, conceptIndex, confidence) {
+    const allPaths = (detail.hierarchy_paths && detail.hierarchy_paths.length > 0)
+      ? detail.hierarchy_paths
+      : (detail.hierarchy_path && detail.hierarchy_path.length > 0) ? [detail.hierarchy_path] : [];
+    if (allPaths.length === 0) return;
+
+    const branchColor = detail.branch_color || BRANCH_COLORS[detail.branch] || '#6b6b80';
+    let counted = false;
+
+    for (const path of allPaths) {
+      if (path.length === 0) continue;
+      const rootEntry = path[0];
+
+      if (!branches.has(rootEntry.iri_hash)) {
+        branches.set(rootEntry.iri_hash, {
+          iri_hash: rootEntry.iri_hash,
+          label: rootEntry.label,
+          color: branchColor,
+          conceptCount: 0,
+          children: new Map()
+        });
+      }
+      const branch = branches.get(rootEntry.iri_hash);
+      if (!counted) { branch.conceptCount++; counted = true; }
+
+      let currentChildren = branch.children;
+      for (let i = 1; i < path.length; i++) {
+        const entry = path[i];
+        if (!currentChildren.has(entry.iri_hash)) {
+          currentChildren.set(entry.iri_hash, {
+            iri_hash: entry.iri_hash,
+            label: entry.label,
+            children: new Map(),
+            concepts: []
+          });
+        }
+        const node = currentChildren.get(entry.iri_hash);
+        if (i === path.length - 1) {
+          // Avoid duplicate concept entries at same leaf
+          const isDupe = node.concepts.some(c => c.conceptIndex === conceptIndex && c.isPrimary === isPrimary);
+          if (!isDupe) {
+            node.concepts.push({ isPrimary, conceptIndex, confidence, branchColor });
+          }
+        }
+        currentChildren = node.children;
+      }
     }
   }
 

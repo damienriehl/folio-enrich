@@ -3,6 +3,7 @@
 import pytest
 
 from app.services.folio.concept_detail import (
+    _build_all_hierarchy_paths,
     _build_hierarchy_path,
     _extract_iri_hash,
     _get_all_parents,
@@ -212,3 +213,104 @@ class TestGetAllParents:
     def test_returns_empty_for_unknown(self, mock_folio):
         parents = _get_all_parents(mock_folio, "NONEXISTENT")
         assert len(parents) == 0
+
+
+# ---- Polyhierarchy fixtures and tests ----
+
+@pytest.fixture
+def poly_folio():
+    """Build a polyhierarchy DAG:
+    ROOT (branch root)
+      -> PARENT_A
+           -> TARGET
+      -> PARENT_B
+           -> TARGET
+      -> PARENT_C
+           -> TARGET
+    TARGET has 3 parents.
+    """
+    base = "https://folio.openlegalstandard.org/"
+    root = FakeOWLClass(
+        iri=f"{base}ROOT",
+        label="Area of Law",
+        sub_class_of=["http://www.w3.org/2002/07/owl#Thing"],
+        parent_class_of=[f"{base}PARENT_A", f"{base}PARENT_B", f"{base}PARENT_C"],
+    )
+    parent_a = FakeOWLClass(
+        iri=f"{base}PARENT_A",
+        label="Criminal Law",
+        sub_class_of=[f"{base}ROOT"],
+        parent_class_of=[f"{base}TARGET"],
+    )
+    parent_b = FakeOWLClass(
+        iri=f"{base}PARENT_B",
+        label="Civil Law",
+        sub_class_of=[f"{base}ROOT"],
+        parent_class_of=[f"{base}TARGET"],
+    )
+    parent_c = FakeOWLClass(
+        iri=f"{base}PARENT_C",
+        label="Regulatory Law",
+        sub_class_of=[f"{base}ROOT"],
+        parent_class_of=[f"{base}TARGET"],
+    )
+    target = FakeOWLClass(
+        iri=f"{base}TARGET",
+        label="Motion to Dismiss",
+        sub_class_of=[f"{base}PARENT_A", f"{base}PARENT_B", f"{base}PARENT_C"],
+    )
+    return FakeFOLIO([root, parent_a, parent_b, parent_c, target])
+
+
+class TestBuildAllHierarchyPaths:
+    """Tests for _build_all_hierarchy_paths with polyhierarchy support."""
+
+    def _roots(self):
+        return {"ROOT": "Area of Law"}
+
+    def test_single_parent_returns_one_path(self, mock_folio):
+        roots = self._roots()
+        paths = _build_all_hierarchy_paths(mock_folio, "CHILD1", roots)
+        assert len(paths) == 1
+        hashes = [e.iri_hash for e in paths[0]]
+        assert hashes[0] == "ROOT"
+        assert hashes[-1] == "CHILD1"
+
+    def test_multiple_parents_returns_n_paths(self, poly_folio):
+        roots = self._roots()
+        paths = _build_all_hierarchy_paths(poly_folio, "TARGET", roots)
+        assert len(paths) == 3
+        for path in paths:
+            assert path[0].iri_hash == "ROOT"
+            assert path[-1].iri_hash == "TARGET"
+            assert path[-1].label == "Motion to Dismiss"
+
+    def test_multiple_parents_each_through_different_parent(self, poly_folio):
+        roots = self._roots()
+        paths = _build_all_hierarchy_paths(poly_folio, "TARGET", roots)
+        parent_hashes = {path[-2].iri_hash for path in paths}
+        assert parent_hashes == {"PARENT_A", "PARENT_B", "PARENT_C"}
+
+    def test_unknown_concept_returns_empty(self, mock_folio):
+        roots = self._roots()
+        paths = _build_all_hierarchy_paths(mock_folio, "NONEXISTENT", roots)
+        assert paths == []
+
+    def test_root_concept_returns_single_path(self, mock_folio):
+        roots = self._roots()
+        paths = _build_all_hierarchy_paths(mock_folio, "ROOT", roots)
+        assert len(paths) == 1
+        assert len(paths[0]) == 1
+        assert paths[0][0].iri_hash == "ROOT"
+
+    def test_backward_compat_hierarchy_path_equals_first(self, poly_folio):
+        detail = lookup_concept_detail(poly_folio, "TARGET")
+        assert detail is not None
+        assert len(detail.hierarchy_paths) == 3
+        assert detail.hierarchy_path == detail.hierarchy_paths[0]
+
+    def test_single_parent_backward_compat(self, mock_folio):
+        detail = lookup_concept_detail(mock_folio, "CHILD1")
+        assert detail is not None
+        assert len(detail.hierarchy_paths) == 1
+        assert detail.hierarchy_path == detail.hierarchy_paths[0]

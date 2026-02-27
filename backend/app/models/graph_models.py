@@ -59,6 +59,7 @@ class ConceptDetail(BaseModel):
     branch: str = ""
     branch_color: str = ""
     hierarchy_path: list[HierarchyPathEntry] = []
+    hierarchy_paths: list[list[HierarchyPathEntry]] = []
     all_parents: list[HierarchyPathEntry] = []
     children: list[HierarchyPathEntry] = []
     siblings: list[HierarchyPathEntry] = []

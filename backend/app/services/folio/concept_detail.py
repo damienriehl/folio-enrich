@@ -118,6 +118,50 @@ def _build_hierarchy_path(folio, iri_hash: str, branch_root_iris: dict[str, str]
     return path
 
 
+def _build_all_hierarchy_paths(
+    folio, iri_hash: str, branch_root_iris: dict[str, str]
+) -> list[list[HierarchyPathEntry]]:
+    """Build all hierarchy paths for a polyhierarchy concept.
+
+    Returns one root→target path per immediate parent. If the concept has
+    ≤1 parent, returns the single path from ``_build_hierarchy_path``.
+    """
+    owl_class = folio[iri_hash]
+    if not owl_class:
+        return []
+
+    parents = owl_class.sub_class_of or []
+    owl_thing = "http://www.w3.org/2002/07/owl#Thing"
+    real_parents = [p for p in parents if p != owl_thing]
+
+    if len(real_parents) <= 1:
+        single = _build_hierarchy_path(folio, iri_hash, branch_root_iris)
+        return [single] if single else []
+
+    target_entry = HierarchyPathEntry(
+        label=owl_class.label or iri_hash,
+        iri_hash=iri_hash,
+    )
+
+    paths: list[list[HierarchyPathEntry]] = []
+    for parent_iri in real_parents:
+        parent_hash = _extract_iri_hash(parent_iri)
+        parent_path = _build_hierarchy_path(folio, parent_hash, branch_root_iris)
+        if parent_path:
+            paths.append(parent_path + [target_entry])
+
+    # Deduplicate identical paths (same sequence of iri_hashes)
+    seen: set[tuple[str, ...]] = set()
+    unique: list[list[HierarchyPathEntry]] = []
+    for p in paths:
+        key = tuple(e.iri_hash for e in p)
+        if key not in seen:
+            seen.add(key)
+            unique.append(p)
+
+    return unique or [_build_hierarchy_path(folio, iri_hash, branch_root_iris)]
+
+
 def _get_all_parents(folio, iri_hash: str) -> list[HierarchyPathEntry]:
     """Return all immediate parents of a class (for polyhierarchy DAG display)."""
     owl_class = folio[iri_hash]
@@ -198,6 +242,8 @@ def lookup_concept_detail(folio, iri_hash: str) -> ConceptDetail | None:
     examples = list(owl_class.examples) if hasattr(owl_class, "examples") and owl_class.examples else []
     translations = dict(owl_class.translations) if hasattr(owl_class, "translations") and owl_class.translations else {}
 
+    hierarchy_paths = _build_all_hierarchy_paths(folio, iri_hash, branch_root_iris)
+
     return ConceptDetail(
         label=owl_class.label or iri_hash,
         iri=owl_class.iri,
@@ -206,7 +252,8 @@ def lookup_concept_detail(folio, iri_hash: str) -> ConceptDetail | None:
         synonyms=owl_class.alternative_labels or [],
         branch=branch_name,
         branch_color=get_branch_color(branch_name),
-        hierarchy_path=_build_hierarchy_path(folio, iri_hash, branch_root_iris),
+        hierarchy_path=hierarchy_paths[0] if hierarchy_paths else [],
+        hierarchy_paths=hierarchy_paths,
         all_parents=_get_all_parents(folio, iri_hash),
         children=children,
         siblings=siblings,
