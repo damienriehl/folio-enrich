@@ -867,7 +867,7 @@
   .tooltip-conf-num.conf-high { color: #166534; }
   .tooltip-conf-num.conf-mid { color: #92400e; }
   .tooltip-conf-num.conf-low { color: #991b1b; }
-  .tooltip-definition { font-size: 13px; color: #1a1a2e; line-height: 1.5; margin-bottom: 8px; }
+  .tooltip-definition { font-size: 13px; color: #1a1a2e; line-height: 1.5; margin-bottom: 8px; text-align: left; }
   .tooltip-synonyms { font-size: 12px; color: #555; margin-bottom: 8px; line-height: 1.4; }
   .tooltip-synonyms strong { color: #333; }
   .tooltip-meta { font-size: 11px; color: #6b6b80; display: flex; gap: 12px; margin-bottom: 6px; }
@@ -3759,6 +3759,8 @@ function showIndividualTooltip(event, el) {
   // Multi-class graph overlay for individuals with 2+ class links
   if (uniqueLinks.length >= 2) {
     _showIndividualMultiClassOverlay(tooltip, el, ind, uniqueLinks, name, confPct, confTier, normalizedLine, urlLine);
+    // Load first class link in the detail panel
+    _loadIndividualClassDetail(uniqueLinks[0]);
     return;
   }
 
@@ -3790,7 +3792,22 @@ function showIndividualTooltip(event, el) {
   `;
   tooltip.classList.add('visible');
 
+  // Load the class detail in the right panel (single class link case)
+  if (uniqueLinks.length === 1) {
+    _loadIndividualClassDetail(uniqueLinks[0]);
+  }
+
   _positionTooltip(tooltip, el);
+}
+
+/** Load an individual's class (OWL Class) into the right detail panel. */
+function _loadIndividualClassDetail(classLink) {
+  if (!classLink) return;
+  const iri = classLink.folio_iri || '';
+  const iriHash = iri ? iri.split('/').pop() : null;
+  if (iriHash) {
+    loadConceptDetail(iriHash, classLink.annotation_id || null);
+  }
 }
 
 function showPropertyTooltip(event, el) {
@@ -4343,6 +4360,11 @@ function _showIndividualMultiOverlay(tooltip, el, indIds) {
   </div>`;
   tooltip.classList.add('visible');
 
+  // Load the first individual's class detail in the right panel
+  if (_firstData && _firstData.class_links && _firstData.class_links.length > 0) {
+    _loadIndividualClassDetail(_firstData.class_links[0]);
+  }
+
   // Clicking a pill navigates to that individual's class annotation (if linked)
   function _attachPillHandlers(container) {
     container.querySelectorAll('.multi-pill').forEach(pill => {
@@ -4351,7 +4373,8 @@ function _showIndividualMultiOverlay(tooltip, el, indIds) {
         const idx = parseInt(pill.dataset.pillIdx, 10);
         const iid = indIds[idx];
         const iData = _individualDataById[iid];
-        if (iData && iData.class_links) {
+        if (iData && iData.class_links && iData.class_links.length > 0) {
+          _loadIndividualClassDetail(iData.class_links[0]);
           const annId = iData.class_links.find(cl => cl.annotation_id)?.annotation_id;
           if (annId) navigateToAnnotation(annId);
         }
