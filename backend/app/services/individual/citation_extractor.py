@@ -62,8 +62,15 @@ def _extract_with_eyecite(text: str) -> list[Individual]:
         # Determine FOLIO class label from citation type
         folio_label = _CITATION_TYPE_MAP.get(cite_type, "Legal Citation")
 
-        # Build normalized form
-        normalized = str(cite) if str(cite) != matched_text else None
+        # Build normalized form using eyecite's clean output methods
+        if hasattr(cite, "corrected_citation_full"):
+            full = cite.corrected_citation_full()
+            normalized = full if full and full != matched_text else None
+        elif hasattr(cite, "corrected_citation"):
+            corr = cite.corrected_citation()
+            normalized = corr if corr and corr != matched_text else None
+        else:
+            normalized = None
 
         individual = Individual(
             id=str(uuid4()),
