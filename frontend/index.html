@@ -1141,6 +1141,234 @@
   }
   .property-span.ann-hidden { display: none; }
 
+  /* ══════════════════════════════════════════════════════════════
+     Clean View — CSS-scoped overrides (.clean-view ancestor)
+     All rules below only activate when the annotated-text container
+     has the .clean-view class. Classic view is completely untouched.
+     ══════════════════════════════════════════════════════════════ */
+
+  /* ── Annotation toolbar ── */
+  .ann-toolbar {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .ann-toolbar-spacer { flex: 1; }
+
+  /* View toggle (segmented control) */
+  .view-toggle {
+    display: inline-flex; gap: 0; border: 1px solid #e0e1e6; border-radius: 6px;
+    overflow: hidden;
+  }
+  .view-toggle button {
+    padding: 4px 14px; border: none; background: #f0f1f5; color: #3a3a50;
+    cursor: pointer; font-size: 12px; font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    transition: all 0.15s; border-right: 1px solid #e0e1e6;
+  }
+  .view-toggle button:last-child { border-right: none; }
+  .view-toggle button:hover { background: #e2e4ea; }
+  .view-toggle button.active { background: #3b64e0; color: #fff; }
+
+  /* Layer toggle chips */
+  .layer-toggle-bar { display: inline-flex; gap: 6px; align-items: center; }
+  .layer-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+    cursor: pointer; user-select: none; transition: all 0.15s;
+    border: 1.5px solid transparent;
+  }
+  .layer-chip .chip-dot {
+    width: 7px; height: 7px; border-radius: 50%; display: inline-block;
+  }
+  /* Concepts chip */
+  .layer-chip[data-layer="concepts"]          { background: #3b64e0; color: #fff; }
+  .layer-chip[data-layer="concepts"] .chip-dot { background: #fff; }
+  .layer-chip[data-layer="concepts"]:not(.active) { background: #f0f1f5; color: #8888a0; border-color: #d0d1d8; }
+  .layer-chip[data-layer="concepts"]:not(.active) .chip-dot { background: #b0b1bc; }
+  /* Individuals chip */
+  .layer-chip[data-layer="individuals"]          { background: #009688; color: #fff; }
+  .layer-chip[data-layer="individuals"] .chip-dot { background: #fff; }
+  .layer-chip[data-layer="individuals"]:not(.active) { background: #f0f1f5; color: #8888a0; border-color: #d0d1d8; }
+  .layer-chip[data-layer="individuals"]:not(.active) .chip-dot { background: #b0b1bc; }
+  /* Properties chip */
+  .layer-chip[data-layer="properties"]          { background: #9C27B0; color: #fff; }
+  .layer-chip[data-layer="properties"] .chip-dot { background: #fff; }
+  .layer-chip[data-layer="properties"]:not(.active) { background: #f0f1f5; color: #8888a0; border-color: #d0d1d8; }
+  .layer-chip[data-layer="properties"]:not(.active) .chip-dot { background: #b0b1bc; }
+
+  /* ── Clean-view: Annotation overrides ── */
+  .clean-view .annotation-span {
+    background: transparent !important;
+    border-bottom-width: 1.5px;
+    border-radius: 0;
+    border-image: none;
+    padding-bottom: 2px;  /* space between annotation underline and individual overline */
+  }
+  .clean-view .annotation-span:hover {
+    background: rgba(59,100,224,0.10) !important;
+  }
+  /* Multi-branch: segmented gradient underline showing each branch color.
+     The inline style (set by JS) provides border-image gradient + 3px width,
+     which naturally overrides our non-!important CSS defaults above.
+     No extra rule needed — the cascade handles single vs multi automatically. */
+  /* Hide numbered badges — branch colors are visible in the gradient bar */
+  .clean-view .multi-branch-badge { display: none !important; }
+
+  /* States: all solid, no opacity variations (except rejected) */
+  .clean-view .annotation-span[data-state="preliminary"] {
+    background: transparent !important;
+    border-bottom-style: solid !important;
+    opacity: 1 !important;
+  }
+  .clean-view .annotation-span[data-state="confirmed"] {
+    background: transparent !important;
+    border-bottom-style: solid !important;
+    opacity: 1 !important;
+  }
+  .clean-view .annotation-span[data-state="rejected"] {
+    opacity: 0.4 !important;
+    background: transparent !important;
+  }
+
+  /* Branch colors: keep border color, transparent background */
+  .clean-view .annotation-span[data-branch="Actor / Player"]                { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Area of Law"]                   { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Asset Type"]                    { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Communication Modality"]        { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Currency"]                      { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Data Format"]                   { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Document / Artifact"]           { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Document Metadata"]             { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Engagement Terms"]              { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Event"]                         { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Financial Concepts and Metrics"]{ background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Forums and Venues"]             { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Governmental Body"]             { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Industry"]                      { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Language"]                      { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Legal Authorities"]             { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Legal Entity"]                  { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Legal Use Cases"]               { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Location"]                      { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Matter Narrative"]              { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Matter Narrative Format"]       { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Objectives"]                    { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Service"]                       { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Standards Compatibility"]       { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="Status"]                        { background: transparent !important; }
+  .clean-view .annotation-span[data-branch="System Identifiers"]            { background: transparent !important; }
+
+  /* Branch hover: gentle 10% tint */
+  .clean-view .annotation-span[data-branch="Actor / Player"]:hover                { background: rgba(30,111,160,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Area of Law"]:hover                   { background: rgba(26,82,118,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Asset Type"]:hover                    { background: rgba(107,86,0,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Communication Modality"]:hover        { background: rgba(123,77,147,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Currency"]:hover                      { background: rgba(122,90,0,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Data Format"]:hover                   { background: rgba(74,85,104,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Document / Artifact"]:hover           { background: rgba(156,74,16,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Document Metadata"]:hover             { background: rgba(139,94,60,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Engagement Terms"]:hover              { background: rgba(16,97,58,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Event"]:hover                         { background: rgba(185,28,28,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Financial Concepts and Metrics"]:hover{ background: rgba(110,75,0,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Forums and Venues"]:hover             { background: rgba(123,45,142,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Governmental Body"]:hover             { background: rgba(26,96,145,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Industry"]:hover                      { background: rgba(6,85,80,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Language"]:hover                      { background: rgba(122,59,16,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Legal Authorities"]:hover             { background: rgba(139,26,26,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Legal Entity"]:hover                  { background: rgba(8,94,64,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Legal Use Cases"]:hover               { background: rgba(74,53,112,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Location"]:hover                      { background: rgba(16,85,96,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Matter Narrative"]:hover              { background: rgba(109,53,128,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Matter Narrative Format"]:hover       { background: rgba(26,104,148,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Objectives"]:hover                    { background: rgba(176,48,32,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Service"]:hover                       { background: rgba(6,94,78,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Standards Compatibility"]:hover       { background: rgba(74,90,106,0.10) !important; }
+  .clean-view .annotation-span[data-branch="Status"]:hover                        { background: rgba(134,74,8,0.10) !important; }
+  .clean-view .annotation-span[data-branch="System Identifiers"]:hover            { background: rgba(61,77,90,0.10) !important; }
+
+  /* ── Clean-view: Individual overrides ── */
+  .clean-view .individual-span {
+    background: transparent !important;
+    border-top-width: 1.5px;
+    border-radius: 0;
+    border-image: none;
+    padding-top: 2px;   /* space between individual overline and annotation underline above */
+  }
+  .clean-view .individual-span:hover {
+    background: rgba(0,150,136,0.10) !important;
+  }
+  .clean-view .individual-span.multi-individual {
+    border-top-width: 2px;
+  }
+  .clean-view .individual-span[data-individual-type="legal_citation"] {
+    background: transparent !important;
+  }
+  .clean-view .individual-span[data-individual-type="named_entity"] {
+    background: transparent !important;
+  }
+  .clean-view .individual-span[data-individual-type="legal_citation"]:hover {
+    background: rgba(0,150,136,0.10) !important;
+  }
+  .clean-view .individual-span[data-individual-type="named_entity"]:hover {
+    background: rgba(230,126,34,0.10) !important;
+  }
+  /* Confidence tiers: all solid, full opacity */
+  .clean-view .individual-span[data-confidence-tier="low"]  { opacity: 1 !important; border-top-style: solid !important; }
+  .clean-view .individual-span[data-confidence-tier="mid"]  { opacity: 1 !important; border-top-style: solid !important; }
+  .clean-view .individual-span[data-confidence-tier="high"] { border-top-style: solid !important; }
+
+  /* ── Clean-view: Property overrides ──
+     Use border-bottom instead of text-decoration to avoid the horizontal
+     offset bug that occurs with text-decoration inside nested inline spans
+     with position:relative + borders + padding (Chromium rendering quirk). */
+  .clean-view .property-span {
+    text-decoration: none !important;
+    border-bottom: 1.5px solid #9C27B0;
+    padding-bottom: 1px;
+  }
+  .clean-view .property-span:hover {
+    background: rgba(156,39,176,0.10) !important;
+  }
+
+  /* ── Layer-off: strip decorations but keep element in flow ── */
+  .clean-view .annotation-span.layer-off {
+    border-bottom-color: transparent !important;
+    border-image: none !important;
+    background: transparent !important;
+    text-decoration: none !important;
+    opacity: 1 !important;
+    cursor: default;
+    pointer-events: none;
+  }
+  .clean-view .annotation-span.layer-off:hover { background: transparent !important; }
+  .clean-view .individual-span.layer-off {
+    border-top-color: transparent !important;
+    border-image: none !important;
+    background: transparent !important;
+    text-decoration: none !important;
+    opacity: 1 !important;
+    cursor: default;
+    pointer-events: none;
+  }
+  .clean-view .individual-span.layer-off:hover { background: transparent !important; }
+  .clean-view .property-span.layer-off {
+    text-decoration: none !important;
+    border-bottom-color: transparent !important;
+    background: transparent !important;
+    opacity: 1 !important;
+    cursor: default;
+    pointer-events: none;
+  }
+  .clean-view .property-span.layer-off:hover { background: transparent !important; }
+
+  /* Restore pointer-events on active child spans inside a layer-off parent */
+  .clean-view .annotation-span.layer-off > .individual-span:not(.layer-off) { pointer-events: auto; cursor: pointer; }
+  .clean-view .annotation-span.layer-off > .property-span:not(.layer-off)   { pointer-events: auto; cursor: pointer; }
+  .clean-view .individual-span.layer-off > .property-span:not(.layer-off)   { pointer-events: auto; cursor: pointer; }
+  .clean-view .individual-span.layer-off > .annotation-span:not(.layer-off) { pointer-events: auto; cursor: pointer; }
+  .clean-view .property-span.layer-off > .individual-span:not(.layer-off)   { pointer-events: auto; cursor: pointer; }
+  .clean-view .property-span.layer-off > .annotation-span:not(.layer-off)   { pointer-events: auto; cursor: pointer; }
+
   /* Properties tab */
   .prop-group { margin-bottom: 18px; }
   .prop-group-title {
@@ -2252,10 +2480,28 @@
           <span class="doc-type-label" id="docTypeLabel"></span>
           <span class="doc-type-conf" id="docTypeConf"></span>
         </div>
-        <div class="ann-filter-bar" id="annFilterBar" style="display:none;margin-bottom:8px">
-          <button class="active" onclick="setAnnFilter('all', this)" title="Show all annotations (dismissed ones are faded)">All</button>
-          <button onclick="setAnnFilter('hide-dismissed', this)" title="Hide dismissed annotations">Active only</button>
-          <button onclick="setAnnFilter('only-dismissed', this)" title="Show only dismissed annotations">Dismissed</button>
+        <div class="ann-toolbar" id="annToolbar" style="display:none">
+          <div class="view-toggle" id="viewToggle">
+            <button onclick="setViewMode('classic', this)">Classic</button>
+            <button class="active" onclick="setViewMode('clean', this)">Clean</button>
+          </div>
+          <div class="layer-toggle-bar" id="layerToggleBar">
+            <span class="layer-chip active" data-layer="concepts" onclick="toggleLayer('concepts', this)">
+              <span class="chip-dot"></span>Classes
+            </span>
+            <span class="layer-chip active" data-layer="individuals" onclick="toggleLayer('individuals', this)">
+              <span class="chip-dot"></span>Individuals
+            </span>
+            <span class="layer-chip active" data-layer="properties" onclick="toggleLayer('properties', this)">
+              <span class="chip-dot"></span>Properties
+            </span>
+          </div>
+          <span class="ann-toolbar-spacer"></span>
+          <div class="ann-filter-bar" id="annFilterBar">
+            <button class="active" onclick="setAnnFilter('all', this)" title="Show all annotations (dismissed ones are faded)">All</button>
+            <button onclick="setAnnFilter('hide-dismissed', this)" title="Hide dismissed annotations">Active only</button>
+            <button onclick="setAnnFilter('only-dismissed', this)" title="Show only dismissed annotations">Dismissed</button>
+          </div>
         </div>
         <div class="empty-state" id="emptyState">
           <h3>No annotations yet</h3>
@@ -3913,9 +4159,14 @@ function renderResults(job) {
   renderPropertiesTab(properties);
   renderExportButtons();
 
-  // Show filter bar if there are annotations
-  const filterBar = document.getElementById('annFilterBar');
-  if (filterBar) filterBar.style.display = annotations.length > 0 ? '' : 'none';
+  // Show toolbar if there are any annotations/individuals/properties
+  const toolbar = document.getElementById('annToolbar');
+  if (toolbar) {
+    const hasContent = annotations.length > 0 || (individuals && individuals.length > 0) || (properties && properties.length > 0);
+    toolbar.style.display = hasContent ? '' : 'none';
+  }
+  // Sync view mode (clean/classic) and layer visibility
+  _syncViewMode();
 }
 
 function renderAnnotatedText(text, annotations, individuals, properties) {
@@ -4060,6 +4311,9 @@ function renderAnnotatedText(text, annotations, individuals, properties) {
   container.querySelectorAll('.property-span').forEach(el => {
     el.addEventListener('click', (e) => { e.stopPropagation(); showPropertyTooltip(e, el); });
   });
+
+  // Apply clean/classic view mode and layer visibility
+  _syncViewMode();
 }
 
 /** Count unique pipeline stages that created or confirmed this annotation (from lineage). */
@@ -4120,7 +4374,8 @@ function _buildAnnotationSpan(ann, innerHtml, rawInner, allCoveringAnns) {
     confStyle += `--multi-dots:${branchColors.join(',')};`;
   }
 
-  return `<span class="annotation-span" ${dataAttrs}${confStyle ? ` style="${confStyle}"` : ''}>${innerHtml}</span>`;
+  const extraCls = multiCount >= 2 ? ' multi-branch' : '';
+  return `<span class="annotation-span${extraCls}" ${dataAttrs}${confStyle ? ` style="${confStyle}"` : ''}>${innerHtml}</span>`;
 }
 
 function _buildPropertySpan(prop, innerHtml) {
@@ -4174,7 +4429,8 @@ function _buildIndividualSpan(ind, innerHtml, allCoveringInds) {
     confStyle += `border-top:3px solid;border-image:linear-gradient(to right, ${gradStops}) 1;`;
     confStyle += `--multi-ind-dots:${indColors.join(',')};`;
   }
-  return `<span class="individual-span" ${dataAttrs}${confStyle ? ` style="${confStyle}"` : ''}>${innerHtml}</span>`;
+  const extraCls = multiCount >= 2 ? ' multi-individual' : '';
+  return `<span class="individual-span${extraCls}" ${dataAttrs}${confStyle ? ` style="${confStyle}"` : ''}>${innerHtml}</span>`;
 }
 
 function showIndividualTooltip(event, el) {
@@ -5224,6 +5480,87 @@ function _applyAnnotationFilter() {
       el.classList.remove('ann-hidden');
     }
   });
+  // Re-apply layer visibility after filter changes (clean mode)
+  if (_viewMode === 'clean') _applyLayerVisibility();
+}
+
+// ========== View mode + Layer toggles (clean/classic) ==========
+let _viewMode = 'clean';
+let _activeLayers = new Set(['concepts', 'individuals', 'properties']);
+
+// Restore persisted preferences
+(function _restoreViewPrefs() {
+  const saved = localStorage.getItem('viewMode');
+  if (saved === 'classic' || saved === 'clean') _viewMode = saved;
+  const savedLayers = localStorage.getItem('activeLayers');
+  if (savedLayers) {
+    try { _activeLayers = new Set(JSON.parse(savedLayers)); } catch(e) {}
+  }
+})();
+
+function setViewMode(mode, btn) {
+  _viewMode = mode;
+  const container = document.getElementById('annotatedText');
+  if (container) container.classList.toggle('clean-view', mode === 'clean');
+  // Toggle layer chips visibility
+  const layerBar = document.getElementById('layerToggleBar');
+  if (layerBar) layerBar.style.display = mode === 'clean' ? '' : 'none';
+  // Sync button states
+  document.querySelectorAll('#viewToggle button').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Re-apply layer visibility (only matters in clean mode)
+  if (mode === 'clean') _applyLayerVisibility();
+  else _clearLayerVisibility();
+  localStorage.setItem('viewMode', mode);
+}
+
+function toggleLayer(layer, chipEl) {
+  if (_activeLayers.has(layer)) {
+    _activeLayers.delete(layer);
+    chipEl.classList.remove('active');
+  } else {
+    _activeLayers.add(layer);
+    chipEl.classList.add('active');
+  }
+  localStorage.setItem('activeLayers', JSON.stringify([..._activeLayers]));
+  _applyLayerVisibility();
+}
+
+function _applyLayerVisibility() {
+  const MAP = {
+    concepts: '.annotation-span',
+    individuals: '.individual-span',
+    properties: '.property-span'
+  };
+  for (const [layer, sel] of Object.entries(MAP)) {
+    const off = !_activeLayers.has(layer);
+    document.querySelectorAll(sel).forEach(el => el.classList.toggle('layer-off', off));
+  }
+}
+
+function _clearLayerVisibility() {
+  document.querySelectorAll('.layer-off').forEach(el => el.classList.remove('layer-off'));
+}
+
+/** Apply saved view mode to the UI (call after render). */
+function _syncViewMode() {
+  const container = document.getElementById('annotatedText');
+  if (container) container.classList.toggle('clean-view', _viewMode === 'clean');
+  // Sync toggle buttons
+  const btns = document.querySelectorAll('#viewToggle button');
+  btns.forEach(b => {
+    const isClassic = b.textContent.trim() === 'Classic';
+    b.classList.toggle('active', isClassic ? _viewMode === 'classic' : _viewMode === 'clean');
+  });
+  // Sync layer chips
+  const layerBar = document.getElementById('layerToggleBar');
+  if (layerBar) layerBar.style.display = _viewMode === 'clean' ? '' : 'none';
+  document.querySelectorAll('.layer-chip').forEach(chip => {
+    const layer = chip.dataset.layer;
+    chip.classList.toggle('active', _activeLayers.has(layer));
+  });
+  // Apply layer visibility
+  if (_viewMode === 'clean') _applyLayerVisibility();
 }
 
 async function toggleLineage(annId) {
@@ -7840,11 +8177,12 @@ function clearAll() {
   // Reset concepts tab tree cache
   _conceptsTabTreeCache = null;
   Object.keys(_conceptsTabCollapsed).forEach(k => delete _conceptsTabCollapsed[k]);
-  // Reset filter bar
+  // Reset toolbar and filter bar
   _annFilter = 'all';
+  const toolbar = document.getElementById('annToolbar');
+  if (toolbar) toolbar.style.display = 'none';
   const filterBar = document.getElementById('annFilterBar');
   if (filterBar) {
-    filterBar.style.display = 'none';
     filterBar.querySelectorAll('button').forEach((b, i) => b.classList.toggle('active', i === 0));
   }
   document.getElementById('activityLog').innerHTML = '';
