@@ -283,6 +283,10 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+  }
+  .panel-header button {
+    font-size: 11px;
+    padding: 4px 10px;
     flex-shrink: 0;
   }
 
@@ -2015,6 +2019,12 @@
     </div>
     <div class="panel-header">
       <h2>Document Input</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="primary" id="enrichBtn" onclick="submitEnrichment()">Enrich Document</button>
+        <button class="secondary" onclick="clearAll()">Clear</button>
+        <button id="showThinkingBtn" onclick="toggleShowThinking()" style="background:var(--surface2);border:none;color:var(--text-dim)" title="Show LLM chain-of-thought reasoning in lineage"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:transparent"></span>Show Thinking</button>
+        <button id="debugModeBtn" onclick="toggleDebugMode()" style="background:var(--surface2);border:none;color:var(--text-dim)" title="Truncate input to ~500 words for faster pipeline testing"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:transparent"></span>Debug Mode</button>
+      </div>
     </div>
 
     <!-- Pipeline progress -->
@@ -2038,18 +2048,6 @@
         <select id="providerSelect" onchange="onProviderChange()"></select>
         <select id="modelSelect"></select>
         <input type="password" id="apiKeyInput">
-      </div>
-
-      <!-- Upload & Enrich -->
-      <div class="form-row" style="margin-bottom:8px;justify-content:space-between">
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="primary" id="enrichBtn" onclick="submitEnrichment()">Enrich Document</button>
-          <button class="secondary" onclick="clearAll()">Clear</button>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button id="showThinkingBtn" onclick="toggleShowThinking()" style="background:var(--surface2);border:none;color:var(--text-dim)" title="Show LLM chain-of-thought reasoning in lineage"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:transparent"></span>Show Thinking</button>
-          <button id="debugModeBtn" onclick="toggleDebugMode()" style="background:var(--surface2);border:none;color:var(--text-dim)" title="Truncate input to ~500 words for faster pipeline testing"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:transparent"></span>Debug Mode</button>
-        </div>
       </div>
 
       <!-- File upload -->
