@@ -3780,7 +3780,7 @@ function showIndividualTooltip(event, el) {
   const confPct = conf > 1 ? conf : conf * 100;
   const confTier = confPct >= 80 ? 'conf-high' : confPct >= 50 ? 'conf-mid' : 'conf-low';
 
-  // Deduplicate class links by (label, IRI) for display
+  // Deduplicate class links by (label, IRI) for display, sorted by confidence desc
   const uniqueLinks = [];
   const seenLinkKeys = new Set();
   if (ind.class_links) {
@@ -3792,6 +3792,7 @@ function showIndividualTooltip(event, el) {
       }
     }
   }
+  uniqueLinks.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
 
   let normalizedLine = '';
   if (ind.normalized_form && ind.normalized_form !== ind.mention_text) {
@@ -4406,9 +4407,10 @@ function _showIndividualMultiOverlay(tooltip, el, indIds) {
   </div>`;
   tooltip.classList.add('visible');
 
-  // Load the first individual's class detail in the right panel
+  // Load the highest-confidence class detail in the right panel
   if (_firstData && _firstData.class_links && _firstData.class_links.length > 0) {
-    _loadIndividualClassDetail(_firstData.class_links[0]);
+    const bestLink = [..._firstData.class_links].sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
+    _loadIndividualClassDetail(bestLink);
   }
 
   // Clicking a pill navigates to that individual's class annotation (if linked)
@@ -4420,8 +4422,9 @@ function _showIndividualMultiOverlay(tooltip, el, indIds) {
         const iid = indIds[idx];
         const iData = _individualDataById[iid];
         if (iData && iData.class_links && iData.class_links.length > 0) {
-          _loadIndividualClassDetail(iData.class_links[0]);
-          const annId = iData.class_links.find(cl => cl.annotation_id)?.annotation_id;
+          const bestLink = [...iData.class_links].sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
+          _loadIndividualClassDetail(bestLink);
+          const annId = bestLink.annotation_id || iData.class_links.find(cl => cl.annotation_id)?.annotation_id;
           if (annId) navigateToAnnotation(annId);
         }
       });
