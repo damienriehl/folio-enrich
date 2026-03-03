@@ -162,6 +162,18 @@
 
   .header-btn:hover { border-color: var(--accent-dim); color: var(--text); }
 
+  .header-btn.btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .header-btn.btn-primary:hover {
+    background: var(--accent-dim);
+    border-color: var(--accent-dim);
+    color: #fff;
+  }
+
   /* Main layout */
   main {
     display: grid;
@@ -2084,7 +2096,7 @@
       <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
       <span>Show Uncertain</span>
     </label>
-    <button class="header-btn" onclick="window.open(window.location.pathname+'?new=1','_blank')" title="Open new enrichment in a new tab">
+    <button class="header-btn btn-primary" onclick="window.open(window.location.pathname+'?new=1','_blank')" title="Open new enrichment in a new tab">
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/>
       </svg>
