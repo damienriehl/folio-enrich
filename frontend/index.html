@@ -4059,6 +4059,12 @@ function rerenderAnnotatedText() {
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('annotatedText').style.display = 'block';
     renderAnnotatedText(text, annotations, individuals, properties);
+
+    // Show toolbar as soon as any content arrives (progressive rendering)
+    const toolbar = document.getElementById('annToolbar');
+    if (toolbar && (annotations.length > 0 || individuals.length > 0 || properties.length > 0)) {
+      toolbar.style.display = '';
+    }
   }
 }
 
