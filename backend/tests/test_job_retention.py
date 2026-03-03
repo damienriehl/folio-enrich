@@ -79,3 +79,26 @@ class TestConcurrencyLimits:
             await store.save(job)
 
         assert await store.count_active() == 0
+
+    @pytest.mark.asyncio
+    async def test_count_active_marks_stale_jobs_as_failed(self, tmp_path: Path):
+        store = JobStore(base_dir=tmp_path / "jobs")
+
+        # Create a stale in-progress job (updated 2 hours ago)
+        stale = Job(input=DocumentInput(content="stale"))
+        stale.status = JobStatus.RESOLVING
+        stale.updated_at = datetime.now(timezone.utc) - timedelta(hours=2)
+        await store.save(stale)
+
+        # Create a fresh in-progress job
+        fresh = Job(input=DocumentInput(content="fresh"))
+        fresh.status = JobStatus.ENRICHING
+        await store.save(fresh)
+
+        # Stale job should be auto-failed, only fresh counts
+        assert await store.count_active() == 1
+
+        # Verify stale job was marked failed on disk
+        reloaded = await store.load(stale.id)
+        assert reloaded.status == JobStatus.FAILED
+        assert reloaded.error == "Job timed out (stale)"

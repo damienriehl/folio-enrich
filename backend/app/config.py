@@ -88,6 +88,7 @@ class Settings(BaseSettings):
     # Job management
     job_retention_days: int = 30
     max_concurrent_jobs: int = 10
+    stale_job_timeout_minutes: int = 30
 
     # Rate limiting
     rate_limit_requests: int = 60

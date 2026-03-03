@@ -58,14 +58,31 @@ class JobStore:
         return False
 
     async def count_active(self) -> int:
-        """Count jobs currently in progress."""
+        """Count jobs currently in progress, auto-failing stale ones."""
+        cutoff = datetime.now(timezone.utc) - timedelta(
+            minutes=settings.stale_job_timeout_minutes
+        )
         count = 0
         for path in self.base_dir.glob("*.json"):
             try:
                 data = json.loads(path.read_text())
                 status = data.get("status", "")
-                if status not in ("completed", "failed", "pending"):
-                    count += 1
+                if status in ("completed", "failed", "pending"):
+                    continue
+                # Check if this in-progress job is stale
+                updated = data.get("updated_at") or data.get("created_at")
+                if updated:
+                    ts = datetime.fromisoformat(updated)
+                    if ts < cutoff:
+                        data["status"] = "failed"
+                        data["error"] = "Job timed out (stale)"
+                        data["updated_at"] = datetime.now(
+                            timezone.utc
+                        ).isoformat()
+                        path.write_text(json.dumps(data, indent=2))
+                        logger.info("Marked stale job %s as failed", path.stem)
+                        continue
+                count += 1
             except Exception:
                 continue
         return count
