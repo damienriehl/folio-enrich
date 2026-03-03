@@ -12,14 +12,48 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+from app.models.annotation import Individual
 from app.models.job import Job, JobStatus
 from app.pipeline.stages.base import PipelineStage
+from app.services.folio.folio_service import FolioService
 from app.services.individual.citation_extractor import CitationExtractor
 from app.services.individual.deduplicator import deduplicate
 from app.services.individual.entity_extractors import EntityExtractorRunner
 from app.services.llm.base import LLMProvider
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_class_link_iris(
+    individuals: list[Individual], folio_svc: FolioService
+) -> None:
+    """Fill in missing folio_iri on class links using exact label lookup.
+
+    Uses get_all_labels() for case-insensitive exact matching rather than
+    search_by_label() which does fuzzy matching and can return wrong concepts
+    (e.g. "Caselaw" fuzzy-matching to "Advisory Service").
+    """
+    all_labels = folio_svc.get_all_labels()
+    label_cache: dict[str, tuple[str, str]] = {}  # label → (iri, branch)
+
+    for ind in individuals:
+        for link in ind.class_links:
+            if link.folio_iri:
+                continue  # Already has IRI
+            label = link.folio_label
+            if not label:
+                continue
+            if label not in label_cache:
+                info = all_labels.get(label.lower())
+                if info:
+                    label_cache[label] = (info.concept.iri, info.concept.branch)
+                else:
+                    label_cache[label] = ("", "")
+            iri, branch = label_cache[label]
+            if iri:
+                link.folio_iri = iri
+                if not link.branch:
+                    link.branch = branch
 
 
 class EarlyIndividualStage(PipelineStage):
@@ -82,6 +116,13 @@ class EarlyIndividualStage(PipelineStage):
         # Store preliminary individuals (pre-dedup for now — LLM stage will dedup)
         all_individuals = citations + entities
         job.result.individuals = deduplicate(all_individuals)
+
+        # Resolve missing IRIs on class links via FOLIO ontology lookup
+        try:
+            folio_svc = FolioService.get_instance()
+            _resolve_class_link_iris(job.result.individuals, folio_svc)
+        except Exception:
+            logger.warning("Class link IRI resolution failed", exc_info=True)
 
         logger.info(
             "Early individual extraction for job %s: %d individuals "
@@ -153,6 +194,13 @@ class LLMIndividualStage(PipelineStage):
         deduplicated = deduplicate(combined)
 
         job.result.individuals = deduplicated
+
+        # Resolve missing IRIs on class links via FOLIO ontology lookup
+        try:
+            folio_svc = FolioService.get_instance()
+            _resolve_class_link_iris(job.result.individuals, folio_svc)
+        except Exception:
+            logger.warning("Class link IRI resolution failed", exc_info=True)
 
         log.append({
             "ts": datetime.now(timezone.utc).isoformat(),
