@@ -160,10 +160,10 @@
   .header-controls .layer-chip:not(.active) {
     background: var(--surface2);
     color: var(--text-dim);
-    border-color: var(--border);
+    border-color: transparent;
   }
   .header-controls .layer-chip:not(.active) .chip-dot {
-    background: var(--text-dim);
+    background: transparent;
   }
 
   .header-right {
@@ -1233,20 +1233,23 @@
     width: 7px; height: 7px; border-radius: 50%; display: inline-block;
   }
   /* Concepts chip */
-  .layer-chip[data-layer="concepts"]          { background: #3b64e0; color: #fff; }
-  .layer-chip[data-layer="concepts"] .chip-dot { background: #fff; }
-  .layer-chip[data-layer="concepts"]:not(.active) { background: #f0f1f5; color: #8888a0; border-color: #d0d1d8; }
-  .layer-chip[data-layer="concepts"]:not(.active) .chip-dot { background: #b0b1bc; }
+  .layer-chip[data-layer="concepts"]          { background: rgba(59,100,224,0.15); color: #6c8cff; }
+  .layer-chip[data-layer="concepts"] .chip-dot { background: #6c8cff; }
+  .layer-chip[data-layer="concepts"]:not(.active) { background: var(--surface2); color: var(--text-dim); border-color: transparent; }
+  .layer-chip[data-layer="concepts"]:not(.active) .chip-dot { background: transparent; }
   /* Individuals chip */
-  .layer-chip[data-layer="individuals"]          { background: #009688; color: #fff; }
-  .layer-chip[data-layer="individuals"] .chip-dot { background: #fff; }
-  .layer-chip[data-layer="individuals"]:not(.active) { background: #f0f1f5; color: #8888a0; border-color: #d0d1d8; }
-  .layer-chip[data-layer="individuals"]:not(.active) .chip-dot { background: #b0b1bc; }
+  .layer-chip[data-layer="individuals"]          { background: rgba(0,150,136,0.15); color: #4db6ac; }
+  .layer-chip[data-layer="individuals"] .chip-dot { background: #4db6ac; }
+  .layer-chip[data-layer="individuals"]:not(.active) { background: var(--surface2); color: var(--text-dim); border-color: transparent; }
+  .layer-chip[data-layer="individuals"]:not(.active) .chip-dot { background: transparent; }
   /* Properties chip */
-  .layer-chip[data-layer="properties"]          { background: #9C27B0; color: #fff; }
-  .layer-chip[data-layer="properties"] .chip-dot { background: #fff; }
-  .layer-chip[data-layer="properties"]:not(.active) { background: #f0f1f5; color: #8888a0; border-color: #d0d1d8; }
-  .layer-chip[data-layer="properties"]:not(.active) .chip-dot { background: #b0b1bc; }
+  .layer-chip[data-layer="properties"]          { background: rgba(176,126,232,0.15); color: #b07ee8; }
+  .layer-chip[data-layer="properties"] .chip-dot { background: #b07ee8; }
+  .layer-chip[data-layer="properties"]:not(.active) { background: var(--surface2); color: var(--text-dim); border-color: transparent; }
+  .layer-chip[data-layer="properties"]:not(.active) .chip-dot { background: transparent; }
+  /* Layer chip hover */
+  .layer-chip:hover { filter: brightness(1.15); }
+  .layer-chip:not(.active):hover { background: var(--surface3); }
 
   /* ── Clean-view: Annotation overrides ── */
   .clean-view .annotation-span {
