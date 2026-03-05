@@ -4,9 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FOLIO Enrich</title>
-<script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
-<script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
-<script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+<script src="https://unpkg.com/elkjs@0.11.1/lib/elk.bundled.js"></script>
 <style>
   :root {
     --bg: #0f1117;
@@ -672,7 +670,42 @@
     border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer;
   }
   .graph-modal-header button:hover { border-color: #6c8cff; color: #fff; }
-  #cytoscapeContainer { flex: 1; background: #0f1117; }
+  .graph-viewport {
+    position: relative; flex: 1; overflow: hidden;
+    background: var(--bg); cursor: grab;
+  }
+  .graph-viewport.grabbing { cursor: grabbing; }
+  .graph-transform {
+    position: absolute; transform-origin: 0 0;
+    will-change: transform;
+  }
+  .graph-transform.animating { transition: transform 0.35s ease; }
+  .graph-edges {
+    position: absolute; top: 0; left: 0;
+    pointer-events: none; overflow: visible;
+  }
+  .graph-nodes { position: absolute; top: 0; left: 0; }
+  .graph-node {
+    position: absolute; border-radius: 8px;
+    border: 2px solid var(--surface3); background: var(--surface2);
+    color: var(--text); padding: 4px 12px; font-size: 12px;
+    cursor: pointer; white-space: nowrap; user-select: none;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    transition: box-shadow 0.15s, border-color 0.15s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .graph-node:hover { box-shadow: 0 0 12px rgba(59,100,224,0.35); border-color: #5a7ae8; }
+  .graph-node.focus { border-color: #3b82f6; background: #1e2a4a; font-weight: bold; }
+  .graph-node.branch-root { border-color: #e05555; border-width: 3px; }
+  .graph-node.unexpanded::after {
+    content: '+'; font-size: 10px; font-weight: bold;
+    color: #8b8fa3; margin-left: 2px;
+  }
+  .graph-minimap {
+    position: absolute; bottom: 12px; right: 12px;
+    border-radius: 6px; background: rgba(26,29,39,0.85);
+    border: 1px solid var(--surface3);
+  }
   .graph-modal-legend {
     display: flex; gap: 16px; padding: 8px 20px;
     background: #1a1d27; border-top: 1px solid #2e3348;
@@ -1253,7 +1286,7 @@
   .layer-chip[data-layer="pos"]:not(.active) { background: var(--surface2); color: var(--text-dim); border-color: transparent; }
   .layer-chip[data-layer="pos"]:not(.active) .chip-dot { background: transparent; }
 
-  .pos-word { cursor: help; transition: color 0.15s; }
+  .pos-word { cursor: pointer; transition: color 0.15s; }
   .pos-word[data-pos="NOUN"]  { color: #1565C0; }
   .pos-word[data-pos="PROPN"] { color: #00897B; }
   .pos-word[data-pos="VERB"]  { color: #C62828; }
@@ -2633,11 +2666,11 @@
         <div id="detailInfo" class="detail-section"></div>
         <div id="detailAlternatives" class="detail-section"></div>
         <div id="detailDag" class="detail-section"></div>
+        <div id="detailGraphBtn" class="detail-section"></div>
         <div id="detailRelated" class="detail-section"></div>
         <div id="detailLineage" class="detail-section"></div>
         <div id="detailIndividuals" class="detail-section"></div>
         <div id="detailNotes" class="detail-section"></div>
-        <div id="detailGraphBtn" class="detail-section"></div>
       </div>
     </div>
   </div>
@@ -2762,16 +2795,30 @@
   <div class="graph-modal-header">
     <h3 id="graphModalTitle">Entity Graph</h3>
     <span class="graph-stats" id="graphStats"></span>
+    <button onclick="toggleDescendants()" id="graphDescBtn">Show Descendants</button>
+    <button onclick="toggleGraphDirection()" id="graphDirBtn">Top-Down</button>
     <button onclick="fitGraph()">Fit</button>
-    <button onclick="toggleGraphDirection()" id="graphDirBtn">Toggle H/V</button>
     <button onclick="closeGraphModal()">&times; Close</button>
   </div>
-  <div id="cytoscapeContainer"></div>
+  <div class="graph-viewport" id="graphViewport">
+    <svg style="position:absolute;width:0;height:0"><defs>
+      <marker id="arrow-sub" viewBox="0 0 10 10" refX="10" refY="5"
+              markerWidth="8" markerHeight="8" orient="auto">
+        <path d="M0 0 L10 5 L0 10z" fill="#3b64e0"/>
+      </marker>
+    </defs></svg>
+    <div class="graph-transform" id="graphTransform">
+      <svg class="graph-edges" id="graphEdgesSvg"></svg>
+      <div class="graph-nodes" id="graphNodesContainer"></div>
+    </div>
+    <canvas class="graph-minimap" id="graphMinimap" width="180" height="120"></canvas>
+  </div>
   <div class="graph-modal-legend">
     <div class="graph-legend-item"><span class="graph-legend-line" style="background:#3b64e0"></span> subClassOf</div>
     <div class="graph-legend-item"><span class="graph-legend-line" style="background:#7c3aed;border-top:2px dashed #7c3aed;height:0"></span> seeAlso</div>
     <div class="graph-legend-item"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;border:3px solid #3b64e0;background:#1a1d27"></span> Focus</div>
     <div class="graph-legend-item"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;border:3px solid #e05555;background:#1a1d27"></span> Branch Root</div>
+    <div class="graph-legend-item" style="margin-left:auto;color:#6b6b80">Click to expand &bull; Double-click to navigate &bull; Scroll to zoom &bull; Drag to pan</div>
   </div>
 </div>
 
@@ -5977,8 +6024,14 @@ document.addEventListener('click', (e) => {
 const _conceptDetailCache = {};  // iri_hash → detail object
 let _currentDetailIriHash = null;
 let _currentDetailAnnId = null;
-let _graphCy = null;  // Cytoscape instance
-let _graphDirection = 'TB';  // 'TB' or 'LR'
+let _graphDirection = 'TB';
+let _graphShowDescendants = false;
+let _graphData = null;
+let _graphExpandedNodes = new Set();
+let _graphFocusIriHash = null;
+let _graphTransform = { x: 0, y: 0, scale: 1 };
+let _graphNodePositions = {};
+let _graphElk = null;
 
 function toggleDetailPanel() {
   const main = document.getElementById('mainLayout');
@@ -7406,7 +7459,7 @@ function renderDetailGraphButton(iriHash, label) {
 }
 
 // ==============================================
-// Entity Graph — Cytoscape.js
+// Entity Graph — ELK + HTML/SVG
 // ==============================================
 
 async function openGraphModal(iriHash) {
@@ -7415,11 +7468,20 @@ async function openGraphModal(iriHash) {
   document.getElementById('graphModalTitle').textContent = 'Loading graph...';
   document.getElementById('graphStats').textContent = '';
 
+  _graphFocusIriHash = iriHash;
+  _graphExpandedNodes = new Set([iriHash]);
+  _graphTransform = { x: 0, y: 0, scale: 1 };
+  _graphDirection = 'TB';
+  _graphShowDescendants = false;
+  document.getElementById('graphDirBtn').textContent = 'Top-Down';
+  document.getElementById('graphDescBtn').textContent = 'Show Descendants';
+
   try {
-    const data = await loadGraphData(iriHash);
-    document.getElementById('graphModalTitle').textContent = `Entity Graph: ${data.focus_label}`;
-    document.getElementById('graphStats').textContent = `${data.nodes.length} nodes, ${data.edges.length} edges`;
-    renderCytoscapeGraph(document.getElementById('cytoscapeContainer'), data);
+    _graphData = await loadGraphData(iriHash);
+    document.getElementById('graphModalTitle').textContent = `Entity Graph: ${_graphData.focus_label}`;
+    document.getElementById('graphStats').textContent = `${_graphData.nodes.length} nodes, ${_graphData.edges.length} edges`;
+    await layoutAndRender();
+    initGraphPanZoom();
   } catch (e) {
     console.error('Graph load error:', e);
     document.getElementById('graphModalTitle').textContent = e.message || 'Failed to load graph';
@@ -7429,14 +7491,18 @@ async function openGraphModal(iriHash) {
 function closeGraphModal() {
   const modal = document.getElementById('graphModal');
   modal.classList.remove('visible');
-  if (_graphCy) {
-    _graphCy.destroy();
-    _graphCy = null;
-  }
+  _graphData = null;
+  _graphNodePositions = {};
+  const container = document.getElementById('graphNodesContainer');
+  if (container) container.innerHTML = '';
+  const svg = document.getElementById('graphEdgesSvg');
+  if (svg) svg.innerHTML = '';
+  removeGraphPanZoom();
 }
 
 async function loadGraphData(iriHash) {
-  const resp = await fetch(`${API}/concepts/${iriHash}/graph?ancestors_depth=3&descendants_depth=2`);
+  const desc = _graphShowDescendants ? 2 : 0;
+  const resp = await fetch(`${API}/concepts/${iriHash}/graph?ancestors_depth=5&descendants_depth=${desc}`);
   if (!resp.ok) {
     const msg = resp.status === 429 ? 'Rate limit exceeded — please wait a moment and try again'
       : resp.status === 404 ? 'Concept not found' : `Server error (${resp.status})`;
@@ -7445,135 +7511,369 @@ async function loadGraphData(iriHash) {
   return await resp.json();
 }
 
-function renderCytoscapeGraph(container, data) {
-  if (_graphCy) {
-    _graphCy.destroy();
-    _graphCy = null;
+function buildELKGraph(data, direction) {
+  const dir = direction === 'TB' ? 'DOWN' : 'RIGHT';
+  const children = data.nodes.map(n => {
+    const w = Math.max(180, n.label.length * 7.5 + 32);
+    return { id: n.id, width: w, height: 36, labels: [{ text: n.label }] };
+  });
+  const edges = data.edges.map(e => ({
+    id: e.id, sources: [e.source], targets: [e.target],
+  }));
+  return {
+    id: 'root',
+    layoutOptions: {
+      'elk.algorithm': 'layered',
+      'elk.direction': dir,
+      'elk.spacing.nodeNode': '40',
+      'elk.layered.spacing.nodeNodeBetweenLayers': '70',
+      'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+      'elk.edgeRouting': 'SPLINES',
+      'elk.padding': '[top=30,left=30,bottom=30,right=30]',
+    },
+    children,
+    edges,
+  };
+}
+
+async function runELKLayout(data, direction) {
+  if (!_graphElk) _graphElk = new ELK();
+  const elkGraph = buildELKGraph(data, direction);
+  return await _graphElk.layout(elkGraph);
+}
+
+async function layoutAndRender() {
+  if (!_graphData) return;
+  const elkResult = await runELKLayout(_graphData, _graphDirection);
+  renderGraph(elkResult, _graphData);
+  fitGraph();
+}
+
+function renderGraph(elkResult, data) {
+  const container = document.getElementById('graphNodesContainer');
+  const svg = document.getElementById('graphEdgesSvg');
+  container.innerHTML = '';
+  svg.innerHTML = '';
+  _graphNodePositions = {};
+
+  const nodeMap = {};
+  data.nodes.forEach(n => { nodeMap[n.id] = n; });
+
+  // Set SVG size to match layout
+  const gw = elkResult.width || 800;
+  const gh = elkResult.height || 600;
+  svg.setAttribute('width', gw);
+  svg.setAttribute('height', gh);
+  svg.style.width = gw + 'px';
+  svg.style.height = gh + 'px';
+
+  // Render nodes
+  (elkResult.children || []).forEach(elkNode => {
+    const nd = nodeMap[elkNode.id];
+    if (!nd) return;
+    _graphNodePositions[elkNode.id] = { x: elkNode.x, y: elkNode.y, w: elkNode.width, h: elkNode.height };
+
+    const div = document.createElement('div');
+    div.className = 'graph-node';
+    if (nd.is_focus) div.classList.add('focus');
+    if (nd.is_branch_root) div.classList.add('branch-root');
+    if (!_graphExpandedNodes.has(elkNode.id) && !nd.is_focus) div.classList.add('unexpanded');
+
+    div.style.left = elkNode.x + 'px';
+    div.style.top = elkNode.y + 'px';
+    div.style.width = elkNode.width + 'px';
+    div.style.height = elkNode.height + 'px';
+    div.style.borderLeftColor = nd.branch_color || '#6b6b80';
+    div.style.borderLeftWidth = '4px';
+    div.dataset.iriHash = elkNode.id;
+    div.title = nd.definition || nd.label;
+
+    const span = document.createElement('span');
+    span.textContent = nd.label;
+    span.style.overflow = 'hidden';
+    span.style.textOverflow = 'ellipsis';
+    div.appendChild(span);
+
+    div.addEventListener('click', () => handleGraphNodeClick(elkNode.id));
+    div.addEventListener('dblclick', (e) => { e.stopPropagation(); handleGraphNodeDblClick(elkNode.id); });
+    container.appendChild(div);
+  });
+
+  // Render edges
+  const edgeMap = {};
+  data.edges.forEach(e => { edgeMap[e.id] = e; });
+
+  (elkResult.edges || []).forEach(elkEdge => {
+    const ed = edgeMap[elkEdge.id];
+    const isSeeAlso = ed && ed.edge_type === 'seeAlso';
+
+    (elkEdge.sections || []).forEach(section => {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const d = buildEdgePath(section);
+      path.setAttribute('d', d);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', isSeeAlso ? '#7c3aed' : '#3b64e0');
+      path.setAttribute('stroke-width', '1.5');
+      if (isSeeAlso) {
+        path.setAttribute('stroke-dasharray', '6 3');
+      } else {
+        path.setAttribute('marker-end', 'url(#arrow-sub)');
+      }
+      svg.appendChild(path);
+    });
+  });
+
+  renderMinimap();
+}
+
+function buildEdgePath(section) {
+  const sp = section.startPoint;
+  const ep = section.endPoint;
+  const bends = section.bendPoints || [];
+  const pts = [sp, ...bends, ep];
+
+  if (pts.length === 2) {
+    // Straight line — use slight curve for visual softness
+    const mx = (sp.x + ep.x) / 2;
+    const my = (sp.y + ep.y) / 2;
+    return `M${sp.x},${sp.y} Q${mx},${my} ${ep.x},${ep.y}`;
   }
 
-  const elements = [];
+  // Catmull-Rom-style smooth path through all points
+  let d = `M${pts[0].x},${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+  }
+  return d;
+}
 
-  // Nodes
-  data.nodes.forEach(n => {
-    elements.push({
-      data: {
-        id: n.id,
-        label: n.label,
-        branch: n.branch,
-        branchColor: n.branch_color || '#6b6b80',
-        isFocus: n.is_focus,
-        isBranchRoot: n.is_branch_root,
-        definition: n.definition || '',
-      },
-    });
+function renderMinimap() {
+  const canvas = document.getElementById('graphMinimap');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width;
+  const ch = canvas.height;
+  ctx.clearRect(0, 0, cw, ch);
+
+  const positions = Object.values(_graphNodePositions);
+  if (positions.length === 0) return;
+
+  const minX = Math.min(...positions.map(p => p.x));
+  const minY = Math.min(...positions.map(p => p.y));
+  const maxX = Math.max(...positions.map(p => p.x + p.w));
+  const maxY = Math.max(...positions.map(p => p.y + p.h));
+  const gw = maxX - minX || 1;
+  const gh = maxY - minY || 1;
+  const scale = Math.min((cw - 8) / gw, (ch - 8) / gh);
+  const ox = (cw - gw * scale) / 2;
+  const oy = (ch - gh * scale) / 2;
+
+  // Draw nodes
+  positions.forEach(p => {
+    ctx.fillStyle = 'rgba(59,100,224,0.4)';
+    ctx.fillRect(ox + (p.x - minX) * scale, oy + (p.y - minY) * scale, Math.max(p.w * scale, 2), Math.max(p.h * scale, 2));
   });
 
-  // Edges
-  data.edges.forEach(e => {
-    elements.push({
-      data: {
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        edgeType: e.edge_type,
-      },
-    });
-  });
+  // Draw viewport rect
+  const vp = document.getElementById('graphViewport');
+  if (vp) {
+    const vpW = vp.clientWidth;
+    const vpH = vp.clientHeight;
+    const rx = ox + (-_graphTransform.x / _graphTransform.scale - minX) * scale;
+    const ry = oy + (-_graphTransform.y / _graphTransform.scale - minY) * scale;
+    const rw = (vpW / _graphTransform.scale) * scale;
+    const rh = (vpH / _graphTransform.scale) * scale;
+    ctx.strokeStyle = 'rgba(228,230,240,0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(rx, ry, rw, rh);
+  }
+}
 
-  _graphCy = cytoscape({
-    container: container,
-    elements: elements,
-    style: [
-      {
-        selector: 'node',
-        style: {
-          'label': 'data(label)',
-          'background-color': 'data(branchColor)',
-          'color': '#e4e6f0',
-          'text-valign': 'center',
-          'text-halign': 'center',
-          'font-size': '10px',
-          'width': function(el) { return Math.max(el.data('label').length * 6.5 + 20, 60); },
-          'height': 28,
-          'shape': 'roundrectangle',
-          'text-wrap': 'ellipsis',
-          'text-max-width': function(el) { return Math.max(el.data('label').length * 6.5, 40); },
-          'border-width': 0,
-          'border-color': '#3b64e0',
-          'font-family': '-apple-system, BlinkMacSystemFont, sans-serif',
-        },
-      },
-      {
-        selector: 'node[?isFocus]',
-        style: {
-          'border-width': 3,
-          'border-color': '#3b64e0',
-          'font-weight': 'bold',
-          'font-size': '11px',
-        },
-      },
-      {
-        selector: 'node[?isBranchRoot]',
-        style: {
-          'border-width': 3,
-          'border-color': '#e05555',
-        },
-      },
-      {
-        selector: 'edge',
-        style: {
-          'width': 1.5,
-          'line-color': '#3b64e0',
-          'target-arrow-color': '#3b64e0',
-          'target-arrow-shape': 'triangle',
-          'curve-style': 'bezier',
-          'arrow-scale': 0.8,
-        },
-      },
-      {
-        selector: 'edge[edgeType = "seeAlso"]',
-        style: {
-          'line-style': 'dashed',
-          'line-color': '#7c3aed',
-          'target-arrow-color': '#7c3aed',
-        },
-      },
-    ],
-    layout: {
-      name: 'dagre',
-      rankDir: _graphDirection,
-      nodeSep: 30,
-      rankSep: 60,
-      padding: 30,
-    },
-    userZoomingEnabled: true,
-    userPanningEnabled: true,
-    boxSelectionEnabled: false,
-  });
+// --- Pan/zoom ---
 
-  // Click node → load concept detail
-  _graphCy.on('tap', 'node', function(evt) {
-    const nodeId = evt.target.id();
-    loadConceptDetail(nodeId);
+let _graphPanning = false;
+let _graphPanStart = { x: 0, y: 0 };
+let _graphPanStartTransform = { x: 0, y: 0 };
+
+function _graphOnWheel(e) {
+  e.preventDefault();
+  const vp = document.getElementById('graphViewport');
+  const rect = vp.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const oldScale = _graphTransform.scale;
+  const zoomFactor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+  const newScale = Math.max(0.1, Math.min(3.0, oldScale * zoomFactor));
+
+  _graphTransform.x = mx - (mx - _graphTransform.x) * (newScale / oldScale);
+  _graphTransform.y = my - (my - _graphTransform.y) * (newScale / oldScale);
+  _graphTransform.scale = newScale;
+  applyGraphTransform();
+  renderMinimap();
+}
+
+function _graphOnMouseDown(e) {
+  if (e.button !== 0) return;
+  _graphPanning = true;
+  _graphPanStart = { x: e.clientX, y: e.clientY };
+  _graphPanStartTransform = { x: _graphTransform.x, y: _graphTransform.y };
+  document.getElementById('graphViewport').classList.add('grabbing');
+}
+
+function _graphOnMouseMove(e) {
+  if (!_graphPanning) return;
+  _graphTransform.x = _graphPanStartTransform.x + (e.clientX - _graphPanStart.x);
+  _graphTransform.y = _graphPanStartTransform.y + (e.clientY - _graphPanStart.y);
+  applyGraphTransform();
+  renderMinimap();
+}
+
+function _graphOnMouseUp() {
+  _graphPanning = false;
+  const vp = document.getElementById('graphViewport');
+  if (vp) vp.classList.remove('grabbing');
+}
+
+function applyGraphTransform(animate) {
+  const el = document.getElementById('graphTransform');
+  if (!el) return;
+  if (animate) {
+    el.classList.add('animating');
+    setTimeout(() => el.classList.remove('animating'), 400);
+  } else {
+    el.classList.remove('animating');
+  }
+  el.style.transform = `translate(${_graphTransform.x}px, ${_graphTransform.y}px) scale(${_graphTransform.scale})`;
+}
+
+function initGraphPanZoom() {
+  const vp = document.getElementById('graphViewport');
+  if (!vp) return;
+  vp.addEventListener('wheel', _graphOnWheel, { passive: false });
+  vp.addEventListener('mousedown', _graphOnMouseDown);
+  window.addEventListener('mousemove', _graphOnMouseMove);
+  window.addEventListener('mouseup', _graphOnMouseUp);
+}
+
+function removeGraphPanZoom() {
+  const vp = document.getElementById('graphViewport');
+  if (vp) {
+    vp.removeEventListener('wheel', _graphOnWheel);
+    vp.removeEventListener('mousedown', _graphOnMouseDown);
+  }
+  window.removeEventListener('mousemove', _graphOnMouseMove);
+  window.removeEventListener('mouseup', _graphOnMouseUp);
+}
+
+// --- Graph interaction ---
+
+async function handleGraphNodeClick(iriHash) {
+  if (!_graphExpandedNodes.has(iriHash) && iriHash !== _graphFocusIriHash) {
+    // Expand: fetch 1-hop neighbors and merge
+    _graphExpandedNodes.add(iriHash);
+    try {
+      const newData = await fetch(`${API}/concepts/${iriHash}/graph?ancestors_depth=1&descendants_depth=1`);
+      if (newData.ok) {
+        const extra = await newData.json();
+        mergeGraphData(extra);
+        document.getElementById('graphStats').textContent =
+          `${_graphData.nodes.length} nodes, ${_graphData.edges.length} edges`;
+        await layoutAndRender();
+      }
+    } catch (e) {
+      console.error('Expand error:', e);
+    }
+  } else {
+    loadConceptDetail(iriHash);
+  }
+}
+
+function handleGraphNodeDblClick(iriHash) {
+  loadConceptDetail(iriHash);
+}
+
+function mergeGraphData(extra) {
+  if (!_graphData || !extra) return;
+  const existingNodeIds = new Set(_graphData.nodes.map(n => n.id));
+  const existingEdgeIds = new Set(_graphData.edges.map(e => e.id));
+  extra.nodes.forEach(n => {
+    if (!existingNodeIds.has(n.id)) {
+      _graphData.nodes.push(n);
+      existingNodeIds.add(n.id);
+    }
+  });
+  extra.edges.forEach(e => {
+    if (!existingEdgeIds.has(e.id)) {
+      _graphData.edges.push(e);
+      existingEdgeIds.add(e.id);
+    }
   });
 }
 
 function fitGraph() {
-  if (_graphCy) _graphCy.fit(undefined, 30);
+  const positions = Object.values(_graphNodePositions);
+  if (positions.length === 0) return;
+  const vp = document.getElementById('graphViewport');
+  if (!vp) return;
+
+  const minX = Math.min(...positions.map(p => p.x));
+  const minY = Math.min(...positions.map(p => p.y));
+  const maxX = Math.max(...positions.map(p => p.x + p.w));
+  const maxY = Math.max(...positions.map(p => p.y + p.h));
+  const gw = maxX - minX;
+  const gh = maxY - minY;
+  const pad = 40;
+  const vpW = vp.clientWidth;
+  const vpH = vp.clientHeight;
+
+  const scale = Math.min((vpW - pad * 2) / (gw || 1), (vpH - pad * 2) / (gh || 1), 1.5);
+  const cx = minX + gw / 2;
+  const cy = minY + gh / 2;
+
+  _graphTransform.scale = scale;
+  _graphTransform.x = vpW / 2 - cx * scale;
+  _graphTransform.y = vpH / 2 - cy * scale;
+  applyGraphTransform(true);
+  setTimeout(renderMinimap, 400);
 }
 
-function toggleGraphDirection() {
+async function toggleGraphDirection() {
   _graphDirection = _graphDirection === 'TB' ? 'LR' : 'TB';
-  if (_graphCy) {
-    _graphCy.layout({
-      name: 'dagre',
-      rankDir: _graphDirection,
-      nodeSep: 30,
-      rankSep: 60,
-      padding: 30,
-      animate: true,
-      animationDuration: 300,
-    }).run();
+  document.getElementById('graphDirBtn').textContent = _graphDirection === 'TB' ? 'Top-Down' : 'Left-Right';
+  await layoutAndRender();
+}
+
+async function toggleDescendants() {
+  _graphShowDescendants = !_graphShowDescendants;
+  document.getElementById('graphDescBtn').textContent =
+    _graphShowDescendants ? 'Hide Descendants' : 'Show Descendants';
+  if (_graphFocusIriHash) {
+    try {
+      _graphData = await loadGraphData(_graphFocusIriHash);
+      // Re-merge any expanded nodes data
+      for (const expandedId of _graphExpandedNodes) {
+        if (expandedId !== _graphFocusIriHash) {
+          try {
+            const resp = await fetch(`${API}/concepts/${expandedId}/graph?ancestors_depth=1&descendants_depth=1`);
+            if (resp.ok) mergeGraphData(await resp.json());
+          } catch (_) {}
+        }
+      }
+      document.getElementById('graphStats').textContent =
+        `${_graphData.nodes.length} nodes, ${_graphData.edges.length} edges`;
+      await layoutAndRender();
+    } catch (e) {
+      console.error('Toggle descendants error:', e);
+    }
   }
 }
 
