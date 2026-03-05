@@ -94,4 +94,30 @@ class CSVExporter(ExporterBase):
                     "; ".join(prop.range_iris),
                 ])
 
+        # Triples section (blank row separator)
+        if job.result.triples:
+            writer.writerow([])
+            writer.writerow([
+                "subject", "predicate", "object", "sentence",
+                "voice", "has_folio_link", "subject_iri",
+                "object_iri", "predicate_iri", "confidence",
+            ])
+            for t in job.result.triples:
+                subj_iri = next((l.folio_iri for l in t.subject_links if l.folio_iri), "")
+                obj_iri = next((l.folio_iri for l in t.object_links if l.folio_iri), "")
+                pred_iri = next((l.folio_iri for l in t.predicate_links if l.folio_iri), "")
+                has_link = bool(t.subject_links or t.object_links or t.predicate_links)
+                writer.writerow([
+                    t.subject,
+                    t.predicate,
+                    t.object,
+                    t.sentence,
+                    t.voice,
+                    str(has_link),
+                    subj_iri,
+                    obj_iri,
+                    pred_iri,
+                    f"{t.confidence:.4f}",
+                ])
+
         return output.getvalue()

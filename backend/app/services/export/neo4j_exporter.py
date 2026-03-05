@@ -112,6 +112,33 @@ class Neo4jExporter(ExporterBase):
                         "", "", "",
                     ])
 
+        # Triple relationships (subject → predicate → object)
+        for t in job.result.triples:
+            # Find subject/object node IDs from links
+            subj_id = None
+            for link in t.subject_links:
+                if link.entity_type == "individual" and link.entity_id:
+                    subj_id = f"ind_{link.entity_id[:8]}"
+                    break
+                elif link.entity_type == "concept" and link.folio_iri:
+                    subj_id = link.folio_iri
+                    break
+            obj_id = None
+            for link in t.object_links:
+                if link.entity_type == "individual" and link.entity_id:
+                    obj_id = f"ind_{link.entity_id[:8]}"
+                    break
+                elif link.entity_type == "concept" and link.folio_iri:
+                    obj_id = link.folio_iri
+                    break
+            if subj_id and obj_id:
+                rel_type = t.predicate.upper().replace(" ", "_")
+                rels_writer.writerow([
+                    subj_id, obj_id, rel_type,
+                    f"{t.confidence:.4f}",
+                    "", "",
+                ])
+
         return (
             "# NODES\n" + nodes_buf.getvalue() +
             "\n# RELATIONSHIPS\n" + rels_buf.getvalue()

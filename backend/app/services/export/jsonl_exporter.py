@@ -85,4 +85,21 @@ class JSONLExporter(ExporterBase):
                 record["inverse_of_iri"] = prop.inverse_of_iri
             lines.append(json.dumps(record))
 
+        # Triple records
+        for t in job.result.triples:
+            record = {
+                "record_type": "triple",
+                "id": t.id,
+                "subject": t.subject,
+                "predicate": t.predicate,
+                "object": t.object,
+                "sentence": t.sentence,
+                "voice": t.voice,
+                "normalized": t.normalized,
+                "confidence": t.confidence,
+                "source": t.source,
+                "has_folio_link": bool(t.subject_links or t.object_links or t.predicate_links),
+            }
+            lines.append(json.dumps(record))
+
         return "\n".join(lines)

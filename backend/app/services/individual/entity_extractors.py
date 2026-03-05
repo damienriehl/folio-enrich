@@ -597,18 +597,11 @@ class SpaCyLocationExtractor(EntityExtractor):
 
 # ── spaCy singleton ────────────────────────────────────────────────────
 
-_nlp_instance = None
-
-
 def _get_spacy_nlp():
-    """Lazily load spaCy model (same one used by EntityRuler)."""
-    global _nlp_instance
-    if _nlp_instance is not None:
-        return _nlp_instance
+    """Get the shared spaCy model singleton."""
     try:
-        import spacy
-        _nlp_instance = spacy.load("en_core_web_sm")
-        return _nlp_instance
+        from app.services.nlp.spacy_singleton import get_spacy_nlp
+        return get_spacy_nlp()
     except Exception:
         logger.warning("spaCy model not available — NER extractors disabled")
         return None

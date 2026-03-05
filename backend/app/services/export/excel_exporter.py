@@ -181,6 +181,48 @@ class ExcelExporter(ExporterBase):
                 max_len = max(len(str(cell.value or "")) for cell in col)
                 ws_prop.column_dimensions[col[0].column_letter].width = min(max_len + 2, 50)
 
+        # Triples sheet
+        if job.result.triples:
+            ws_tri = wb.create_sheet("Triples")
+            tri_headers = [
+                "Subject", "Predicate", "Object", "Sentence",
+                "Voice", "Has FOLIO Link", "Subject IRI",
+                "Object IRI", "Predicate IRI", "Confidence",
+            ]
+            ws_tri.append(tri_headers)
+            for cell in ws_tri[1]:
+                cell.font = Font(bold=True)
+
+            tri_row_idx = 2
+            for t in job.result.triples:
+                subj_iri = next((l.folio_iri for l in t.subject_links if l.folio_iri), "")
+                obj_iri = next((l.folio_iri for l in t.object_links if l.folio_iri), "")
+                pred_iri = next((l.folio_iri for l in t.predicate_links if l.folio_iri), "")
+                has_link = bool(t.subject_links or t.object_links or t.predicate_links)
+                ws_tri.append([
+                    t.subject,
+                    t.predicate,
+                    t.object,
+                    t.sentence,
+                    t.voice,
+                    str(has_link),
+                    subj_iri,
+                    obj_iri,
+                    pred_iri,
+                    round(t.confidence, 4),
+                ])
+
+                conf_fill = _confidence_fill(t.confidence)
+                if conf_fill:
+                    conf_cell = ws_tri.cell(row=tri_row_idx, column=10)
+                    conf_cell.fill = conf_fill
+
+                tri_row_idx += 1
+
+            for col in ws_tri.columns:
+                max_len = max(len(str(cell.value or "")) for cell in col)
+                ws_tri.column_dimensions[col[0].column_letter].width = min(max_len + 2, 50)
+
         output = io.BytesIO()
         wb.save(output)
         return output.getvalue()

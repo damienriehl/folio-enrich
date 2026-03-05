@@ -19,6 +19,7 @@ async def job_event_stream(
     seen_ids: set[str] = set()
     seen_individual_ids: set[str] = set()
     seen_property_ids: set[str] = set()
+    seen_triple_ids: set[str] = set()
     last_states: dict[str, str] = {}
     last_activity_count: int = 0
     doc_type_sent: bool = False
@@ -122,6 +123,33 @@ async def job_event_stream(
                 }
                 yield {"event": "property_added", "data": json.dumps(prop_data)}
 
+        # Emit new triples
+        for triple in job.result.triples:
+            if triple.id not in seen_triple_ids:
+                seen_triple_ids.add(triple.id)
+                triple_data = {
+                    "id": triple.id,
+                    "subject": triple.subject,
+                    "predicate": triple.predicate,
+                    "object": triple.object,
+                    "sentence": triple.sentence,
+                    "sentence_index": triple.sentence_index,
+                    "voice": triple.voice,
+                    "normalized": triple.normalized,
+                    "confidence": triple.confidence,
+                    "source": triple.source,
+                    "subject_links": [l.model_dump() for l in triple.subject_links],
+                    "predicate_links": [l.model_dump() for l in triple.predicate_links],
+                    "object_links": [l.model_dump() for l in triple.object_links],
+                }
+                if triple.subject_span:
+                    triple_data["subject_span"] = {"start": triple.subject_span.start, "end": triple.subject_span.end, "text": triple.subject_span.text}
+                if triple.predicate_span:
+                    triple_data["predicate_span"] = {"start": triple.predicate_span.start, "end": triple.predicate_span.end, "text": triple.predicate_span.text}
+                if triple.object_span:
+                    triple_data["object_span"] = {"start": triple.object_span.start, "end": triple.object_span.end, "text": triple.object_span.text}
+                yield {"event": "triple_added", "data": json.dumps(triple_data)}
+
         # Emit document type as soon as MetadataStage assigns it
         if not doc_type_sent and job.result.metadata.get("document_type"):
             doc_type_sent = True
@@ -150,6 +178,7 @@ async def job_event_stream(
                     "total_annotations": len(job.result.annotations),
                     "total_individuals": len(job.result.individuals),
                     "total_properties": len(job.result.properties),
+                    "total_triples": len(job.result.triples),
                     "error": job.error,
                 }),
             }

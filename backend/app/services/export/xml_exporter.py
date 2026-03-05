@@ -104,5 +104,26 @@ class XMLExporter(ExporterBase):
             if prop.inverse_of_iri:
                 ET.SubElement(prop_elem, "inverse_of").text = prop.inverse_of_iri
 
+        # Triples
+        triples_elem = ET.SubElement(root, "triples")
+        for t in job.result.triples:
+            t_elem = ET.SubElement(triples_elem, "triple")
+            t_elem.set("id", t.id)
+            t_elem.set("voice", t.voice)
+            ET.SubElement(t_elem, "subject").text = t.subject
+            ET.SubElement(t_elem, "predicate").text = t.predicate
+            ET.SubElement(t_elem, "object").text = t.object
+            ET.SubElement(t_elem, "sentence").text = t.sentence
+            ET.SubElement(t_elem, "confidence").text = str(t.confidence)
+            ET.SubElement(t_elem, "source").text = t.source
+            if t.subject_links:
+                for link in t.subject_links:
+                    if link.folio_iri:
+                        ET.SubElement(t_elem, "subject_iri").text = link.folio_iri
+            if t.object_links:
+                for link in t.object_links:
+                    if link.folio_iri:
+                        ET.SubElement(t_elem, "object_iri").text = link.folio_iri
+
         ET.indent(root)
         return ET.tostring(root, encoding="unicode", xml_declaration=True)

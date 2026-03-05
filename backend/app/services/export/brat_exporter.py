@@ -69,4 +69,18 @@ class BratExporter(ExporterBase):
 
             t_idx += 1
 
+        # Triple annotations (as relation lines)
+        r_idx = 1
+        for t in job.result.triples:
+            if t.subject_span and t.object_span:
+                # Create entity annotations for subject and object
+                lines.append(f"T{t_idx}\tTRIPLE_SUBJECT {t.subject_span.start} {t.subject_span.end}\t{t.subject}")
+                subj_t = t_idx
+                t_idx += 1
+                lines.append(f"T{t_idx}\tTRIPLE_OBJECT {t.object_span.start} {t.object_span.end}\t{t.object}")
+                obj_t = t_idx
+                t_idx += 1
+                lines.append(f"R{r_idx}\t{t.predicate.replace(' ', '_')} Arg1:T{subj_t} Arg2:T{obj_t}")
+                r_idx += 1
+
         return "\n".join(lines)

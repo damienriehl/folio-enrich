@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from app.models.annotation import Annotation, Individual, PropertyAnnotation
+from app.models.annotation import Annotation, Individual, PropertyAnnotation, SPOTriple
 from app.models.document import CanonicalText, DocumentInput
 
 
@@ -31,6 +31,7 @@ class JobResult(BaseModel):
     annotations: list[Annotation] = Field(default_factory=list)
     individuals: list[Individual] = Field(default_factory=list)
     properties: list[PropertyAnnotation] = Field(default_factory=list)
+    triples: list[SPOTriple] = Field(default_factory=list)
     metadata: dict = Field(default_factory=dict)
 
 

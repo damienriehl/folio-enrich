@@ -100,6 +100,52 @@ class Individual(BaseModel):
     feedback: list[FeedbackItem] = Field(default_factory=list)
 
 
+class TripleLink(BaseModel):
+    """Links a triple component (subject/predicate/object) to a FOLIO entity."""
+
+    entity_type: str  # "concept" | "individual" | "property"
+    entity_id: str | None = None
+    folio_iri: str | None = None
+    folio_label: str | None = None
+    confidence: float = 0.0
+
+
+class SPOTriple(BaseModel):
+    """A first-class subject-predicate-object triple extracted from text."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    subject: str
+    predicate: str
+    object: str
+    sentence: str
+    sentence_index: int = 0
+    subject_span: Span | None = None
+    predicate_span: Span | None = None
+    object_span: Span | None = None
+    subject_links: list[TripleLink] = Field(default_factory=list)
+    predicate_links: list[TripleLink] = Field(default_factory=list)
+    object_links: list[TripleLink] = Field(default_factory=list)
+    voice: str = "active"  # "active" | "passive"
+    normalized: bool = False  # True if passive was restructured
+    confidence: float = 0.0
+    source: str = "spacy"
+    lineage: list[StageEvent] = Field(default_factory=list)
+
+
+class SentencePOS(BaseModel):
+    """Compact per-sentence POS tag storage."""
+
+    sentence_index: int
+    start: int
+    end: int
+    text: str
+    tokens: list[str] = Field(default_factory=list)
+    pos_tags: list[str] = Field(default_factory=list)  # NOUN, VERB, ADJ, ...
+    fine_tags: list[str] = Field(default_factory=list)  # NN, VBD, JJ, ... (Penn Treebank)
+    dep_labels: list[str] = Field(default_factory=list)  # nsubj, ROOT, dobj, ...
+    head_indices: list[int] = Field(default_factory=list)
+
+
 class PropertyAnnotation(BaseModel):
     """An OWL ObjectProperty match — a verb/relation found in the text."""
 

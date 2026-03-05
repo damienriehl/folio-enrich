@@ -119,6 +119,27 @@ class JSONExporter(ExporterBase):
                 }
                 for prop in job.result.properties
             ],
+            "triples": [
+                {
+                    k: v
+                    for k, v in {
+                        "id": t.id,
+                        "subject": t.subject,
+                        "predicate": t.predicate,
+                        "object": t.object,
+                        "sentence": t.sentence,
+                        "voice": t.voice,
+                        "normalized": t.normalized,
+                        "confidence": t.confidence,
+                        "source": t.source,
+                        "subject_links": [l.model_dump() for l in t.subject_links] or None,
+                        "predicate_links": [l.model_dump() for l in t.predicate_links] or None,
+                        "object_links": [l.model_dump() for l in t.object_links] or None,
+                    }.items()
+                    if v is not None
+                }
+                for t in job.result.triples
+            ],
             "statistics": {
                 "total_annotations": len(job.result.annotations),
                 "unique_concepts": len(
@@ -139,6 +160,10 @@ class JSONExporter(ExporterBase):
                 "total_properties": len(job.result.properties),
                 "unique_properties": len(
                     {p.folio_iri for p in job.result.properties if p.folio_iri}
+                ),
+                "total_triples": len(job.result.triples),
+                "folio_linked_triples": len(
+                    [t for t in job.result.triples if t.subject_links or t.object_links or t.predicate_links]
                 ),
             },
         }

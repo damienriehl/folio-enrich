@@ -117,6 +117,33 @@ class JSONLDExporter(ExporterBase):
                 prop_obj["owl:inverseOf"] = {"@id": prop.inverse_of_iri}
             properties_ld.append(prop_obj)
 
+        # SVO Triples
+        triples_ld = []
+        for t in job.result.triples:
+            triple_obj = {
+                "@type": "rdf:Statement",
+                "rdf:subject": t.subject,
+                "rdf:predicate": t.predicate,
+                "rdf:object": t.object,
+                "folio:sentence": t.sentence,
+                "folio:voice": t.voice,
+                "schema:confidence": t.confidence,
+            }
+            # Link to FOLIO IRIs if available
+            for link in t.subject_links:
+                if link.folio_iri:
+                    triple_obj["folio:subjectIRI"] = link.folio_iri
+                    break
+            for link in t.object_links:
+                if link.folio_iri:
+                    triple_obj["folio:objectIRI"] = link.folio_iri
+                    break
+            for link in t.predicate_links:
+                if link.folio_iri:
+                    triple_obj["folio:predicateIRI"] = link.folio_iri
+                    break
+            triples_ld.append(triple_obj)
+
         output = {
             "@context": {
                 "oa": "http://www.w3.org/ns/oa#",
@@ -134,5 +161,6 @@ class JSONLDExporter(ExporterBase):
             "annotations": annotations_ld,
             "individuals": individuals_ld,
             "properties": properties_ld,
+            "triples": triples_ld,
         }
         return json.dumps(output, indent=2)

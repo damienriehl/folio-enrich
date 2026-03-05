@@ -25,8 +25,8 @@ def _compute_verb_lemmas(labels: set[str]) -> dict[str, str]:
     the original and aren't already registered labels.
     """
     try:
-        import spacy
-        nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
+        from app.services.nlp.spacy_singleton import get_spacy_tokenizer
+        nlp = get_spacy_tokenizer()
     except Exception:
         return {}
 

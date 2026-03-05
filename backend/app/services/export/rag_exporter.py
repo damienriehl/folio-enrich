@@ -70,6 +70,19 @@ class RAGExporter(ExporterBase):
                         "source": prop.source,
                     })
 
+            # Find triples within this chunk (by sentence position)
+            chunk_triples = []
+            for t in job.result.triples:
+                if t.subject_span and t.subject_span.start >= chunk.start_offset and t.subject_span.end <= chunk.end_offset:
+                    chunk_triples.append({
+                        "subject": t.subject,
+                        "predicate": t.predicate,
+                        "object": t.object,
+                        "voice": t.voice,
+                        "confidence": t.confidence,
+                        "has_folio_link": bool(t.subject_links or t.object_links or t.predicate_links),
+                    })
+
             chunks.append({
                 "chunk_index": chunk.chunk_index,
                 "text": chunk.text,
@@ -87,6 +100,7 @@ class RAGExporter(ExporterBase):
                 "annotations": chunk_annotations,
                 "individuals": chunk_individuals,
                 "properties": chunk_properties,
+                "triples": chunk_triples,
                 "metadata": {
                     "document_type": job.result.metadata.get("document_type", ""),
                     "job_id": str(job.id),

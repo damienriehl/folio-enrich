@@ -92,4 +92,32 @@ class ElasticsearchExporter(ExporterBase):
                 doc["inverse_of_iri"] = prop.inverse_of_iri
             lines.append(json.dumps(doc))
 
+        # Triple documents
+        for t in job.result.triples:
+            action = {"index": {"_index": "folio-triples"}}
+            lines.append(json.dumps(action))
+            subj_iri = next((l.folio_iri for l in t.subject_links if l.folio_iri), None)
+            obj_iri = next((l.folio_iri for l in t.object_links if l.folio_iri), None)
+            pred_iri = next((l.folio_iri for l in t.predicate_links if l.folio_iri), None)
+            doc = {
+                "job_id": str(job.id),
+                "triple_id": t.id,
+                "subject": t.subject,
+                "predicate": t.predicate,
+                "object": t.object,
+                "sentence": t.sentence,
+                "voice": t.voice,
+                "normalized": t.normalized,
+                "confidence": t.confidence,
+                "source": t.source,
+                "has_folio_link": bool(t.subject_links or t.object_links or t.predicate_links),
+            }
+            if subj_iri:
+                doc["subject_iri"] = subj_iri
+            if obj_iri:
+                doc["object_iri"] = obj_iri
+            if pred_iri:
+                doc["predicate_iri"] = pred_iri
+            lines.append(json.dumps(doc))
+
         return "\n".join(lines) + "\n" if lines else ""

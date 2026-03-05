@@ -113,6 +113,28 @@ class HTMLExporter(ExporterBase):
 
         body = "".join(result)
 
+        # Build triples table HTML
+        triples_html = ""
+        if job.result.triples:
+            triples_rows = ""
+            for t in job.result.triples:
+                has_link = bool(t.subject_links or t.object_links or t.predicate_links)
+                link_badge = '<span style="color:#009688;font-weight:bold;">&#x2713;</span>' if has_link else ""
+                triples_rows += (
+                    f"<tr><td>{html.escape(t.subject)}</td>"
+                    f"<td><em>{html.escape(t.predicate)}</em></td>"
+                    f"<td>{html.escape(t.object)}</td>"
+                    f"<td>{t.voice}</td>"
+                    f"<td>{t.confidence:.2f}</td>"
+                    f"<td>{link_badge}</td></tr>\n"
+                )
+            triples_html = f"""
+<hr>
+<h2>Extracted Triples ({len(job.result.triples)})</h2>
+<table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:0.9em;">
+<tr style="background:#f5f5f5;"><th>Subject</th><th>Predicate</th><th>Object</th><th>Voice</th><th>Confidence</th><th>FOLIO</th></tr>
+{triples_rows}</table>"""
+
         return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -131,5 +153,6 @@ body {{ font-family: 'Georgia', serif; line-height: 1.6; max-width: 800px; margi
 </head>
 <body>
 <pre style="white-space: pre-wrap; font-family: inherit;">{body}</pre>
+{triples_html}
 </body>
 </html>"""

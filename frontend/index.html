@@ -8027,20 +8027,33 @@ function applyPOSTags(metadata) {
   // Build a lookup of character offset -> { token, pos } for content words only
   const posMap = new Map();
   for (const sp of sentencePOS) {
-    let charIdx = sp.start;
+    let localOffset = 0; // offset within sp.text
     for (let i = 0; i < sp.tokens.length; i++) {
       const token = sp.tokens[i];
       const pos = sp.pos_tags[i];
+      // Find exact token position in sentence text (handles any whitespace/punctuation gaps)
+      const idx = sp.text.indexOf(token, localOffset);
+      if (idx === -1) { localOffset += token.length; continue; }
       if (pos && CONTENT_POS.has(pos)) {
-        posMap.set(charIdx, { token, pos });
+        posMap.set(sp.start + idx, { token, pos });
       }
-      charIdx += token.length;
-      while (charIdx < sp.end && sp.text[charIdx - sp.start] === ' ') charIdx++;
+      localOffset = idx + token.length;
     }
   }
 
   // Walk text nodes and wrap content-word tokens in colored spans
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  // Skip badge/overlay text nodes that aren't part of the document text
+  const SKIP_CLASSES = new Set(['multi-branch-badge', 'multi-ind-badge']);
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      let el = node.parentNode;
+      while (el && el !== container) {
+        if (el.classList && (SKIP_CLASSES.has(el.className) || el.className?.includes('badge'))) return NodeFilter.FILTER_REJECT;
+        el = el.parentNode;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
   const textNodes = [];
   while (walker.nextNode()) textNodes.push(walker.currentNode);
 

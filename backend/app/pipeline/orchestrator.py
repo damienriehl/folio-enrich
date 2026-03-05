@@ -16,9 +16,10 @@ from app.pipeline.stages.resolution_stage import ResolutionStage
 from app.pipeline.stages.string_match_stage import StringMatchStage
 from app.pipeline.stages.branch_judge_stage import BranchJudgeStage
 from app.pipeline.stages.metadata_stage import MetadataStage
-from app.pipeline.stages.dependency_stage import DependencyStage
+from app.pipeline.stages.dependency_stage import TripleEnrichmentStage
 from app.pipeline.stages.individual_stage import EarlyIndividualStage, LLMIndividualStage
 from app.pipeline.stages.property_stage import EarlyPropertyStage, LLMPropertyStage
+from app.pipeline.stages.triple_stage import EarlyTripleStage
 from app.pipeline.stages.document_type_stage import DocumentTypeStage
 from app.pipeline.stages.rerank_stage import ContextualRerankStage
 from app.services.llm.base import LLMProvider
@@ -100,6 +101,7 @@ class PipelineConfig:
     llm_concept: PipelineStage | None = None
     early_individual: PipelineStage | None = None
     early_property: PipelineStage | None = None
+    early_triple: PipelineStage | None = None
     document_type: PipelineStage | None = None
     post_parallel: list[PipelineStage] = field(default_factory=list)
 
@@ -140,6 +142,9 @@ def build_pipeline_config(
     # Early property extraction (Aho-Corasick) runs in parallel
     config.early_property = EarlyPropertyStage()
 
+    # Early triple extraction (dependency parsing) runs in parallel
+    config.early_triple = EarlyTripleStage()
+
     # Early document type classification runs in parallel
     if document_type_llm is not None:
         config.document_type = DocumentTypeStage(document_type_llm)
@@ -163,7 +168,7 @@ def build_pipeline_config(
     # LLM property linking (after LLMIndividual, needs resolved classes)
     config.post_parallel.append(LLMPropertyStage(llm=property_llm))
 
-    config.post_parallel.append(DependencyStage())
+    config.post_parallel.append(TripleEnrichmentStage())
 
     # MetadataStage runs absolute last — it uses all pipeline outputs as context
     if classifier_llm is not None or extractor_llm is not None:
@@ -211,6 +216,9 @@ def build_stages(
     # Early property extraction (Aho-Corasick) — fast, no LLM
     stages.append(EarlyPropertyStage())
 
+    # Early triple extraction (dependency parsing) — fast, no LLM
+    stages.append(EarlyTripleStage())
+
     # Early document type classification — LLM-based
     if document_type_llm is not None:
         stages.append(DocumentTypeStage(document_type_llm))
@@ -235,7 +243,7 @@ def build_stages(
     # LLM property linking (after LLMIndividual, needs resolved classes)
     stages.append(LLMPropertyStage(llm=property_llm))
 
-    stages.append(DependencyStage())
+    stages.append(TripleEnrichmentStage())
 
     # MetadataStage runs absolute last — it uses all pipeline outputs as context
     if classifier_llm is not None or extractor_llm is not None:
@@ -402,7 +410,7 @@ class PipelineOrchestrator:
             job.updated_at = datetime.now(timezone.utc)
             await self.job_store.save(job)
 
-            _log_activity(job, "orchestrator", "Running EntityRuler, LLM, early individuals, early properties, and document type in parallel...")
+            _log_activity(job, "orchestrator", "Running EntityRuler, LLM, early individuals, early properties, early triples, and document type in parallel...")
 
             async def run_entity_ruler(j: Job) -> None:
                 if config.entity_ruler is None:
@@ -452,6 +460,18 @@ class PipelineOrchestrator:
                     logger.warning("Stage %s failed for job %s: %s — continuing",
                                    config.early_property.name, j.id, e)
 
+            async def run_early_triple(j: Job) -> None:
+                if config.early_triple is None:
+                    return
+                logger.info("Running stage %s for job %s (parallel)", config.early_triple.name, j.id)
+                try:
+                    await config.early_triple.execute(j)
+                    j.updated_at = datetime.now(timezone.utc)
+                    await self.job_store.save(j)
+                except Exception as e:
+                    logger.warning("Stage %s failed for job %s: %s — continuing",
+                                   config.early_triple.name, j.id, e)
+
             async def run_document_type(j: Job) -> None:
                 if config.document_type is None:
                     return
@@ -469,6 +489,7 @@ class PipelineOrchestrator:
                 run_llm_concept(job),
                 run_early_individual(job),
                 run_early_property(job),
+                run_early_triple(job),
                 run_document_type(job),
             )
 

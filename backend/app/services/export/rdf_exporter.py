@@ -90,4 +90,24 @@ class RDFExporter(ExporterBase):
             if prop.inverse_of_iri:
                 g.add((prop_uri, OWL.inverseOf, URIRef(prop.inverse_of_iri)))
 
+        # SVO Triples as reified RDF statements
+        for i, t in enumerate(job.result.triples):
+            stmt_uri = URIRef(f"urn:folio-enrich:job:{job.id}:triple:{i}")
+            g.add((stmt_uri, RDF.type, RDF.Statement))
+            g.add((doc_uri, FOLIO.hasTriple, stmt_uri))
+            g.add((stmt_uri, RDF.subject, Literal(t.subject)))
+            g.add((stmt_uri, RDF.predicate, Literal(t.predicate)))
+            g.add((stmt_uri, RDF.object, Literal(t.object)))
+            g.add((stmt_uri, FOLIO.voice, Literal(t.voice)))
+            # Link to FOLIO IRIs where available
+            for link in t.subject_links:
+                if link.folio_iri:
+                    g.add((stmt_uri, FOLIO.subjectRef, URIRef(link.folio_iri)))
+            for link in t.object_links:
+                if link.folio_iri:
+                    g.add((stmt_uri, FOLIO.objectRef, URIRef(link.folio_iri)))
+            for link in t.predicate_links:
+                if link.folio_iri:
+                    g.add((stmt_uri, FOLIO.predicateRef, URIRef(link.folio_iri)))
+
         return g.serialize(format="turtle")

@@ -83,6 +83,27 @@ class ParquetExporter(ExporterBase):
                 "range_iris": "; ".join(prop.range_iris),
             })
 
+        # Triples table
+        tri_rows = []
+        for t in job.result.triples:
+            subj_iri = next((l.folio_iri for l in t.subject_links if l.folio_iri), "")
+            obj_iri = next((l.folio_iri for l in t.object_links if l.folio_iri), "")
+            pred_iri = next((l.folio_iri for l in t.predicate_links if l.folio_iri), "")
+            tri_rows.append({
+                "job_id": str(job.id),
+                "triple_id": t.id,
+                "subject": t.subject,
+                "predicate": t.predicate,
+                "object": t.object,
+                "sentence": t.sentence,
+                "voice": t.voice,
+                "has_folio_link": bool(t.subject_links or t.object_links or t.predicate_links),
+                "subject_iri": subj_iri,
+                "object_iri": obj_iri,
+                "predicate_iri": pred_iri,
+                "confidence": t.confidence,
+            })
+
         buf = io.BytesIO()
         pq.write_table(table, buf, row_group_size=len(rows) or 1)
 
@@ -93,5 +114,9 @@ class ParquetExporter(ExporterBase):
         if prop_rows:
             prop_table = pa.Table.from_pylist(prop_rows)
             pq.write_table(prop_table, buf)
+
+        if tri_rows:
+            tri_table = pa.Table.from_pylist(tri_rows)
+            pq.write_table(tri_table, buf)
 
         return buf.getvalue()
