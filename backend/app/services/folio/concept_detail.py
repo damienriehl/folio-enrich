@@ -321,12 +321,13 @@ def build_entity_graph(
     if not focus_node:
         return None
 
-    # BFS upward (ancestors)
+    # BFS upward (ancestors) — always reach branch roots
+    ancestor_max_depth = max(ancestors_depth, 50)
     ancestor_queue: list[tuple[str, int]] = [(iri_hash, 0)]
     ancestor_visited: set[str] = {iri_hash}
     while ancestor_queue:
         current_hash, current_depth = ancestor_queue.pop(0)
-        if current_depth >= ancestors_depth:
+        if current_depth >= ancestor_max_depth:
             continue
         current_oc = folio[current_hash]
         if not current_oc or not current_oc.sub_class_of:
@@ -386,6 +387,30 @@ def build_entity_graph(
                 else:
                     _add_edge(related_hash, node_hash, "seeAlso", "rdfs:seeAlso")
                 sa_count += 1
+
+    # BFS upward from seeAlso nodes to their branch roots (unbounded depth)
+    if see_also_nodes:
+        sa_max_depth = 50  # effectively unbounded — always reach branch roots
+        sa_ancestor_queue: list[tuple[str, int]] = [(h, 0) for h in see_also_nodes]
+        sa_ancestor_visited: set[str] = set(see_also_nodes) | ancestor_visited
+        while sa_ancestor_queue:
+            current_hash, current_depth = sa_ancestor_queue.pop(0)
+            if current_depth >= sa_max_depth:
+                continue
+            current_oc = folio[current_hash]
+            if not current_oc or not current_oc.sub_class_of:
+                continue
+            for parent_iri in current_oc.sub_class_of:
+                if parent_iri == owl_thing:
+                    continue
+                parent_hash = _extract_iri_hash(parent_iri)
+                parent_node = _make_node(parent_hash, -(current_depth + 1))
+                if parent_node is None:
+                    continue
+                _add_edge(parent_hash, current_hash, "subClassOf")
+                if parent_hash not in sa_ancestor_visited:
+                    sa_ancestor_visited.add(parent_hash)
+                    sa_ancestor_queue.append((parent_hash, current_depth + 1))
 
     truncated = total_discovered_ref[0] > len(visited)
 

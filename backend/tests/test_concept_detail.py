@@ -187,6 +187,36 @@ class TestBuildEntityGraph:
         see_also_edges = [e for e in result.edges if e.edge_type == "seeAlso"]
         assert len(see_also_edges) == 0
 
+    def test_see_also_ancestors_connected(self, mock_folio):
+        """seeAlso target (RELATED) should have its parent (ROOT) with a subClassOf edge."""
+        result = build_entity_graph(
+            mock_folio, "CHILD1", ancestors_depth=2, include_see_also=True
+        )
+        node_ids = {n.id for n in result.nodes}
+        assert "RELATED" in node_ids
+        # ROOT is RELATED's parent — should have a subClassOf edge from ROOT -> RELATED
+        sa_ancestor_edges = [
+            e
+            for e in result.edges
+            if e.source == "ROOT" and e.target == "RELATED" and e.edge_type == "subClassOf"
+        ]
+        assert len(sa_ancestor_edges) == 1
+
+    def test_see_also_ancestors_always_reach_roots(self, mock_folio):
+        """seeAlso ancestor traversal is unbounded — reaches branch roots even with ancestors_depth=0."""
+        result = build_entity_graph(
+            mock_folio, "CHILD1", ancestors_depth=0, include_see_also=True
+        )
+        node_ids = {n.id for n in result.nodes}
+        assert "RELATED" in node_ids
+        # Even with ancestors_depth=0, seeAlso ancestors should still be traversed
+        sa_ancestor_edges = [
+            e
+            for e in result.edges
+            if e.source == "ROOT" and e.target == "RELATED" and e.edge_type == "subClassOf"
+        ]
+        assert len(sa_ancestor_edges) == 1
+
     def test_respects_max_nodes(self, mock_folio):
         result = build_entity_graph(mock_folio, "CHILD1", max_nodes=2)
         assert len(result.nodes) <= 2

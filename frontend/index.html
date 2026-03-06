@@ -7451,7 +7451,11 @@ function buildELKGraph(data, direction) {
   const dir = direction === 'TB' ? 'DOWN' : 'RIGHT';
   const children = data.nodes.map(n => {
     const w = Math.max(180, n.label.length * 7.5 + 32);
-    return { id: n.id, width: w, height: 36, labels: [{ text: n.label }] };
+    const node = { id: n.id, width: w, height: 36, labels: [{ text: n.label }] };
+    if (n.is_branch_root) {
+      node.layoutOptions = { 'elk.layered.layering.layerConstraint': 'FIRST' };
+    }
+    return node;
   });
   const edges = data.edges.map(e => ({
     id: e.id, sources: [e.source], targets: [e.target],
