@@ -1260,6 +1260,10 @@
   .layer-chip:hover { filter: brightness(1.15); }
   .layer-chip:not(.active):hover { background: var(--surface3); }
   .layer-divider { width: 1.5px; height: 20px; background: var(--text-dim); opacity: 0.45; flex-shrink: 0; margin: 0 6px; border-radius: 1px; }
+  .pos-legend { display: none; gap: 12px; align-items: center; padding: 4px 12px; font-size: 11px; color: var(--text-dim); opacity: 0; transition: opacity 0.2s; }
+  .pos-legend.visible { display: inline-flex; opacity: 1; }
+  .pos-legend-item { display: inline-flex; align-items: center; gap: 4px; }
+  .pos-legend-swatch { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 
   /* ── Clean-view: Annotation overrides ── */
   .clean-view .annotation-span {
@@ -2396,7 +2400,14 @@
       </span>
       <span class="layer-divider"></span>
       <span class="layer-chip" data-layer="pos" onclick="toggleLayer('pos', this)" title="Nouns (blue) · Verbs (red) · Adjectives (green) · Adverbs (orange) · Proper nouns (teal)">
-        <span class="chip-dot"></span>POS
+        <span class="chip-dot"></span>Parts of Speech
+      </span>
+      <span class="pos-legend" id="posLegend">
+        <span class="pos-legend-item"><span class="pos-legend-swatch" style="background:#1565C0"></span>Noun</span>
+        <span class="pos-legend-item"><span class="pos-legend-swatch" style="background:#00897B"></span>Proper</span>
+        <span class="pos-legend-item"><span class="pos-legend-swatch" style="background:#C62828"></span>Verb</span>
+        <span class="pos-legend-item"><span class="pos-legend-swatch" style="background:#2E7D32"></span>Adj</span>
+        <span class="pos-legend-item"><span class="pos-legend-swatch" style="background:#E65100"></span>Adv</span>
       </span>
     </div>
   </div>
@@ -5651,6 +5662,7 @@ function toggleLayer(layer, chipEl) {
       document.getElementById('annotatedText')?.normalize();
     }
   }
+  document.getElementById('posLegend')?.classList.toggle('visible', _activeLayers.has('pos'));
 }
 
 function _applyLayerVisibility() {
@@ -5664,6 +5676,7 @@ function _applyLayerVisibility() {
     const off = !_activeLayers.has(layer);
     document.querySelectorAll(sel).forEach(el => el.classList.toggle('layer-off', off));
   }
+  document.getElementById('posLegend')?.classList.toggle('visible', _activeLayers.has('pos'));
 }
 
 /** Apply saved view mode to the UI (call after render). */
