@@ -23,6 +23,7 @@ async def job_event_stream(
     last_states: dict[str, str] = {}
     last_activity_count: int = 0
     doc_type_sent: bool = False
+    pos_sent: bool = False
 
     while True:
         job = await job_store.load(job_id)
@@ -159,6 +160,14 @@ async def job_event_stream(
                     "document_type": job.result.metadata["document_type"],
                     "confidence": job.result.metadata.get("document_type_confidence", 0.0),
                 }),
+            }
+
+        # Emit POS data as soon as EarlyTripleStage produces it
+        if not pos_sent and job.result.metadata.get("sentence_pos"):
+            pos_sent = True
+            yield {
+                "event": "pos_ready",
+                "data": json.dumps({"sentence_pos": job.result.metadata["sentence_pos"]}),
             }
 
         # Emit new activity log entries
