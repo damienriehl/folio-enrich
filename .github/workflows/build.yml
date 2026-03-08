@@ -147,8 +147,24 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         working-directory: backend
+        shell: bash
         run: |
-          pip install -e ".[dev]"
+          # Some packages (e.g. PyMuPDF) lack ARM64 Windows wheels.
+          # Try full install first; on failure, install deps individually.
+          pip install -e ".[dev]" 2>&1 || {
+            echo "::warning::Standard install failed, installing deps individually..."
+            pip install --no-deps -e .
+            python -c "
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              cfg = tomllib.load(f)
+          deps = cfg['project']['dependencies']
+          deps += cfg['project'].get('optional-dependencies', {}).get('dev', [])
+          print('\n'.join(deps))
+          " | while IFS= read -r dep; do
+              pip install "$dep" 2>&1 || echo "::warning::Skipped: $dep (not available for this platform)"
+            done
+          }
           pip install pyinstaller
           python -m spacy download en_core_web_sm
       - name: Build with PyInstaller
