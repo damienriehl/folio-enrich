@@ -32,15 +32,18 @@ def _check_folio() -> dict:
     try:
         from app.services.folio.folio_service import FolioService
         from app.services.folio.owl_cache import get_owl_status
+        from app.services.folio.owl_updater import OWLUpdateManager
         svc = FolioService.get_instance()
         if svc._folio is not None:
             count = len(svc._folio.classes)
             label_count = len(svc._labels_cache) if svc._labels_cache else 0
+            manager = OWLUpdateManager.get_instance()
             return {
                 "status": "ready",
                 "concepts": count,
                 "labels_indexed": label_count,
                 "owl_cache": get_owl_status(),
+                "update_status": manager.get_status(),
             }
         else:
             return {"status": "not_loaded", "message": "Loaded at startup"}

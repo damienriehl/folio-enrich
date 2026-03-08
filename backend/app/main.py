@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import concepts, enrich, export, feedback, health, ollama, settings, synthetic
+from app.api.routes import concepts, enrich, export, feedback, folio_update, health, ollama, settings, synthetic
 from app.config import settings as app_settings
 from app.middleware.error_handler import register_error_handlers
 from app.middleware.rate_limit import RateLimitMiddleware
@@ -62,6 +62,26 @@ async def _periodic_job_cleanup() -> None:
         await asyncio.sleep(3600)  # Every hour
 
 
+async def _periodic_owl_update_check() -> None:
+    """Periodically check for and apply FOLIO OWL updates."""
+    from app.services.folio.owl_updater import OWLUpdateManager
+
+    manager = OWLUpdateManager.get_instance()
+    while True:
+        interval = app_settings.folio_update_check_interval_hours * 3600
+        await asyncio.sleep(interval)
+        if not app_settings.folio_auto_update:
+            continue
+        try:
+            result = await manager.check_and_apply()
+            if result:
+                logger.info("FOLIO ontology auto-updated: %d → %d concepts",
+                            result.get("concepts_before", 0),
+                            result.get("concepts_after", 0))
+        except Exception:
+            logger.warning("FOLIO auto-update failed", exc_info=True)
+
+
 async def _manage_ollama() -> None:
     """Detect and optionally start Ollama at startup."""
     if not (app_settings.ollama_auto_manage and app_settings.llm_provider == "ollama"):
@@ -108,9 +128,11 @@ async def lifespan(app: FastAPI):
     logger.info("Loading FOLIO ontology and building embedding index...")
     await _index_folio_embeddings()
     cleanup_task = asyncio.create_task(_periodic_job_cleanup())
+    owl_update_task = asyncio.create_task(_periodic_owl_update_check())
     yield
     # Shutdown
     cleanup_task.cancel()
+    owl_update_task.cancel()
     await _stop_ollama()
 
 
@@ -143,6 +165,7 @@ app.include_router(concepts.router)
 app.include_router(feedback.router)
 app.include_router(settings.router)
 app.include_router(ollama.router)
+app.include_router(folio_update.router)
 
 # Serve frontend
 _frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"

@@ -16,8 +16,14 @@ class ParquetExporter(ExporterBase):
         return "application/octet-stream"
 
     def export(self, job: Job) -> bytes:
-        import pyarrow as pa
-        import pyarrow.parquet as pq
+        try:
+            import pyarrow as pa
+            import pyarrow.parquet as pq
+        except ImportError:
+            raise ImportError(
+                "pyarrow is not available on this platform. "
+                "Parquet export is not supported on Windows ARM64."
+            )
 
         rows = []
         for ann in job.result.annotations:

@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     llm_property_provider: str = ""
     llm_property_model: str = ""
 
+    # FOLIO OWL auto-update
+    folio_auto_update: bool = True
+    folio_update_check_interval_hours: int = 24
+
     # Triple extraction & POS tagging
     triple_extraction_enabled: bool = True
     pos_tagging_enabled: bool = True

@@ -65,7 +65,13 @@ class EmailIngestor(IngestorBase):
         import tempfile
         from pathlib import Path
 
-        import extract_msg
+        try:
+            import extract_msg
+        except ImportError:
+            raise ImportError(
+                "extract-msg is not available on this platform. "
+                "MSG ingestion is not supported on Windows ARM64."
+            )
 
         # MSG files are binary — decode from base64
         msg_bytes = base64.b64decode(content)

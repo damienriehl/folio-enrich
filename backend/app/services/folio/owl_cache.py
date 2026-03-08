@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Mirror the folio-python library defaults
 _REPO_OWNER = "alea-institute"
 _REPO_NAME = "FOLIO"
-_REPO_BRANCH = "2.0.0"
+_REPO_BRANCH = "main"
 _CACHE_DIR = Path.home() / ".folio" / "cache"
 _OWL_URL = (
     f"https://raw.githubusercontent.com/{_REPO_OWNER}/{_REPO_NAME}"
@@ -55,6 +55,41 @@ def _save_metadata(data: dict) -> None:
     tmp = _METADATA_FILE.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
     tmp.rename(_METADATA_FILE)
+
+
+def check_owl_freshness() -> tuple[bool, str | None]:
+    """HEAD-only probe. Returns (is_stale, new_etag).
+
+    Returns (False, None) on 304 or error (i.e. no update available).
+    """
+    meta = _load_metadata()
+    stored_etag = meta.get("etag")
+
+    headers: dict[str, str] = {}
+    if stored_etag and _CACHE_FILE.exists():
+        headers["If-None-Match"] = stored_etag
+
+    try:
+        with httpx.Client(timeout=_REQUEST_TIMEOUT, follow_redirects=True) as client:
+            head_resp = client.head(_OWL_URL, headers=headers)
+    except httpx.HTTPError as exc:
+        logger.warning("OWL freshness probe failed (network error): %s", exc)
+        return (False, None)
+
+    if head_resp.status_code == 304:
+        logger.info("FOLIO OWL is up to date (304 Not Modified)")
+        meta["checked_at"] = datetime.now(timezone.utc).isoformat()
+        _save_metadata(meta)
+        return (False, None)
+
+    if head_resp.status_code != 200:
+        logger.warning(
+            "OWL freshness HEAD returned unexpected status %d", head_resp.status_code
+        )
+        return (False, None)
+
+    new_etag = head_resp.headers.get("etag", "").strip('"')
+    return (True, new_etag)
 
 
 def ensure_owl_fresh() -> None:

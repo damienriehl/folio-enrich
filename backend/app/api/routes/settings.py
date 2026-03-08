@@ -82,6 +82,9 @@ class SettingsUpdate(BaseModel):
     ollama_model_simple: str | None = None
     ollama_model_medium: str | None = None
     ollama_model_complex: str | None = None
+    # FOLIO OWL auto-update
+    folio_auto_update: bool | None = None
+    folio_update_check_interval_hours: int | None = None
 
 
 _TASK_LLM_FIELDS = (
@@ -120,6 +123,9 @@ async def get_settings() -> dict:
     result["ollama_model_simple"] = settings.ollama_model_simple
     result["ollama_model_medium"] = settings.ollama_model_medium
     result["ollama_model_complex"] = settings.ollama_model_complex
+    # FOLIO OWL auto-update
+    result["folio_auto_update"] = settings.folio_auto_update
+    result["folio_update_check_interval_hours"] = settings.folio_update_check_interval_hours
     return result
 
 
@@ -158,6 +164,11 @@ async def update_settings(update: SettingsUpdate) -> dict:
         val = getattr(update, f"ollama_model_{tier}", None)
         if val is not None:
             setattr(settings, f"ollama_model_{tier}", val)
+    # FOLIO OWL auto-update
+    if update.folio_auto_update is not None:
+        settings.folio_auto_update = update.folio_auto_update
+    if update.folio_update_check_interval_hours is not None:
+        settings.folio_update_check_interval_hours = update.folio_update_check_interval_hours
     return {"status": "ok", "message": "Settings updated"}
 
 

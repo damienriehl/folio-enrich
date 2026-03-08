@@ -85,10 +85,38 @@ class FolioService:
         if self._folio is None:
             from folio import FOLIO
 
-            self._folio = FOLIO()
+            self._folio = FOLIO(github_repo_branch="main")
             self._build_branch_map()
             logger.info("FOLIO ontology loaded with %d concepts", len(self._folio.classes))
         return self._folio
+
+    def _reload(self) -> dict:
+        """Reload FOLIO from updated disk cache. Thread-safe via GIL attribute swap."""
+        from folio import FOLIO
+
+        old_count = len(self._folio.classes) if self._folio else 0
+
+        new_folio = FOLIO(github_repo_branch="main")
+
+        # Build new caches from the new FOLIO instance
+        old_folio = self._folio
+        self._folio = new_folio
+        self._branch_map = None
+        self._build_branch_map()
+
+        # Rebuild label caches
+        self._labels_cache = None
+        self._labels_multi_cache = None
+        self._property_labels_cache = None
+        self.get_all_labels()
+        self.get_all_labels_multi()
+        self.get_all_property_labels()
+
+        new_count = len(new_folio.classes)
+        logger.info(
+            "FOLIO ontology reloaded: %d → %d concepts", old_count, new_count
+        )
+        return {"concepts_before": old_count, "concepts_after": new_count}
 
     def _build_branch_map(self) -> None:
         """Build a map from concept IRI to branch display name."""
