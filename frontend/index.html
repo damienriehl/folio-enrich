@@ -4321,6 +4321,11 @@ function rerenderAnnotatedText() {
     document.getElementById('annotatedText').style.display = 'block';
     renderAnnotatedText(text, annotations, individuals, properties);
 
+    // Re-apply POS tags if layer is active (renderAnnotatedText wipes .pos-word spans)
+    if (_activeLayers.has('pos') && accumulatedPOS) {
+      applyPOSTags({ sentence_pos: accumulatedPOS });
+    }
+
     // Show toolbar + header controls as soon as any content arrives (progressive rendering)
     const hasContent = annotations.length > 0 || individuals.length > 0 || properties.length > 0;
     if (hasContent) {
@@ -5810,9 +5815,10 @@ function toggleLayer(layer, chipEl) {
   localStorage.setItem('activeLayers', JSON.stringify([..._activeLayers]));
   _applyLayerVisibility();
   // POS layer toggle requires re-rendering tags
-  if (layer === 'pos' && currentJob) {
+  if (layer === 'pos') {
     if (_activeLayers.has('pos')) {
-      applyPOSTags(currentJob?.result?.metadata || (accumulatedPOS ? { sentence_pos: accumulatedPOS } : {}));
+      const meta = currentJob?.result?.metadata;
+      applyPOSTags(meta?.sentence_pos ? meta : (accumulatedPOS ? { sentence_pos: accumulatedPOS } : {}));
     } else {
       // Unwrap .pos-word spans back to text nodes
       document.querySelectorAll('.pos-word').forEach(el => {
