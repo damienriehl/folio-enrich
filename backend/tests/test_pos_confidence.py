@@ -189,7 +189,8 @@ class TestConceptPosPenalty:
         assert boosted == 1
         assert ann.concepts[0].confidence > 0.60
 
-    def test_multi_word_not_adjusted(self):
+    def test_multi_word_noun_span_boosted(self):
+        """Multi-word span with NOUN token gets boosted (not skipped)."""
         from app.pipeline.stages.reconciliation_stage import ReconciliationStage
 
         job = MagicMock()
@@ -212,8 +213,66 @@ class TestConceptPosPenalty:
         )
         job.result.metadata = {"sentence_pos": [sent]}
         boosted, penalized = ReconciliationStage._apply_pos_adjustments(job)
-        assert boosted == 0
+        assert boosted == 1
         assert penalized == 0
+        # NOUN present → NOUN boost: base 0.10 × 1.0 = +0.10
+        assert ann.concepts[0].confidence == pytest.approx(0.70)
+
+    def test_multi_word_verb_dominant_penalized(self):
+        """Multi-word span with only VERB/ADV tokens gets penalized."""
+        from app.pipeline.stages.reconciliation_stage import ReconciliationStage
+
+        job = MagicMock()
+        ann = Annotation(
+            span=Span(start=4, end=20, text="running quickly"),
+            concepts=[ConceptMatch(
+                concept_text="running quickly",
+                confidence=0.60,
+                match_type="alternative",
+                source="entity_ruler",
+            )],
+            state="confirmed",
+        )
+        job.result.annotations = [ann]
+        sent = _make_sentence_pos(
+            "The running quickly was noted",
+            ["The", "running", "quickly", "was", "noted"],
+            ["DET", "VERB", "ADV", "AUX", "VERB"],
+            start=0,
+        )
+        job.result.metadata = {"sentence_pos": [sent]}
+        boosted, penalized = ReconciliationStage._apply_pos_adjustments(job)
+        assert boosted == 0
+        assert penalized == 1
+        assert ann.concepts[0].confidence < 0.60
+
+    def test_multi_word_propn_gets_stronger_boost(self):
+        """Multi-word span containing PROPN gets PROPN multiplier."""
+        from app.pipeline.stages.reconciliation_stage import ReconciliationStage
+
+        job = MagicMock()
+        ann = Annotation(
+            span=Span(start=4, end=20, text="Supreme Court"),
+            concepts=[ConceptMatch(
+                concept_text="Supreme Court",
+                confidence=0.60,
+                match_type="preferred",
+                source="entity_ruler",
+            )],
+            state="confirmed",
+        )
+        job.result.annotations = [ann]
+        sent = _make_sentence_pos(
+            "The Supreme Court decided",
+            ["The", "Supreme", "Court", "decided"],
+            ["DET", "PROPN", "PROPN", "VERB"],
+            start=0,
+        )
+        job.result.metadata = {"sentence_pos": [sent]}
+        boosted, _ = ReconciliationStage._apply_pos_adjustments(job)
+        assert boosted == 1
+        # PROPN × 1.2 × 0.10 = +0.12
+        assert ann.concepts[0].confidence == pytest.approx(0.72)
 
     def test_penalty_below_threshold_rejects(self):
         from app.pipeline.stages.reconciliation_stage import ReconciliationStage
@@ -285,7 +344,8 @@ class TestConceptPosBoost:
         # 0.95 + 0.12 would be 1.07, clamped to 1.0
         assert ann.concepts[0].confidence == 1.0
 
-    def test_boost_skips_multiword_spans(self):
+    def test_boost_multiword_with_noun(self):
+        """Multi-word span with NOUN now gets boosted (not skipped)."""
         from app.pipeline.stages.reconciliation_stage import ReconciliationStage
 
         job = MagicMock()
@@ -307,8 +367,9 @@ class TestConceptPosBoost:
         )
         job.result.metadata = {"sentence_pos": [sent]}
         boosted, _ = ReconciliationStage._apply_pos_adjustments(job)
-        assert boosted == 0
-        assert ann.concepts[0].confidence == 0.60
+        assert boosted == 1
+        # NOUN present → NOUN boost: 0.10 × 1.0 = +0.10
+        assert ann.concepts[0].confidence == pytest.approx(0.70)
 
     def test_boost_disabled_when_pos_confidence_off(self):
         from app.pipeline.stages.reconciliation_stage import ReconciliationStage

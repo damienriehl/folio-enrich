@@ -141,9 +141,16 @@ class ReconciliationStage(PipelineStage):
 
     @staticmethod
     def _apply_pos_adjustments(job: Job) -> tuple[int, int]:
-        """Apply POS-based confidence boosts and penalties to annotations."""
+        """Apply POS-based confidence boosts and penalties to annotations.
+
+        Handles both single-word and multi-word spans:
+        - Single-word: uses majority POS directly
+        - Multi-word: uses priority-based resolution — any NOUN/PROPN present
+          means the span is noun-like (boost for class concepts); only penalize
+          if majority POS is VERB/ADV with no noun presence.
+        """
         from app.config import settings
-        from app.services.nlp.pos_lookup import get_majority_pos
+        from app.services.nlp.pos_lookup import get_majority_pos, get_pos_for_span
 
         if not settings.pos_confidence_enabled or not settings.pos_tagging_enabled:
             return 0, 0
@@ -163,41 +170,88 @@ class ReconciliationStage(PipelineStage):
 
             concept = ann.concepts[0]
             span_text = ann.span.text
+            is_multiword = " " in span_text.strip()
 
-            # Only adjust single-word matches
-            if " " in span_text.strip():
-                continue
+            if is_multiword:
+                # Multi-word: priority-based POS resolution
+                pos_tags = get_pos_for_span(ann.span.start, ann.span.end, sentence_pos)
+                if not pos_tags:
+                    continue
 
-            pos = get_majority_pos(ann.span.start, ann.span.end, sentence_pos)
-            if pos is None:
-                continue
+                has_noun = any(p in ("NOUN", "PROPN") for p in pos_tags)
+                has_adj = any(p == "ADJ" for p in pos_tags)
+                has_verb = any(p in ("VERB", "ADV") for p in pos_tags)
 
-            # BOOST: POS agrees with class concept (noun-like)
-            if pos in _POS_CONCEPT_BOOST_MULTIPLIERS and boost_base > 0:
-                boost = boost_base * _POS_CONCEPT_BOOST_MULTIPLIERS[pos]
-                concept.confidence = min(1.0, concept.confidence + boost)
-                boosted += 1
-                record_lineage(
-                    ann, "reconciliation", "pos_boosted",
-                    detail=f"POS agreement: {pos} for class concept '{concept.concept_text}'",
-                    confidence=concept.confidence,
-                )
-
-            # PENALTY: POS disagrees with class concept (verb-like) — existing logic
-            elif pos in ("VERB", "ADV") and concept.match_type == "alternative":
-                concept.confidence = max(0.0, concept.confidence - penalty)
-                penalized += 1
-                record_lineage(
-                    ann, "reconciliation", "pos_penalized",
-                    detail=f"POS mismatch: {pos} for noun concept '{concept.concept_text}'",
-                    confidence=concept.confidence,
-                )
-                if concept.confidence < 0.20:
-                    ann.state = "rejected"
+                if has_noun and boost_base > 0:
+                    # Any noun-like token → boost (NOUN multiplier)
+                    has_propn = any(p == "PROPN" for p in pos_tags)
+                    mult = _POS_CONCEPT_BOOST_MULTIPLIERS.get("PROPN" if has_propn else "NOUN", 1.0)
+                    boost = boost_base * mult
+                    concept.confidence = min(1.0, concept.confidence + boost)
+                    boosted += 1
+                    effective_pos = "PROPN" if has_propn else "NOUN"
                     record_lineage(
-                        ann, "reconciliation", "rejected",
-                        detail="Confidence below 0.20 after POS penalty",
+                        ann, "reconciliation", "pos_boosted",
+                        detail=f"POS agreement: {effective_pos} in multi-word span '{concept.concept_text}'",
+                        confidence=concept.confidence,
                     )
+                elif has_adj and not has_verb and boost_base > 0:
+                    # ADJ-only (no verbs/nouns) → mild boost
+                    boost = boost_base * _POS_CONCEPT_BOOST_MULTIPLIERS.get("ADJ", 0.6)
+                    concept.confidence = min(1.0, concept.confidence + boost)
+                    boosted += 1
+                    record_lineage(
+                        ann, "reconciliation", "pos_boosted",
+                        detail=f"POS agreement: ADJ in multi-word span '{concept.concept_text}'",
+                        confidence=concept.confidence,
+                    )
+                elif has_verb and not has_noun and concept.match_type == "alternative":
+                    # Verb-dominant, no nouns → penalize for class concept
+                    concept.confidence = max(0.0, concept.confidence - penalty)
+                    penalized += 1
+                    record_lineage(
+                        ann, "reconciliation", "pos_penalized",
+                        detail=f"POS mismatch: VERB-dominant multi-word span '{concept.concept_text}'",
+                        confidence=concept.confidence,
+                    )
+                    if concept.confidence < 0.20:
+                        ann.state = "rejected"
+                        record_lineage(
+                            ann, "reconciliation", "rejected",
+                            detail="Confidence below 0.20 after POS penalty",
+                        )
+            else:
+                # Single-word: use majority POS directly (original logic)
+                pos = get_majority_pos(ann.span.start, ann.span.end, sentence_pos)
+                if pos is None:
+                    continue
+
+                # BOOST: POS agrees with class concept (noun-like)
+                if pos in _POS_CONCEPT_BOOST_MULTIPLIERS and boost_base > 0:
+                    boost = boost_base * _POS_CONCEPT_BOOST_MULTIPLIERS[pos]
+                    concept.confidence = min(1.0, concept.confidence + boost)
+                    boosted += 1
+                    record_lineage(
+                        ann, "reconciliation", "pos_boosted",
+                        detail=f"POS agreement: {pos} for class concept '{concept.concept_text}'",
+                        confidence=concept.confidence,
+                    )
+
+                # PENALTY: POS disagrees with class concept (verb-like)
+                elif pos in ("VERB", "ADV") and concept.match_type == "alternative":
+                    concept.confidence = max(0.0, concept.confidence - penalty)
+                    penalized += 1
+                    record_lineage(
+                        ann, "reconciliation", "pos_penalized",
+                        detail=f"POS mismatch: {pos} for noun concept '{concept.concept_text}'",
+                        confidence=concept.confidence,
+                    )
+                    if concept.confidence < 0.20:
+                        ann.state = "rejected"
+                        record_lineage(
+                            ann, "reconciliation", "rejected",
+                            detail="Confidence below 0.20 after POS penalty",
+                        )
 
         return boosted, penalized
 

@@ -171,10 +171,16 @@ class LLMPropertyStage(PipelineStage):
 
     @staticmethod
     def _apply_pos_adjustments(job: Job, properties: list) -> tuple[int, int]:
-        """Apply POS-based confidence boosts and penalties to properties."""
+        """Apply POS-based confidence boosts and penalties to properties.
+
+        Handles both single-word and multi-word spans:
+        - Single-word: uses majority POS directly
+        - Multi-word: priority-based — any VERB/AUX present means verb-like (boost);
+          only penalize if all tokens are NOUN/PROPN with no verb presence.
+        """
         from app.config import settings
         from app.models.annotation import StageEvent
-        from app.services.nlp.pos_lookup import get_majority_pos
+        from app.services.nlp.pos_lookup import get_majority_pos, get_pos_for_span
 
         if not settings.pos_confidence_enabled or not settings.pos_tagging_enabled:
             return 0, 0
@@ -193,35 +199,66 @@ class LLMPropertyStage(PipelineStage):
             if prop.source != "aho_corasick":
                 continue
 
-            # Skip multi-word matches (less likely to be ambiguous)
-            if " " in prop.property_text.strip():
-                continue
+            is_multiword = " " in prop.property_text.strip()
 
-            pos = get_majority_pos(prop.span.start, prop.span.end, sentence_pos)
-            if pos is None:
-                continue
+            if is_multiword:
+                pos_tags = get_pos_for_span(prop.span.start, prop.span.end, sentence_pos)
+                if not pos_tags:
+                    continue
 
-            # BOOST: POS agrees with property (verb-like)
-            if pos in _POS_PROPERTY_BOOST_MULTIPLIERS and boost_base > 0:
-                boost = boost_base * _POS_PROPERTY_BOOST_MULTIPLIERS[pos]
-                prop.confidence = min(1.0, prop.confidence + boost)
-                boosted += 1
-                prop.lineage.append(StageEvent(
-                    stage="llm_property_linking",
-                    action="pos_boosted",
-                    detail=f"POS agreement: {pos} for property '{prop.folio_label}'",
-                    confidence=prop.confidence,
-                ))
+                has_verb = any(p in ("VERB", "AUX") for p in pos_tags)
+                has_noun_only = all(p in ("NOUN", "PROPN", "ADJ", "DET", "ADP") for p in pos_tags)
 
-            # PENALTY: NOUN/PROPN for a verb-sense ObjectProperty → penalize
-            elif pos in ("NOUN", "PROPN"):
-                prop.confidence = max(0.0, prop.confidence - penalty)
-                penalized += 1
-                prop.lineage.append(StageEvent(
-                    stage="llm_property_linking",
-                    action="pos_penalized",
-                    detail=f"POS mismatch: {pos} for verb-sense property '{prop.folio_label}'",
-                    confidence=prop.confidence,
-                ))
+                if has_verb and boost_base > 0:
+                    # Any verb/aux token → boost for property
+                    has_aux = any(p == "AUX" for p in pos_tags)
+                    mult = _POS_PROPERTY_BOOST_MULTIPLIERS.get("AUX" if has_aux and "VERB" not in pos_tags else "VERB", 1.0)
+                    boost = boost_base * mult
+                    prop.confidence = min(1.0, prop.confidence + boost)
+                    boosted += 1
+                    effective_pos = "VERB" if "VERB" in pos_tags else "AUX"
+                    prop.lineage.append(StageEvent(
+                        stage="llm_property_linking",
+                        action="pos_boosted",
+                        detail=f"POS agreement: {effective_pos} in multi-word property '{prop.folio_label}'",
+                        confidence=prop.confidence,
+                    ))
+                elif has_noun_only:
+                    # All noun-like, no verb → penalize for verb-sense property
+                    prop.confidence = max(0.0, prop.confidence - penalty)
+                    penalized += 1
+                    prop.lineage.append(StageEvent(
+                        stage="llm_property_linking",
+                        action="pos_penalized",
+                        detail=f"POS mismatch: NOUN-dominant multi-word property '{prop.folio_label}'",
+                        confidence=prop.confidence,
+                    ))
+            else:
+                pos = get_majority_pos(prop.span.start, prop.span.end, sentence_pos)
+                if pos is None:
+                    continue
+
+                # BOOST: POS agrees with property (verb-like)
+                if pos in _POS_PROPERTY_BOOST_MULTIPLIERS and boost_base > 0:
+                    boost = boost_base * _POS_PROPERTY_BOOST_MULTIPLIERS[pos]
+                    prop.confidence = min(1.0, prop.confidence + boost)
+                    boosted += 1
+                    prop.lineage.append(StageEvent(
+                        stage="llm_property_linking",
+                        action="pos_boosted",
+                        detail=f"POS agreement: {pos} for property '{prop.folio_label}'",
+                        confidence=prop.confidence,
+                    ))
+
+                # PENALTY: NOUN/PROPN for a verb-sense ObjectProperty → penalize
+                elif pos in ("NOUN", "PROPN"):
+                    prop.confidence = max(0.0, prop.confidence - penalty)
+                    penalized += 1
+                    prop.lineage.append(StageEvent(
+                        stage="llm_property_linking",
+                        action="pos_penalized",
+                        detail=f"POS mismatch: {pos} for verb-sense property '{prop.folio_label}'",
+                        confidence=prop.confidence,
+                    ))
 
         return boosted, penalized
