@@ -193,7 +193,7 @@ class FolioService:
     def search_by_label(self, label: str, top_k: int = 5) -> list[tuple[FOLIOConcept, float]]:
         folio = self._get_folio()
         try:
-            results = folio.search_by_label(label)
+            results = folio.search_by_label(label, include_alt_labels=True)
         except Exception:
             logger.warning("search_by_label failed for '%s'", label, exc_info=True)
             return []

@@ -180,12 +180,13 @@ class TestGenerateSearchTerms:
 
 class FakeOWLClass:
     """Minimal mock of an OWL class from folio-python."""
-    def __init__(self, iri, label, definition=None, alt_labels=None, sub_class_of=None):
+    def __init__(self, iri, label, definition=None, alt_labels=None, sub_class_of=None, preferred_label=None):
         self.iri = iri
         self.label = label
         self.definition = definition
         self.alternative_labels = alt_labels or []
         self.sub_class_of = sub_class_of or []
+        self.preferred_label = preferred_label
 
 
 class FakeFOLIO:

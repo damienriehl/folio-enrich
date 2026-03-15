@@ -138,6 +138,7 @@ def _compute_relevance_score(
     label: str,
     definition: str | None,
     synonyms: list[str],
+    preferred_label: str | None = None,
 ) -> float:
     """Score 0-100 based on word overlap between query and candidate."""
     if not label:
@@ -172,6 +173,20 @@ def _compute_relevance_score(
     if overlap > 0:
         label_score = max(label_score, overlap * 88)
 
+    # --- Preferred label scoring ---
+    pref_score = 0.0
+    if preferred_label:
+        pref_lower = preferred_label.lower()
+        if query_lower == pref_lower:
+            pref_score = 90.0
+        elif len(query_lower) >= 4 and query_lower in pref_lower:
+            pref_score = 84.0
+        else:
+            pref_content = _content_words(preferred_label)
+            p_overlap = _word_overlap(query_content, pref_content)
+            if p_overlap > 0:
+                pref_score = p_overlap * 86
+
     # --- Synonym scoring ---
     syn_score = 0.0
     for syn in synonyms:
@@ -191,8 +206,8 @@ def _compute_relevance_score(
         if d_overlap > 0:
             def_score = max(def_score, d_overlap * 55)
 
-    # Combine: best of label/synonym, with small definition boost
-    primary = max(label_score, syn_score)
+    # Combine: best of label/preferred/synonym, with small definition boost
+    primary = max(label_score, pref_score, syn_score)
     if primary > 0:
         final = primary + min(def_score * 0.12, 8)
     else:
@@ -336,6 +351,7 @@ def multi_strategy_search(
             owl_class.label or iri_hash,
             owl_class.definition,
             owl_class.alternative_labels or [],
+            preferred_label=owl_class.preferred_label,
         )
         if score >= min_score:
             scored.append((iri_hash, owl_class, score))
@@ -359,6 +375,7 @@ def multi_strategy_search(
                     owl_class.label or iri_hash,
                     owl_class.definition,
                     owl_class.alternative_labels or [],
+                    preferred_label=owl_class.preferred_label,
                 )
                 if exp_score >= min_score and exp_score > best_scores.get(iri_hash, 0):
                     best_scores[iri_hash] = exp_score
