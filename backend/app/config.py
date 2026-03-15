@@ -105,6 +105,8 @@ class Settings(BaseSettings):
     pos_concept_mismatch_penalty: float = 0.15    # Penalty when concept span POS != expected
     pos_property_mismatch_penalty: float = 0.12   # Penalty when property span POS mismatches
     pos_branch_affinity_boost: float = 0.05       # Boost/penalty for POS-branch alignment
+    pos_concept_match_boost: float = 0.10        # Boost for POS-agreeing class concepts (NOUN/PROPN/ADJ)
+    pos_property_match_boost: float = 0.10       # Boost for POS-agreeing properties (VERB/AUX)
 
     # Candidates
     max_candidates: int = 5

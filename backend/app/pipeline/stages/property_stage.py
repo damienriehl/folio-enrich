@@ -20,6 +20,12 @@ from app.services.property.property_matcher import PropertyMatcher
 
 logger = logging.getLogger(__name__)
 
+# POS tag → multiplier for property match boost (verb-like tags boost properties)
+_POS_PROPERTY_BOOST_MULTIPLIERS: dict[str, float] = {
+    "VERB": 1.0,    # base × 1.0 = 0.10
+    "AUX": 0.8,     # base × 0.8 = 0.08
+}
+
 
 class EarlyPropertyStage(PipelineStage):
     """Aho-Corasick property matching — fast, no LLM needed.
@@ -137,11 +143,14 @@ class LLMPropertyStage(PipelineStage):
         combined = existing_properties + llm_new
         deduplicated = deduplicate_properties(combined)
 
-        # POS-based penalty for Aho-Corasick property matches
-        pos_adjusted = self._apply_pos_penalties(job, deduplicated)
+        # POS-based boost + penalty for Aho-Corasick property matches
+        pos_boosted, pos_penalized = self._apply_pos_adjustments(job, deduplicated)
 
         job.result.properties = deduplicated
 
+        pos_msg = ""
+        if pos_boosted or pos_penalized:
+            pos_msg = f", {pos_boosted} POS-boosted, {pos_penalized} POS-penalized"
         log.append({
             "ts": datetime.now(timezone.utc).isoformat(),
             "stage": self.name,
@@ -149,7 +158,7 @@ class LLMPropertyStage(PipelineStage):
                 f"Property linking complete: {len(deduplicated)} properties "
                 f"({len(llm_new)} LLM-discovered, "
                 f"{len(existing_properties)} from early extraction)"
-                + (f", {pos_adjusted} POS-adjusted" if pos_adjusted else "")
+                + pos_msg
             ),
         })
 
@@ -161,24 +170,26 @@ class LLMPropertyStage(PipelineStage):
         return job
 
     @staticmethod
-    def _apply_pos_penalties(job: Job, properties: list) -> int:
-        """Penalize Aho-Corasick properties where span POS mismatches verb sense."""
+    def _apply_pos_adjustments(job: Job, properties: list) -> tuple[int, int]:
+        """Apply POS-based confidence boosts and penalties to properties."""
         from app.config import settings
         from app.models.annotation import StageEvent
         from app.services.nlp.pos_lookup import get_majority_pos
 
         if not settings.pos_confidence_enabled or not settings.pos_tagging_enabled:
-            return 0
+            return 0, 0
 
         sentence_pos = job.result.metadata.get("sentence_pos", [])
         if not sentence_pos:
-            return 0
+            return 0, 0
 
         penalty = settings.pos_property_mismatch_penalty
-        adjusted = 0
+        boost_base = settings.pos_property_match_boost
+        boosted = 0
+        penalized = 0
 
         for prop in properties:
-            # Only penalize Aho-Corasick matches, not LLM-sourced
+            # Only adjust Aho-Corasick matches, not LLM-sourced
             if prop.source != "aho_corasick":
                 continue
 
@@ -190,15 +201,27 @@ class LLMPropertyStage(PipelineStage):
             if pos is None:
                 continue
 
-            # NOUN/PROPN for a verb-sense ObjectProperty → penalize
-            if pos in ("NOUN", "PROPN"):
-                prop.confidence = max(0.0, prop.confidence - penalty)
-                adjusted += 1
+            # BOOST: POS agrees with property (verb-like)
+            if pos in _POS_PROPERTY_BOOST_MULTIPLIERS and boost_base > 0:
+                boost = boost_base * _POS_PROPERTY_BOOST_MULTIPLIERS[pos]
+                prop.confidence = min(1.0, prop.confidence + boost)
+                boosted += 1
                 prop.lineage.append(StageEvent(
                     stage="llm_property_linking",
-                    action="pos_adjusted",
+                    action="pos_boosted",
+                    detail=f"POS agreement: {pos} for property '{prop.folio_label}'",
+                    confidence=prop.confidence,
+                ))
+
+            # PENALTY: NOUN/PROPN for a verb-sense ObjectProperty → penalize
+            elif pos in ("NOUN", "PROPN"):
+                prop.confidence = max(0.0, prop.confidence - penalty)
+                penalized += 1
+                prop.lineage.append(StageEvent(
+                    stage="llm_property_linking",
+                    action="pos_penalized",
                     detail=f"POS mismatch: {pos} for verb-sense property '{prop.folio_label}'",
                     confidence=prop.confidence,
                 ))
 
-        return adjusted
+        return boosted, penalized

@@ -45,6 +45,62 @@ def _make_sentence_pos(
     }
 
 
+def _make_concept_job(
+    ann_text: str,
+    ann_start: int,
+    pos_tag: str,
+    match_type: str = "alternative",
+    confidence: float = 0.60,
+    state: str = "confirmed",
+) -> tuple[MagicMock, Annotation]:
+    """Create a minimal Job-like object with one concept annotation."""
+    job = MagicMock()
+    ann = Annotation(
+        span=Span(start=ann_start, end=ann_start + len(ann_text), text=ann_text),
+        concepts=[ConceptMatch(
+            concept_text=ann_text,
+            confidence=confidence,
+            match_type=match_type,
+            source="entity_ruler",
+        )],
+        state=state,
+    )
+    job.result.annotations = [ann]
+    sent = _make_sentence_pos(
+        f"The {ann_text} was issued",
+        ["The", ann_text, "was", "issued"],
+        ["DET", pos_tag, "AUX", "VERB"],
+        start=0,
+    )
+    job.result.metadata = {"sentence_pos": [sent]}
+    return job, ann
+
+
+def _make_property_job(
+    prop_text: str,
+    pos_tag: str,
+    source: str = "aho_corasick",
+    confidence: float = 0.70,
+) -> tuple[MagicMock, PropertyAnnotation]:
+    """Create a minimal Job-like object with one property annotation."""
+    job = MagicMock()
+    prop = PropertyAnnotation(
+        property_text=prop_text,
+        folio_label=prop_text,
+        span=Span(start=4, end=4 + len(prop_text), text=prop_text),
+        confidence=confidence,
+        source=source,
+    )
+    sent = _make_sentence_pos(
+        f"The {prop_text} was important",
+        ["The", prop_text, "was", "important"],
+        ["DET", pos_tag, "AUX", "ADJ"],
+        start=0,
+    )
+    job.result.metadata = {"sentence_pos": [sent]}
+    return job, prop
+
+
 # ---------------------------------------------------------------------------
 # POS Lookup Utility Tests
 # ---------------------------------------------------------------------------
@@ -114,46 +170,26 @@ class TestGetFineTagsForSpan:
 # ---------------------------------------------------------------------------
 
 class TestConceptPosPenalty:
-    def _make_job(self, ann_text, ann_start, pos_tag, match_type="alternative", confidence=0.60):
-        """Create a minimal Job-like object for testing."""
-        job = MagicMock()
-        ann = Annotation(
-            span=Span(start=ann_start, end=ann_start + len(ann_text), text=ann_text),
-            concepts=[ConceptMatch(
-                concept_text=ann_text,
-                confidence=confidence,
-                match_type=match_type,
-                source="entity_ruler",
-            )],
-            state="confirmed",
-        )
-        job.result.annotations = [ann]
-        sent = _make_sentence_pos(
-            f"The {ann_text} was issued",
-            ["The", ann_text, "was", "issued"],
-            ["DET", pos_tag, "AUX", "VERB"],
-            start=0,
-        )
-        job.result.metadata = {"sentence_pos": [sent]}
-        return job, ann
-
     def test_verb_concept_penalized(self):
         from app.pipeline.stages.reconciliation_stage import ReconciliationStage
 
-        job, ann = self._make_job("grant", 4, "VERB")
-        adjusted = ReconciliationStage._apply_pos_penalties(job)
-        assert adjusted == 1
+        job, ann = _make_concept_job("grant", 4, "VERB")
+        boosted, penalized = ReconciliationStage._apply_pos_adjustments(job)
+        assert penalized == 1
+        assert boosted == 0
         assert ann.concepts[0].confidence < 0.60
 
     def test_noun_concept_not_penalized(self):
         from app.pipeline.stages.reconciliation_stage import ReconciliationStage
 
-        job, ann = self._make_job("grant", 4, "NOUN")
-        adjusted = ReconciliationStage._apply_pos_penalties(job)
-        assert adjusted == 0
-        assert ann.concepts[0].confidence == 0.60
+        # NOUN gets boosted instead of penalized, so confidence should increase
+        job, ann = _make_concept_job("grant", 4, "NOUN")
+        boosted, penalized = ReconciliationStage._apply_pos_adjustments(job)
+        assert penalized == 0
+        assert boosted == 1
+        assert ann.concepts[0].confidence > 0.60
 
-    def test_multi_word_not_penalized(self):
+    def test_multi_word_not_adjusted(self):
         from app.pipeline.stages.reconciliation_stage import ReconciliationStage
 
         job = MagicMock()
@@ -175,26 +211,169 @@ class TestConceptPosPenalty:
             start=0,
         )
         job.result.metadata = {"sentence_pos": [sent]}
-        adjusted = ReconciliationStage._apply_pos_penalties(job)
-        assert adjusted == 0
+        boosted, penalized = ReconciliationStage._apply_pos_adjustments(job)
+        assert boosted == 0
+        assert penalized == 0
 
     def test_penalty_below_threshold_rejects(self):
         from app.pipeline.stages.reconciliation_stage import ReconciliationStage
 
-        job, ann = self._make_job("grant", 4, "VERB", confidence=0.18)
-        ReconciliationStage._apply_pos_penalties(job)
+        job, ann = _make_concept_job("grant", 4, "VERB", confidence=0.18)
+        ReconciliationStage._apply_pos_adjustments(job)
         assert ann.state == "rejected"
 
     def test_pos_disabled_no_change(self):
         from app.pipeline.stages.reconciliation_stage import ReconciliationStage
 
-        job, ann = self._make_job("grant", 4, "VERB")
+        job, ann = _make_concept_job("grant", 4, "VERB")
         with patch("app.config.settings") as mock_settings:
             mock_settings.pos_confidence_enabled = False
             mock_settings.pos_tagging_enabled = True
-            adjusted = ReconciliationStage._apply_pos_penalties(job)
-        assert adjusted == 0
+            boosted, penalized = ReconciliationStage._apply_pos_adjustments(job)
+        assert boosted == 0
+        assert penalized == 0
         assert ann.concepts[0].confidence == 0.60
+
+
+# ---------------------------------------------------------------------------
+# Concept POS Boost Tests (ReconciliationStage)
+# ---------------------------------------------------------------------------
+
+class TestConceptPosBoost:
+    def test_noun_span_boosts_class_concept(self):
+        from app.pipeline.stages.reconciliation_stage import ReconciliationStage
+
+        job, ann = _make_concept_job("obligation", 4, "NOUN", confidence=0.60)
+        boosted, penalized = ReconciliationStage._apply_pos_adjustments(job)
+        assert boosted == 1
+        assert penalized == 0
+        # NOUN × 1.0 × 0.10 = +0.10
+        assert ann.concepts[0].confidence == pytest.approx(0.70)
+
+    def test_propn_span_boosts_stronger(self):
+        from app.pipeline.stages.reconciliation_stage import ReconciliationStage
+
+        job, ann = _make_concept_job("Congress", 4, "PROPN", confidence=0.60)
+        boosted, _ = ReconciliationStage._apply_pos_adjustments(job)
+        assert boosted == 1
+        # PROPN × 1.2 × 0.10 = +0.12
+        assert ann.concepts[0].confidence == pytest.approx(0.72)
+
+    def test_adj_span_boosts_mild(self):
+        from app.pipeline.stages.reconciliation_stage import ReconciliationStage
+
+        job, ann = _make_concept_job("contractual", 4, "ADJ", confidence=0.60)
+        boosted, _ = ReconciliationStage._apply_pos_adjustments(job)
+        assert boosted == 1
+        # ADJ × 0.6 × 0.10 = +0.06
+        assert ann.concepts[0].confidence == pytest.approx(0.66)
+
+    def test_boost_applies_to_preferred_label(self):
+        from app.pipeline.stages.reconciliation_stage import ReconciliationStage
+
+        job, ann = _make_concept_job("obligation", 4, "NOUN", match_type="preferred", confidence=0.72)
+        boosted, _ = ReconciliationStage._apply_pos_adjustments(job)
+        assert boosted == 1
+        assert ann.concepts[0].confidence == pytest.approx(0.82)
+
+    def test_boost_clamped_at_1_0(self):
+        from app.pipeline.stages.reconciliation_stage import ReconciliationStage
+
+        job, ann = _make_concept_job("obligation", 4, "PROPN", confidence=0.95)
+        boosted, _ = ReconciliationStage._apply_pos_adjustments(job)
+        assert boosted == 1
+        # 0.95 + 0.12 would be 1.07, clamped to 1.0
+        assert ann.concepts[0].confidence == 1.0
+
+    def test_boost_skips_multiword_spans(self):
+        from app.pipeline.stages.reconciliation_stage import ReconciliationStage
+
+        job = MagicMock()
+        ann = Annotation(
+            span=Span(start=0, end=16, text="legal obligation"),
+            concepts=[ConceptMatch(
+                concept_text="legal obligation",
+                confidence=0.60,
+                source="entity_ruler",
+            )],
+            state="confirmed",
+        )
+        job.result.annotations = [ann]
+        sent = _make_sentence_pos(
+            "legal obligation was clear",
+            ["legal", "obligation", "was", "clear"],
+            ["ADJ", "NOUN", "AUX", "ADJ"],
+            start=0,
+        )
+        job.result.metadata = {"sentence_pos": [sent]}
+        boosted, _ = ReconciliationStage._apply_pos_adjustments(job)
+        assert boosted == 0
+        assert ann.concepts[0].confidence == 0.60
+
+    def test_boost_disabled_when_pos_confidence_off(self):
+        from app.pipeline.stages.reconciliation_stage import ReconciliationStage
+
+        job, ann = _make_concept_job("obligation", 4, "NOUN", confidence=0.60)
+        with patch("app.config.settings") as mock_settings:
+            mock_settings.pos_confidence_enabled = False
+            mock_settings.pos_tagging_enabled = True
+            boosted, penalized = ReconciliationStage._apply_pos_adjustments(job)
+        assert boosted == 0
+        assert penalized == 0
+        assert ann.concepts[0].confidence == 0.60
+
+    def test_boost_zero_config_disables(self):
+        from app.pipeline.stages.reconciliation_stage import ReconciliationStage
+
+        job, ann = _make_concept_job("obligation", 4, "NOUN", confidence=0.60)
+        with patch("app.config.settings") as mock_settings:
+            mock_settings.pos_confidence_enabled = True
+            mock_settings.pos_tagging_enabled = True
+            mock_settings.pos_concept_match_boost = 0.0
+            mock_settings.pos_concept_mismatch_penalty = 0.15
+            boosted, penalized = ReconciliationStage._apply_pos_adjustments(job)
+        assert boosted == 0
+        assert ann.concepts[0].confidence == 0.60
+
+    def test_no_double_boost_penalty(self):
+        """Same span gets boost OR penalty, never both — POS tags are mutually exclusive."""
+        from app.pipeline.stages.reconciliation_stage import ReconciliationStage
+
+        # NOUN should get boost, not penalty
+        job, ann = _make_concept_job("grant", 4, "NOUN", match_type="alternative", confidence=0.60)
+        boosted, penalized = ReconciliationStage._apply_pos_adjustments(job)
+        assert boosted == 1
+        assert penalized == 0
+        assert ann.concepts[0].confidence > 0.60
+
+    def test_lineage_records_boost_event(self):
+        from app.pipeline.stages.reconciliation_stage import ReconciliationStage
+
+        job, ann = _make_concept_job("obligation", 4, "NOUN", confidence=0.60)
+        ReconciliationStage._apply_pos_adjustments(job)
+        boost_events = [e for e in ann.lineage if e.action == "pos_boosted"]
+        assert len(boost_events) == 1
+        assert "POS agreement: NOUN" in boost_events[0].detail
+        assert boost_events[0].confidence == pytest.approx(0.70)
+
+
+# ---------------------------------------------------------------------------
+# Concept POS Metadata Sync Tests
+# ---------------------------------------------------------------------------
+
+class TestConceptPosMetadataSync:
+    def test_pos_adjustment_propagates_to_reconciled_concepts(self):
+        from app.pipeline.stages.reconciliation_stage import ReconciliationStage
+
+        job, ann = _make_concept_job("obligation", 4, "NOUN", confidence=0.60)
+        # Add reconciled_concepts metadata dict to simulate real pipeline
+        job.result.metadata["reconciled_concepts"] = [
+            {"concept_text": "obligation", "folio_iri": "", "confidence": 0.60},
+        ]
+        ReconciliationStage._apply_pos_adjustments(job)
+        ReconciliationStage._sync_pos_to_metadata(job)
+        # Metadata dict should be updated to match the boosted annotation
+        assert job.result.metadata["reconciled_concepts"][0]["confidence"] == pytest.approx(0.70)
 
 
 # ---------------------------------------------------------------------------
@@ -226,46 +405,103 @@ class TestBranchPosAffinity:
 # ---------------------------------------------------------------------------
 
 class TestPropertyPosPenalty:
-    def _make_job_with_props(self, prop_text, pos_tag, source="aho_corasick"):
-        job = MagicMock()
-        prop = PropertyAnnotation(
-            property_text=prop_text,
-            folio_label=prop_text,
-            span=Span(start=4, end=4 + len(prop_text), text=prop_text),
-            confidence=0.70,
-            source=source,
-        )
-        sent = _make_sentence_pos(
-            f"The {prop_text} was important",
-            ["The", prop_text, "was", "important"],
-            ["DET", pos_tag, "AUX", "ADJ"],
-            start=0,
-        )
-        job.result.metadata = {"sentence_pos": [sent]}
-        return job, prop
-
     def test_noun_property_penalized(self):
         from app.pipeline.stages.property_stage import LLMPropertyStage
 
-        job, prop = self._make_job_with_props("filing", "NOUN")
-        adjusted = LLMPropertyStage._apply_pos_penalties(job, [prop])
-        assert adjusted == 1
+        job, prop = _make_property_job("filing", "NOUN")
+        boosted, penalized = LLMPropertyStage._apply_pos_adjustments(job, [prop])
+        assert penalized == 1
+        assert boosted == 0
         assert prop.confidence < 0.70
 
     def test_verb_property_not_penalized(self):
         from app.pipeline.stages.property_stage import LLMPropertyStage
 
-        job, prop = self._make_job_with_props("filing", "VERB")
-        adjusted = LLMPropertyStage._apply_pos_penalties(job, [prop])
-        assert adjusted == 0
-        assert prop.confidence == 0.70
+        # VERB gets boosted instead of penalized
+        job, prop = _make_property_job("filing", "VERB")
+        boosted, penalized = LLMPropertyStage._apply_pos_adjustments(job, [prop])
+        assert penalized == 0
+        assert boosted == 1
+        assert prop.confidence > 0.70
 
     def test_llm_property_skipped(self):
         from app.pipeline.stages.property_stage import LLMPropertyStage
 
-        job, prop = self._make_job_with_props("filing", "NOUN", source="llm")
-        adjusted = LLMPropertyStage._apply_pos_penalties(job, [prop])
-        assert adjusted == 0
+        job, prop = _make_property_job("filing", "NOUN", source="llm")
+        boosted, penalized = LLMPropertyStage._apply_pos_adjustments(job, [prop])
+        assert boosted == 0
+        assert penalized == 0
+
+
+# ---------------------------------------------------------------------------
+# Property POS Boost Tests (LLMPropertyStage)
+# ---------------------------------------------------------------------------
+
+class TestPropertyPosBoost:
+    def test_verb_span_boosts_property(self):
+        from app.pipeline.stages.property_stage import LLMPropertyStage
+
+        job, prop = _make_property_job("governs", "VERB", confidence=0.70)
+        boosted, penalized = LLMPropertyStage._apply_pos_adjustments(job, [prop])
+        assert boosted == 1
+        assert penalized == 0
+        # VERB × 1.0 × 0.10 = +0.10
+        assert prop.confidence == pytest.approx(0.80)
+
+    def test_aux_span_boosts_property(self):
+        from app.pipeline.stages.property_stage import LLMPropertyStage
+
+        job, prop = _make_property_job("has", "AUX", confidence=0.70)
+        boosted, _ = LLMPropertyStage._apply_pos_adjustments(job, [prop])
+        assert boosted == 1
+        # AUX × 0.8 × 0.10 = +0.08
+        assert prop.confidence == pytest.approx(0.78)
+
+    def test_property_boost_skips_llm_sourced(self):
+        from app.pipeline.stages.property_stage import LLMPropertyStage
+
+        job, prop = _make_property_job("governs", "VERB", source="llm", confidence=0.70)
+        boosted, _ = LLMPropertyStage._apply_pos_adjustments(job, [prop])
+        assert boosted == 0
+        assert prop.confidence == 0.70
+
+    def test_property_boost_clamped_at_1_0(self):
+        from app.pipeline.stages.property_stage import LLMPropertyStage
+
+        job, prop = _make_property_job("governs", "VERB", confidence=0.95)
+        boosted, _ = LLMPropertyStage._apply_pos_adjustments(job, [prop])
+        assert boosted == 1
+        assert prop.confidence == 1.0
+
+    def test_property_boost_disabled_when_off(self):
+        from app.pipeline.stages.property_stage import LLMPropertyStage
+
+        job, prop = _make_property_job("governs", "VERB", confidence=0.70)
+        with patch("app.config.settings") as mock_settings:
+            mock_settings.pos_confidence_enabled = False
+            mock_settings.pos_tagging_enabled = True
+            boosted, penalized = LLMPropertyStage._apply_pos_adjustments(job, [prop])
+        assert boosted == 0
+        assert penalized == 0
+        assert prop.confidence == 0.70
+
+    def test_property_lineage_records_boost(self):
+        from app.pipeline.stages.property_stage import LLMPropertyStage
+
+        job, prop = _make_property_job("governs", "VERB", confidence=0.70)
+        LLMPropertyStage._apply_pos_adjustments(job, [prop])
+        boost_events = [e for e in prop.lineage if e.action == "pos_boosted"]
+        assert len(boost_events) == 1
+        assert "POS agreement: VERB" in boost_events[0].detail
+
+    def test_existing_property_penalty_still_works(self):
+        """Regression: NOUN Aho-Corasick property still penalized -0.12."""
+        from app.pipeline.stages.property_stage import LLMPropertyStage
+
+        job, prop = _make_property_job("filing", "NOUN", confidence=0.70)
+        _, penalized = LLMPropertyStage._apply_pos_adjustments(job, [prop])
+        assert penalized == 1
+        assert prop.confidence == pytest.approx(0.58)
 
 
 # ---------------------------------------------------------------------------
