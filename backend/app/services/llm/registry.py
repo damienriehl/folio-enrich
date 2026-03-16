@@ -184,8 +184,19 @@ def get_provider(
                 f"Unknown LLM provider: {provider_type}. Available: {available}"
             )
 
-    # Resolve defaults
-    resolved_base_url = base_url or DEFAULT_BASE_URLS.get(provider_type)
+    # Resolve defaults — local provider URLs come from config (env-overridable)
+    if base_url is None:
+        from app.config import settings
+
+        _config_urls = {
+            LLMProviderType.ollama: f"{settings.ollama_base_url.rstrip('/')}/v1",
+            LLMProviderType.lmstudio: f"{settings.lmstudio_base_url.rstrip('/')}/v1",
+            LLMProviderType.custom: f"{settings.custom_base_url.rstrip('/')}/v1",
+            LLMProviderType.llamafile: f"{settings.llamafile_base_url.rstrip('/')}/v1",
+        }
+        resolved_base_url = _config_urls.get(provider_type, DEFAULT_BASE_URLS.get(provider_type))
+    else:
+        resolved_base_url = base_url
     resolved_model = model or DEFAULT_MODELS.get(provider_type)
 
     # For local providers that don't need a real key, supply a placeholder

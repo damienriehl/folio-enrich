@@ -23,8 +23,10 @@ class OllamaEmbeddingProvider(BaseEmbeddingProvider):
         model: str | None = None,
         base_url: str | None = None,
     ):
+        from app.config import settings
+
         self._model_name = model or _DEFAULT_MODEL
-        self._base_url = (base_url or _DEFAULT_BASE_URL).rstrip("/")
+        self._base_url = (base_url or settings.ollama_base_url).rstrip("/")
         self._dim: int | None = None
 
         # Probe dimension with a test embedding

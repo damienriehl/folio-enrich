@@ -64,12 +64,13 @@ jobs:
         working-directory: backend
         run: |
           cat > dist/folio-enrich/run.py << 'PYEOF'
-          import subprocess, sys, webbrowser, time, threading
+          import os, subprocess, sys, webbrowser, time, threading
+          _PORT = int(os.environ.get("FOLIO_ENRICH_PORT", "8731"))
           def open_browser():
               time.sleep(2)
-              webbrowser.open("http://localhost:8731")
+              webbrowser.open(f"http://localhost:{_PORT}")
           threading.Thread(target=open_browser, daemon=True).start()
-          subprocess.run([sys.executable, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8731"])
+          subprocess.run([sys.executable, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", str(_PORT)])
           PYEOF
       - name: Package
         run: tar -czf folio-enrich-linux-x64.tar.gz -C backend/dist folio-enrich

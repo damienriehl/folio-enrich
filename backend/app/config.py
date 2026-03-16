@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     # Ollama auto-management
     ollama_auto_manage: bool = True
     ollama_base_url: str = "http://localhost:11434"
+    lmstudio_base_url: str = "http://localhost:1234"
+    custom_base_url: str = "http://localhost:8080"
+    llamafile_base_url: str = "http://localhost:8080"
     ollama_model_simple: str = "qwen3:4b"     # ~2.5GB — classification, area_of_law
     ollama_model_medium: str = "qwen3:8b"     # ~5GB — concept, branch_judge, synthetic
     ollama_model_complex: str = "qwen3:14b"   # ~9GB — metadata extraction, individual, property
