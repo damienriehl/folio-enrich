@@ -2531,6 +2531,8 @@
       </svg>
       New
     </button>
+    <button class="header-btn" onclick="openDemos()" title="Open pre-enriched demo exemplars in new tabs">Demo</button>
+    <button class="header-btn" id="resetDemoBtn" onclick="resetDemo()" style="display:none" title="Reset demo to original state">Reset Demo</button>
     <button class="header-btn detail-toggle" id="detailToggleBtn" onclick="toggleDetailPanel()" title="Toggle concept detail panel">Detail</button>
   </div>
 </header>
@@ -2961,6 +2963,19 @@
   </div>
 </div>
 
+<!-- Demo Links Modal (popup blocker fallback) -->
+<div class="modal-overlay" id="demoLinksModal">
+  <div class="modal" style="max-width:520px">
+    <h3>Demo Exemplars</h3>
+    <p style="font-size:12px;color:#6b6b80;margin-bottom:12px">Pre-enriched documents showcasing FOLIO Enrich features. Click to open:</p>
+    <div id="demoLinksList" style="display:flex;flex-direction:column;gap:6px;max-height:360px;overflow-y:auto"></div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="primary" onclick="openAllDemoTabs()">Open All Tabs</button>
+      <button class="secondary" onclick="document.getElementById('demoLinksModal').classList.remove('visible')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Entity Graph Modal -->
 <div class="graph-modal-overlay" id="graphModal">
   <div class="graph-modal-header">
@@ -3017,14 +3032,22 @@ let _lastFolioUpdateAt = null;  // track FOLIO update timestamp for toast
 let debugMode = localStorage.getItem('debugMode') === 'true';
 let showThinking = localStorage.getItem('showThinking') === 'true';
 
+// Demo mode state
+let isDemoMode = false;
+let currentDemoSlug = null;
+let originalDemoCache = null;  // deep clone for Reset Demo
+
 // ==============================================
 // Session Cache — persist pipeline results across reloads
 // ==============================================
 
 function cacheState() {
   if (!currentJob || !currentJobId) return;
+  const cacheKey = isDemoMode && currentDemoSlug
+    ? 'folio_demo_cache_' + currentDemoSlug
+    : 'folio_enrich_cache';
   try {
-    sessionStorage.setItem('folio_enrich_cache', JSON.stringify({
+    sessionStorage.setItem(cacheKey, JSON.stringify({
       jobId: currentJobId,
       job: currentJob,
       annotations: accumulatedAnnotations,
@@ -3203,6 +3226,132 @@ const SAMPLES = {
 };
 
 // ==============================================
+// Demo Exemplars
+// ==============================================
+
+const DEMO_CATALOG = [
+  { slug: 'litigation',     title: 'Litigation',      description: 'Citations, Rule 12(b)(6), negligence/contract' },
+  { slug: 'transactional',  title: 'Transactional',   description: 'Corporate entities, IP, contract terms' },
+  { slug: 'advisory',       title: 'Advisory',        description: 'Multi-area risk analysis memo' },
+  { slug: 'regulatory',     title: 'Regulatory',      description: 'Government agencies, compliance' },
+  { slug: 'timekeeping',    title: 'Timekeeping',     description: 'Billing narratives, event verbs' },
+  { slug: 'multi-branch',   title: 'Multi-Branch',    description: '8+ FOLIO branches, stacked borders' },
+  { slug: 'individuals',    title: 'Individuals',     description: 'Citations, money, dates, addresses' },
+  { slug: 'property-verbs', title: 'Property Verbs',  description: 'Granted/denied/reversed verbs' },
+  { slug: 'synonyms',       title: 'Synonyms',        description: 'DUI/DWI, AV/Self-Driving variants' },
+  { slug: 'kitchen-sink',   title: 'Kitchen Sink',    description: 'Bankruptcy order — every feature' },
+];
+
+async function tryLoadDemo() {
+  const params = new URLSearchParams(window.location.search);
+  const slug = params.get('demo');
+  if (!slug) return false;
+
+  // Try sessionStorage first (refresh support)
+  const cacheKey = 'folio_demo_cache_' + slug;
+  let demoData = null;
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) demoData = JSON.parse(cached);
+  } catch (e) { /* ignore */ }
+
+  // If no cache, fetch the static JSON
+  if (!demoData) {
+    try {
+      const resp = await fetch('/static/demos/' + encodeURIComponent(slug) + '.json');
+      if (!resp.ok) {
+        console.warn('Demo not found:', slug);
+        return false;
+      }
+      const payload = await resp.json();
+      demoData = payload.cache;
+      // Also store demo metadata for title
+      if (payload.demo) demoData._demoMeta = payload.demo;
+    } catch (e) {
+      console.warn('Failed to load demo:', e);
+      return false;
+    }
+  }
+
+  hydrateFromDemo(demoData, slug);
+  return true;
+}
+
+function hydrateFromDemo(cache, slug) {
+  isDemoMode = true;
+  currentDemoSlug = slug;
+  originalDemoCache = JSON.parse(JSON.stringify(cache));  // deep clone
+
+  currentJobId = cache.jobId;
+  currentJob = cache.job;
+  accumulatedAnnotations = cache.annotations || [];
+  accumulatedIndividuals = cache.individuals || [];
+  accumulatedProperties = cache.properties || [];
+  normalizedText = cache.normalizedText || null;
+  activityEntries = cache.activity || [];
+  uploadedFilename = cache.filename || null;
+
+  _seedFeedbackCaches(accumulatedAnnotations);
+
+  if (cache.docInput) {
+    document.getElementById('docInput').value = cache.docInput;
+    const ta = document.getElementById('docInput');
+    if (ta._autoResize) ta._autoResize();
+  }
+
+  // Set title
+  const meta = cache._demoMeta;
+  const title = meta ? meta.title : slug;
+  document.title = 'FOLIO Enrich \u2014 Demo: ' + title;
+
+  // Show reset button
+  document.getElementById('resetDemoBtn').style.display = '';
+
+  // Render
+  renderResults(currentJob);
+  renderProgressStages('completed');
+  renderActivityLog();
+  const annCount = (currentJob.result?.annotations || []).length;
+  setStatus('Demo: ' + title + ' (' + annCount + ' annotations)', 'completed');
+
+  // Cache for refresh
+  cacheState();
+}
+
+function openDemos() {
+  // Show modal with clickable links — browsers block window.open() in loops
+  const list = document.getElementById('demoLinksList');
+  list.innerHTML = DEMO_CATALOG.map(d => {
+    const url = window.location.pathname + '?demo=' + encodeURIComponent(d.slug);
+    return '<a href="' + url + '" target="_blank" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f6f6fa;border:1px solid #e0e0e8;border-radius:6px;text-decoration:none;color:#3a3a5c;font-size:13px;transition:background 0.15s"'
+      + ' onmouseover="this.style.background=\'#eeeef6\'" onmouseout="this.style.background=\'#f6f6fa\'">'
+      + '<strong style="min-width:100px">' + escapeHtml(d.title) + '</strong>'
+      + '<span style="color:#8888a0;font-size:11px">' + escapeHtml(d.description) + '</span>'
+      + '</a>';
+  }).join('');
+  document.getElementById('demoLinksModal').classList.add('visible');
+}
+
+function openAllDemoTabs() {
+  document.getElementById('demoLinksModal').classList.remove('visible');
+  // Click each link with a stagger to reduce popup blocker triggers
+  let i = 0;
+  function openNext() {
+    if (i >= DEMO_CATALOG.length) return;
+    const d = DEMO_CATALOG[i++];
+    const url = window.location.pathname + '?demo=' + encodeURIComponent(d.slug);
+    window.open(url, '_blank');
+    setTimeout(openNext, 100);
+  }
+  openNext();
+}
+
+function resetDemo() {
+  if (!originalDemoCache || !currentDemoSlug) return;
+  hydrateFromDemo(JSON.parse(JSON.stringify(originalDemoCache)), currentDemoSlug);
+}
+
+// ==============================================
 // Initialization
 // ==============================================
 
@@ -3235,7 +3384,8 @@ async function init() {
     });
   });
 
-  if (!restoreState()) {
+  const demoLoaded = await tryLoadDemo();
+  if (!demoLoaded && !restoreState()) {
     renderProgressStages('pending');
   }
 
