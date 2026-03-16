@@ -592,8 +592,8 @@
   .detail-examples { font-size: 12px; color: #555; margin-bottom: 8px; }
   .detail-examples li { margin-bottom: 2px; }
   .detail-meta-field { font-size: 12px; color: #555; margin-bottom: 6px; }
-  .detail-related-link { color: #3b64e0; text-decoration: none; cursor: pointer; }
-  .detail-related-link:hover { text-decoration: underline; }
+  .detail-seealso-pill { cursor: pointer; }
+  .detail-seealso-pill:hover { background: rgba(59,100,224,0.08); border-color: #3b64e0; color: #3b64e0; }
 
   /* DAG */
   .dag-container { position: relative; overflow-x: auto; padding: 8px 0; }
@@ -6608,7 +6608,7 @@ async function loadConceptDetail(iriHash, annId) {
     renderDetailLineage(annId);
     renderDetailIndividuals(annId);
     renderDetailDag(detail);
-    renderDetailRelated(detail);
+
     renderDetailNotes(iriHash, annId);
     renderDetailGraphButton(iriHash, detail.label);
     renderDetailDismissBtn(annId);
@@ -7604,10 +7604,13 @@ function renderDetailInfo(detail) {
     html += `<div class="detail-meta-field"><strong>Jurisdiction:</strong> ${escapeHtml(detail.country)}</div>`;
   }
   if (detail.related && detail.related.length) {
-    const relLinks = detail.related.map(r =>
-      `<a href="#" class="detail-related-link" onclick="event.preventDefault();loadConceptDetail('${escapeAttr(r.iri_hash)}')">${escapeHtml(r.label)}</a>`
-    ).join(', ');
-    html += `<div class="detail-meta-field"><strong>See Also:</strong> ${relLinks}</div>`;
+    const pills = detail.related.map(r =>
+      `<span class="detail-trans-pill detail-seealso-pill" onclick="loadConceptDetail('${escapeAttr(r.iri_hash)}')">${escapeHtml(r.label)}</span>`
+    ).join('');
+    html += `<div class="detail-translations">
+      <div class="detail-trans-header"><strong>See Also</strong><span class="detail-trans-count">(${detail.related.length})</span></div>
+      <div class="detail-trans-pills">${pills}</div>
+    </div>`;
   }
   container.innerHTML = html;
 }
@@ -7894,21 +7897,7 @@ function navigateToIndividual(indId) {
   }
 }
 
-function renderDetailRelated(detail) {
-  const container = document.getElementById('detailRelated');
-  const related = detail.related || [];
-  if (related.length === 0) { container.innerHTML = ''; return; }
 
-  let html = `<div class="detail-section-title">Related (${related.length})</div><div class="concept-pill-list">`;
-  related.forEach(r => {
-    html += `<span class="concept-pill" onclick="loadConceptDetail('${escapeAttr(r.iri_hash)}')">
-      <span class="concept-pill-dot" style="background:#7c3aed"></span>
-      ${escapeHtml(r.label)}
-    </span>`;
-  });
-  html += '</div>';
-  container.innerHTML = html;
-}
 
 function renderDetailNotes(iriHash, annId) {
   const container = document.getElementById('detailNotes');
