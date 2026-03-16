@@ -308,6 +308,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
   }
   .panel-header button {
     font-size: 11px;
@@ -2545,7 +2547,7 @@
     </div>
     <div class="panel-header">
       <h2>Document Input</h2>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="primary" id="enrichBtn" onclick="submitEnrichment()">Enrich Document</button>
         <button class="secondary" onclick="clearAll()">Clear</button>
         <button id="showThinkingBtn" onclick="toggleShowThinking()" style="background:var(--surface2);border:none;color:var(--text-dim)" title="Show LLM chain-of-thought reasoning in lineage"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:transparent"></span>Show Thinking</button>
@@ -2992,7 +2994,7 @@
 </div>
 
 <script>
-const API = 'http://localhost:8731';
+const API = '';
 let currentJobId = null;
 let currentJob = null;
 let pollInterval = null;
@@ -3268,7 +3270,7 @@ async function checkHealth() {
     if (!r.ok) throw new Error();
     setChip('chipBackend', 'green', '', 'Backend is running');
   } catch {
-    setChip('chipBackend', 'red', 'Offline', 'Cannot reach backend at ' + API);
+    setChip('chipBackend', 'red', 'Offline', 'Cannot reach backend at ' + (API || window.location.origin));
     setChip('chipFolio', 'gray', '---', 'Backend offline');
     setChip('chipEmbedding', 'gray', '---', 'Backend offline');
     setChip('chipLLM', 'gray', '---', 'Backend offline');
